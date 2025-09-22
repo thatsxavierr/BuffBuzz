@@ -32,6 +32,3 @@ Key goals:
 - **Real-Time**: WebSockets / Django Channels  
 - **Authentication**: WTAMU Email Integration  
 
----
-
-## 📂 Project Structure  
