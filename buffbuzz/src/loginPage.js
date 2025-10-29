@@ -1,10 +1,55 @@
-import React from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./loginPage.css";
 
-export default function loginPage() {
-  const handleLogin = (e) => {
+export default function LoginPage() {
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    email: "",
+    password: ""
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setError("");
+  };
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Add authentication logic here later
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:5000/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        navigate('/main', { state: { user: data.user } });
+      } else {
+        setError(data.message || 'Login failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('An error occurred during login. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -14,17 +59,37 @@ export default function loginPage() {
 
         <form onSubmit={handleLogin}>
           <label>Email:</label>
-          <input type="email" placeholder="Enter your buffs email" required />
+          <input 
+            type="email" 
+            name="email"
+            placeholder="Enter your buffs email"
+            value={formData.email}
+            onChange={handleChange}
+            disabled={loading}
+            required 
+          />
 
           <label>Password:</label>
-          <input type="password" placeholder="Enter your password" required />
+          <input 
+            type="password" 
+            name="password"
+            placeholder="Enter your password"
+            value={formData.password}
+            onChange={handleChange}
+            disabled={loading}
+            required 
+          />
 
-          <button type="submit">Log In</button>
+          {error && <p className="error-text">{error}</p>}
+
+          <button type="submit" disabled={loading}>
+            {loading ? 'Logging in...' : 'Log In'}
+          </button>
         </form>
 
         <div className="login-links">
           <p>
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <a href="/signup">Sign up</a>
           </p>
           <a href="/reset">Forgot password?</a>

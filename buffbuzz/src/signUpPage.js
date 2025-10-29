@@ -23,6 +23,9 @@ export default function SignupPage() {
     confirmPassword: false
   });
 
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
   const getEmailDomain = () => {
     if (formData.userType === "student") {
       return "@buffs.wtamu.edu";
@@ -46,6 +49,7 @@ export default function SignupPage() {
         [name]: false
       }));
     }
+    setErrorMessage("");
   };
 
   const validateForm = () => {
@@ -64,11 +68,13 @@ export default function SignupPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMessage("");
 
     if (!validateForm()) {
       return;
     }
 
+    setLoading(true);
     const fullEmail = formData.email + getEmailDomain();
 
     const userData = {
@@ -80,7 +86,6 @@ export default function SignupPage() {
     };
 
     try {
-      // Replace with your actual API endpoint
       const response = await fetch('http://localhost:5000/api/register', {
         method: 'POST',
         headers: {
@@ -89,16 +94,19 @@ export default function SignupPage() {
         body: JSON.stringify(userData)
       });
 
+      const data = await response.json();
+
       if (response.ok) {
-        alert('Account created successfully!');
-        navigate('/login');
+        // Navigate to verification page with email
+        navigate('/verification', { state: { email: fullEmail } });
       } else {
-        const error = await response.json();
-        alert('Error: ' + error.message);
+        setErrorMessage(data.message || 'Registration failed. Please try again.');
       }
     } catch (error) {
       console.error('Registration error:', error);
-      alert('An error occurred during registration');
+      setErrorMessage('An error occurred during registration. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -124,6 +132,7 @@ export default function SignupPage() {
               onChange={handleInputChange}
               className={errors.userType ? "invalid" : ""}
               required
+              disabled={loading}
             >
               <option value="">Select...</option>
               <option value="student">Student</option>
@@ -142,6 +151,7 @@ export default function SignupPage() {
               onChange={handleInputChange}
               className={errors.firstName ? "invalid" : ""}
               required
+              disabled={loading}
             />
             {errors.firstName && <span className="error">Please enter your first name</span>}
           </div>
@@ -156,6 +166,7 @@ export default function SignupPage() {
               onChange={handleInputChange}
               className={errors.lastName ? "invalid" : ""}
               required
+              disabled={loading}
             />
             {errors.lastName && <span className="error">Please enter your last name</span>}
           </div>
@@ -171,6 +182,7 @@ export default function SignupPage() {
                 onChange={handleInputChange}
                 className={errors.email ? "invalid" : ""}
                 required
+                disabled={loading}
               />
               <span className="email-domain">{getEmailDomain()}</span>
             </div>
@@ -187,6 +199,7 @@ export default function SignupPage() {
               onChange={handleInputChange}
               className={errors.password ? "invalid" : ""}
               required
+              disabled={loading}
             />
             {errors.password && <span className="error">Password must be at least 8 characters</span>}
           </div>
@@ -201,11 +214,20 @@ export default function SignupPage() {
               onChange={handleInputChange}
               className={errors.confirmPassword ? "invalid" : ""}
               required
+              disabled={loading}
             />
             {errors.confirmPassword && <span className="error">Passwords do not match</span>}
           </div>
 
-          <button type="submit" className="submit-btn">Create Account</button>
+          {errorMessage && (
+            <div className="error-message-box">
+              {errorMessage}
+            </div>
+          )}
+
+          <button type="submit" className="submit-btn" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Create Account'}
+          </button>
         </form>
 
         <div className="login-link">

@@ -20,7 +20,7 @@ export default function MainPage() {
       <div className="main-layout">
         <LeftSidebar />
         <div className="main-content">
-          <h1>Main content area - coming soon!</h1>
+          <h1>Main content area</h1>
         </div>
         <RightSidebar />
       </div>

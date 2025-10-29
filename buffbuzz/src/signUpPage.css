@@ -1,19 +1,19 @@
 .signup-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #800000 0%, #a00000 100%);
   display: flex;
   justify-content: center;
   align-items: center;
+  background: linear-gradient(135deg, #800000 0%, #a00000 100%);
   padding: 20px;
 }
 
 .signup-container {
   background: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
   padding: 40px;
-  width: 100%;
   max-width: 450px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
 }
 
 .logo-section {
@@ -22,16 +22,15 @@
 }
 
 .logo-section h1 {
+  font-size: 36px;
   color: #800000;
-  font-size: 32px;
-  font-weight: bold;
-  margin: 0;
+  margin-bottom: 5px;
+  font-weight: 700;
 }
 
 .logo-section p {
   color: #666;
   font-size: 14px;
-  margin-top: 5px;
 }
 
 .form-group {
@@ -46,27 +45,26 @@
   font-size: 14px;
 }
 
-.form-group select,
-.form-group input {
+.form-group input,
+.form-group select {
   width: 100%;
-  padding: 12px 15px;
-  border: 2px solid #e0e0e0;
-  border-radius: 10px;
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
   font-size: 14px;
-  transition: all 0.3s ease;
-  font-family: inherit;
+  transition: border-color 0.3s ease;
+  box-sizing: border-box;
 }
 
-.form-group select:focus,
-.form-group input:focus {
+.form-group input:focus,
+.form-group select:focus {
   outline: none;
   border-color: #800000;
-  box-shadow: 0 0 0 3px rgba(128, 0, 0, 0.1);
 }
 
-.form-group select {
-  cursor: pointer;
-  background-color: white;
+.form-group input.invalid,
+.form-group select.invalid {
+  border-color: #ff4444;
 }
 
 .email-display {
@@ -83,17 +81,25 @@
   color: #666;
   font-size: 14px;
   white-space: nowrap;
+  min-width: fit-content;
 }
 
 .error {
-  color: #e74c3c;
+  color: #ff4444;
   font-size: 12px;
   margin-top: 5px;
   display: block;
 }
 
-.invalid {
-  border-color: #e74c3c !important;
+.error-message-box {
+  background-color: #fee;
+  color: #c33;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  text-align: center;
+  font-size: 14px;
+  border: 1px solid #fcc;
 }
 
 .submit-btn {
@@ -102,21 +108,22 @@
   background: linear-gradient(135deg, #800000 0%, #a00000 100%);
   color: white;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  margin-top: 10px;
 }
 
-.submit-btn:hover {
+.submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(128, 0, 0, 0.3);
+  box-shadow: 0 5px 15px rgba(128, 0, 0, 0.4);
 }
 
-.submit-btn:active {
-  transform: translateY(0);
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .login-link {
@@ -135,4 +142,15 @@
 
 .login-link a:hover {
   text-decoration: underline;
+}
+
+/* Responsive design */
+@media (max-width: 600px) {
+  .signup-container {
+    padding: 30px 20px;
+  }
+
+  .logo-section h1 {
+    font-size: 28px;
+  }
 }
