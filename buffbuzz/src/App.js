@@ -5,6 +5,7 @@ import LoginPage from './loginPage';
 import SignupPage from './signUpPage';
 import VerificationPage from './verificationPage';
 import MainPage from './MainPage';
+import CreatePost from './CreatePost';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/verification" element={<VerificationPage />} />
         <Route path="/main" element={<MainPage />} />
+        <Route path="/create-post" element={<CreatePost />} />
       </Routes>
     </Router>
   );
