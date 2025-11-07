@@ -6,6 +6,7 @@ import SignupPage from './signUpPage';
 import VerificationPage from './verificationPage';
 import MainPage from './MainPage';
 import CreatePost from './CreatePost';
+import ProfileEdit from './ProfileEdit';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/verification" element={<VerificationPage />} />
         <Route path="/main" element={<MainPage />} />
         <Route path="/create-post" element={<CreatePost />} />
+        <Route path="/profile-edit" element={<ProfileEdit />} />
       </Routes>
     </Router>
   );
