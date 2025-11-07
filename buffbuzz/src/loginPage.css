@@ -69,3 +69,19 @@ button:hover {
 .login-links a:hover {
   text-decoration: underline;
 }
+
+.error-text {
+  color: #d32f2f;
+  font-size: 14px;
+  margin-top: 10px;
+  text-align: center;
+}
+
+button:disabled {
+  background-color: #999;
+  cursor: not-allowed;
+}
+
+button:disabled:hover {
+  background-color: #999;
+}

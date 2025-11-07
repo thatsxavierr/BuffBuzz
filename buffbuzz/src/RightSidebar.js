@@ -7,10 +7,9 @@ export default function RightSidebar() {
   const [messages, setMessages] = useState({});
   
   const friends = [
-    { id: 1, name: 'Sarah Johnson', online: true },
-    { id: 2, name: 'Mike Chen', online: true },
-    { id: 3, name: 'Emma Davis', online: false },
-    { id: 4, name: 'James Wilson', online: true },
+    { id: 1, name: 'Cecil', online: true },
+    { id: 2, name: 'Valerie', online: true },
+    { id: 3, name: 'Kenton', online: false },
   ];
 
   const openChat = (friend) => {

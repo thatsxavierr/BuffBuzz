@@ -18,6 +18,23 @@
   margin-right: 70px; /* Space for right sidebar */
 }
 
+.create-post-button {
+  padding: 12px 24px;
+  background-color: #800000;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-bottom: 24px;
+}
+
+.create-post-button:hover {
+  background-color: #600000;
+}
+
 .right-sidebar {
   position: absolute;
   top: 0;
