@@ -20,6 +20,12 @@ export default function MainPage() {
       <div className="main-layout">
         <LeftSidebar />
         <div className="main-content">
+          <button 
+            onClick={() => navigate('/create-post')} 
+            className="create-post-button"
+          >
+            + Create New Post
+          </button>
           <h1>Main content area</h1>
         </div>
         <RightSidebar />
