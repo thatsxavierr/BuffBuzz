@@ -5,7 +5,6 @@
   top: 0;
   z-index: 40;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  height: 60px;
 }
 
 .header-content {
@@ -77,13 +76,18 @@
 }
 
 .profile-circle {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, #800000, #a00000);
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
+  background-color: #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .profile-circle:hover {
-  opacity: 0.8;
+  transform: scale(1.05);
+  box-shadow: 0 0 0 3px rgba(74, 30, 124, 0.3);
 }
