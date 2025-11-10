@@ -6,19 +6,16 @@ import LeftSidebar from './LeftSidebar';
 import RightSidebar from './RightSidebar';
 import Footer from './Footer';
 
-export default function MainPage() {
-  const navigate = useNavigate();
-
-  const handleBackClick = () => {
-    navigate('/');
-  };
+export default function MainPage({ onBackToWelcome }) {
+const navigate = useNavigate();
 
   return (
     <div className="main-page">
-      <Header onBackClick={handleBackClick} />
+      <Header onBackClick={onBackToWelcome} />
       
-      <div className="main-layout">
+      <div className="main-body">
         <LeftSidebar />
+        
         <div className="main-content">
           <button 
             onClick={() => navigate('/create-post')} 
@@ -26,11 +23,11 @@ export default function MainPage() {
           >
             + Create New Post
           </button>
-          <h1>Main content area</h1>
+          <h1>Main content area - coming soon!</h1>
         </div>
+        
         <RightSidebar />
       </div>
-      
       <Footer />
     </div>
   );

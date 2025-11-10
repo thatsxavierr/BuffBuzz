@@ -5,17 +5,16 @@
   flex-direction: column;
 }
 
-.main-layout {
+.main-body {
   display: flex;
   flex: 1;
-  position: relative;
-  min-height: calc(100vh - 60px); /* Full height minus header */
+  min-height: 0;
 }
 
 .main-content {
   flex: 1;
   padding: 24px;
-  margin-right: 70px; /* Space for right sidebar */
+  overflow-y: auto;
 }
 
 .create-post-button {
@@ -33,12 +32,4 @@
 
 .create-post-button:hover {
   background-color: #600000;
-}
-
-.right-sidebar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
-  z-index: 10;
 }
