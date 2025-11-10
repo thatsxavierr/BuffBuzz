@@ -40,6 +40,9 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
+        // Store user data in localStorage for persistence
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
         navigate('/main', { state: { user: data.user } });
       } else {
         setError(data.message || 'Login failed. Please try again.');
