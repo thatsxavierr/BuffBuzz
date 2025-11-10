@@ -6,7 +6,20 @@ export default function Header({ onBackClick, profilePictureUrl }) {
   const navigate = useNavigate();
   
   const handleProfileClick = () => {
-    navigate('/profile-edit');  // Changed from '/profile/edit' to '/profile-edit'
+    navigate('/profile');
+  };
+  
+  const handleLogout = () => {
+    const confirmLogout = window.confirm('Are you sure you want to logout?');
+    
+    if (confirmLogout) {
+      // Clear any stored user data
+      localStorage.removeItem('user');
+      sessionStorage.clear();
+      
+      // Navigate to login page
+      navigate('/login');
+    }
   };
   
   return (
@@ -47,7 +60,9 @@ export default function Header({ onBackClick, profilePictureUrl }) {
           >
             {!profilePictureUrl && '👤'}
           </div>
-          <button className="header-button logout">Logout</button>
+          <button className="header-button logout" onClick={handleLogout}>
+            Logout
+          </button>
         </div>
       </div>
     </header>

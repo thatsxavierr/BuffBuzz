@@ -1,0 +1,258 @@
+.profile-view-container {
+  min-height: calc(100vh - 120px);
+  background-color: #f9fafb;
+  padding: 40px 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.profile-view-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 900px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.profile-header {
+  background: linear-gradient(135deg, #800000 0%, #a00000 100%);
+  color: white;
+  padding: 40px;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+
+.profile-picture-large {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 5px solid white;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-picture-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-placeholder-large {
+  font-size: 60px;
+  color: #800000;
+}
+
+.profile-header-info {
+  flex: 1;
+}
+
+.profile-header-info h1 {
+  margin: 0 0 5px 0;
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.pronouns {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+.email {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.edit-profile-button {
+  background: white;
+  color: #800000;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-profile-button:hover {
+  background: #f0f0f0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.profile-section {
+  padding: 30px 40px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.profile-section:last-child {
+  border-bottom: none;
+}
+
+.profile-section h2 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  color: #800000;
+  font-weight: 600;
+}
+
+.bio-text, .clubs-text {
+  color: #4b5563;
+  line-height: 1.6;
+  font-size: 16px;
+  margin: 0;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.info-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.info-value {
+  font-size: 16px;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.social-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.social-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.social-link.instagram {
+  background: #f3f4f6;
+  color: #e4405f;
+}
+
+.social-link.instagram:hover {
+  background: #fee;
+  transform: translateY(-2px);
+}
+
+.social-link.linkedin {
+  background: #f3f4f6;
+  color: #0077b5;
+}
+
+.social-link.linkedin:hover {
+  background: #e0f2ff;
+  transform: translateY(-2px);
+}
+
+.social-link.facebook {
+  background: #f3f4f6;
+  color: #1877f2;
+}
+
+.social-link.facebook:hover {
+  background: #eff6ff;
+  transform: translateY(-2px);
+}
+
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+  font-size: 18px;
+  color: #6b7280;
+}
+
+.no-profile-card {
+  background: white;
+  border-radius: 12px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.no-profile-card h2 {
+  color: #800000;
+  margin: 0 0 10px 0;
+  font-size: 28px;
+}
+
+.no-profile-card p {
+  color: #6b7280;
+  margin: 0 0 30px 0;
+  font-size: 16px;
+}
+
+.create-profile-button {
+  background: #800000;
+  color: white;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.create-profile-button:hover {
+  background: #600000;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(128, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    padding: 30px 20px;
+  }
+
+  .profile-picture-large {
+    width: 120px;
+    height: 120px;
+  }
+
+  .profile-header-info h1 {
+    font-size: 24px;
+  }
+
+  .profile-section {
+    padding: 20px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}

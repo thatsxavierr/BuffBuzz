@@ -3,9 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import './ProfileEdit.css';
 import Header from './Header';
 
+<<<<<<< HEAD
 
 export default function ProfileEdit() {
   const navigate = useNavigate();
+=======
+export default function ProfileEdit() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+>>>>>>> 85fcc12af745028f8bafe6bbc478cb07d093c80b
   const [formData, setFormData] = useState({
     name: '',
     pronouns: '',
@@ -25,6 +31,7 @@ export default function ProfileEdit() {
 
   // Fetch existing profile data on component mount
   useEffect(() => {
+<<<<<<< HEAD
     const fetchProfile = async () => {
       try {
         const response = await fetch('/api/profile', {
@@ -51,6 +58,44 @@ export default function ProfileEdit() {
           if (data.profilePictureUrl) {
             setPreviewImage(data.profilePictureUrl);
           }
+=======
+    // Get user from localStorage
+    const userData = JSON.parse(localStorage.getItem('user') || 'null');
+    
+    if (!userData) {
+      navigate('/login');
+      return;
+    }
+    
+    setUser(userData);
+
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/profile/${userData.id}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          setFormData({
+            name: data.profile.name || '',
+            bio: data.profile.bio || '',
+            major: data.profile.major || '',
+            department: data.profile.department || '',
+            graduationYear: data.profile.graduationYear || '',
+            classification: data.profile.classification || '',
+            clubs: data.profile.clubs || '',
+            pronouns: data.profile.pronouns || '',
+            instagramHandle: data.profile.instagramHandle || '',
+            linkedinUrl: data.profile.linkedinUrl || '',
+            facebookHandle: data.profile.facebookHandle || '',
+            profilePicture: null
+          });
+          if (data.profile.profilePictureUrl) {
+            setPreviewImage(data.profile.profilePictureUrl);
+          }
+        } else if (response.status === 404) {
+          // Profile doesn't exist yet, that's okay
+          console.log('No profile found, will create new one on save');
+>>>>>>> 85fcc12af745028f8bafe6bbc478cb07d093c80b
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
@@ -58,7 +103,11 @@ export default function ProfileEdit() {
     };
 
     fetchProfile();
+<<<<<<< HEAD
   }, []);
+=======
+  }, [navigate]);
+>>>>>>> 85fcc12af745028f8bafe6bbc478cb07d093c80b
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -99,6 +148,7 @@ export default function ProfileEdit() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+<<<<<<< HEAD
     setIsLoading(true);
 
     try {
@@ -129,6 +179,44 @@ export default function ProfileEdit() {
 
       if (response.ok) {
         // Navigate back to main page after successful update
+=======
+    
+    if (!user) {
+      alert('You must be logged in to update profile');
+      navigate('/login');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // For now, we'll send JSON data with base64 image
+      // Later you can implement proper image upload to a storage service
+      const response = await fetch('http://localhost:5000/api/profile/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          name: formData.name,
+          bio: formData.bio,
+          major: formData.major,
+          department: formData.department,
+          graduationYear: formData.graduationYear,
+          classification: formData.classification,
+          clubs: formData.clubs,
+          pronouns: formData.pronouns,
+          instagramHandle: formData.instagramHandle,
+          linkedinUrl: formData.linkedinUrl,
+          facebookHandle: formData.facebookHandle,
+          profilePictureUrl: previewImage // Base64 or existing URL
+        })
+      });
+
+      if (response.ok) {
+        alert('Profile updated successfully!');
+>>>>>>> 85fcc12af745028f8bafe6bbc478cb07d093c80b
         navigate('/main');
       } else {
         const error = await response.json();
@@ -136,7 +224,11 @@ export default function ProfileEdit() {
       }
     } catch (error) {
       console.error('Error updating profile:', error);
+<<<<<<< HEAD
       alert('Error updating profile');
+=======
+      alert('Error updating profile: ' + error.message);
+>>>>>>> 85fcc12af745028f8bafe6bbc478cb07d093c80b
     } finally {
       setIsLoading(false);
     }
@@ -150,6 +242,7 @@ export default function ProfileEdit() {
   const currentYear = new Date().getFullYear();
   const graduationYears = Array.from({ length: 11 }, (_, i) => currentYear + i);
 
+<<<<<<< HEAD
   return (
     <div>
     <Header onBackClick={() => navigate('/main')} profilePictureUrl={previewImage} />
@@ -382,5 +475,243 @@ export default function ProfileEdit() {
       </div>
       </div>
   </div>
+=======
+  if (!user) {
+    return null; // or loading spinner
+  }
+
+  return (
+    <div>
+      <Header onBackClick={() => navigate('/main')} profilePictureUrl={previewImage} />
+      <div className="profile-edit-container">
+        <div className="profile-edit-card">
+          <h1>Edit Profile</h1>
+          
+          <form onSubmit={handleSubmit}>
+            {/* Profile Picture Section */}
+            <div className="profile-picture-section">
+              <div className="profile-picture-preview">
+                {previewImage ? (
+                  <img src={previewImage} alt="Profile preview" />
+                ) : (
+                  <div className="profile-placeholder">📷</div>
+                )}
+              </div>
+              <label htmlFor="profile-picture-input" className="upload-button">
+                Change Picture
+              </label>
+              <input
+                id="profile-picture-input"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                style={{ display: 'none' }}
+              />
+            </div>
+
+            {/* Basic Information Section */}
+            <div className="section-header">Basic Information</div>
+
+            {/* Name Field */}
+            <div className="form-group">
+              <label htmlFor="name">Name *</label>
+              <input
+                id="name"
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Enter your name"
+                required
+              />
+            </div>
+
+            {/* Pronouns Field */}
+            <div className="form-group">
+              <label htmlFor="pronouns">Pronouns</label>
+              <select
+                id="pronouns"
+                name="pronouns"
+                value={formData.pronouns}
+                onChange={handleChange}
+              >
+                <option value="">Select pronouns</option>
+                <option value="he/him">He/Him</option>
+                <option value="she/her">She/Her</option>
+                <option value="they/them">They/Them</option>
+                <option value="he/they">He/They</option>
+                <option value="she/they">She/They</option>
+                <option value="other">Other/Prefer not to say</option>
+              </select>
+            </div>
+
+            {/* Bio Field */}
+            <div className="form-group">
+              <label htmlFor="bio">Bio</label>
+              <textarea
+                id="bio"
+                name="bio"
+                value={formData.bio}
+                onChange={handleChange}
+                placeholder="Tell us about yourself..."
+                rows="4"
+                maxLength="500"
+              />
+              <span className="character-count">{formData.bio.length}/500</span>
+            </div>
+
+            {/* Academic Information Section */}
+            <div className="section-header">Academic Information</div>
+
+            {/* Major Field */}
+            <div className="form-group">
+              <label htmlFor="major">Major</label>
+              <input
+                id="major"
+                type="text"
+                name="major"
+                value={formData.major}
+                onChange={handleChange}
+                placeholder="e.g., Computer Science"
+              />
+            </div>
+
+            {/* Department Field */}
+            <div className="form-group">
+              <label htmlFor="department">Department</label>
+              <input
+                id="department"
+                type="text"
+                name="department"
+                value={formData.department}
+                onChange={handleChange}
+                placeholder="e.g., College of Engineering"
+              />
+            </div>
+
+            {/* Classification Field */}
+            <div className="form-group">
+              <label htmlFor="classification">Year in School</label>
+              <select
+                id="classification"
+                name="classification"
+                value={formData.classification}
+                onChange={handleChange}
+              >
+                <option value="">Select classification</option>
+                <option value="freshman">Freshman</option>
+                <option value="sophomore">Sophomore</option>
+                <option value="junior">Junior</option>
+                <option value="senior">Senior</option>
+                <option value="graduate">Graduate Student</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            {/* Graduation Year Field */}
+            <div className="form-group">
+              <label htmlFor="graduationYear">Graduation Year</label>
+              <select
+                id="graduationYear"
+                name="graduationYear"
+                value={formData.graduationYear}
+                onChange={handleChange}
+              >
+                <option value="">Select year</option>
+                {graduationYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Campus Life Section */}
+            <div className="section-header">Campus Life</div>
+
+            {/* Clubs/Organizations Field */}
+            <div className="form-group">
+              <label htmlFor="clubs">Clubs & Organizations</label>
+              <textarea
+                id="clubs"
+                name="clubs"
+                value={formData.clubs}
+                onChange={handleChange}
+                placeholder="e.g., ColorStack, Student Government, Robotics Club"
+                rows="3"
+                maxLength="300"
+              />
+              <span className="character-count">{formData.clubs.length}/300</span>
+            </div>
+
+            {/* Social Media Section */}
+            <div className="section-header">Social Media</div>
+
+            {/* Instagram Handle */}
+            <div className="form-group">
+              <label htmlFor="instagramHandle">Instagram</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">@</span>
+                <input
+                  id="instagramHandle"
+                  type="text"
+                  name="instagramHandle"
+                  value={formData.instagramHandle}
+                  onChange={handleChange}
+                  placeholder="username"
+                />
+              </div>
+            </div>
+
+            {/* LinkedIn URL */}
+            <div className="form-group">
+              <label htmlFor="linkedinUrl">LinkedIn</label>
+              <input
+                id="linkedinUrl"
+                type="url"
+                name="linkedinUrl"
+                value={formData.linkedinUrl}
+                onChange={handleChange}
+                placeholder="https://linkedin.com/in/yourprofile"
+              />
+            </div>
+
+            {/* Facebook Handle */}
+            <div className="form-group">
+              <label htmlFor="facebookHandle">Facebook</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">@</span>
+                <input
+                  id="facebookHandle"
+                  type="text"
+                  name="facebookHandle"
+                  value={formData.facebookHandle}
+                  onChange={handleChange}
+                  placeholder="username"
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="form-actions">
+              <button 
+                type="button" 
+                className="cancel-button" 
+                onClick={handleCancel}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                className="save-button"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+>>>>>>> 85fcc12af745028f8bafe6bbc478cb07d093c80b
   );
 }

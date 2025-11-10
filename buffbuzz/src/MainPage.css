@@ -8,13 +8,66 @@
 .main-body {
   display: flex;
   flex: 1;
-  min-height: 0;
+  position: relative;
+  min-height: calc(100vh - 60px);
 }
 
 .main-content {
   flex: 1;
   padding: 24px;
-  overflow-y: auto;
+  margin-right: 70px;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.create-post-button {
+  width: 100%;
+  padding: 12px 24px;
+  background-color: #800000;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-bottom: 24px;
+}
+
+.create-post-button:hover {
+  background-color: #600000;
+}
+
+.posts-feed {
+  margin-top: 20px;
+}
+
+.loading-posts {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+.no-posts {
+  background: white;
+  border-radius: 12px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.no-posts h3 {
+  margin: 0 0 10px 0;
+  font-size: 24px;
+  color: #1f2937;
+}
+
+.no-posts p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 16px;
 }
 
 .create-post-button {
@@ -32,4 +85,12 @@
 
 .create-post-button:hover {
   background-color: #600000;
+}
+
+.right-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  z-index: 10;
 }

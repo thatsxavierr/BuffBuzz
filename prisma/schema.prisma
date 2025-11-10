@@ -12,15 +12,134 @@ enum UserType {
   PROFESSOR
 }
 
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  firstName String
-  lastName  String
-  userType  UserType
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    String              @id @default(uuid())
+  email                 String              @unique
+  password              String
+  firstName             String
+  lastName              String
+  userType              UserType
+  verificationStatus    VerificationStatus  @default(PENDING)
+  verificationCode      String?
+  verificationAttempts  Int                 @default(0)
+  resetToken            String?
+  resetTokenExpiry      DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  
+  // Relations
+  profile               Profile?
+  posts                 Post[]
+  comments              Comment[]
+  likes                 Like[]
+  shares                Share[]
 
   @@map("users")
+}
+
+model Profile {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name              String?
+  pronouns          String?
+  bio               String?
+  major             String?
+  department        String?
+  graduationYear    String?
+  classification    String?
+  clubs             String?
+  
+  // Social Media
+  instagramHandle   String?
+  linkedinUrl       String?
+  facebookHandle    String?
+  
+  // Profile Picture
+  profilePictureUrl String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model Post {
+  id          String    @id @default(uuid())
+  title       String
+  content     String
+  imageUrl    String?
+  
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations
+  comments    Comment[]
+  likes       Like[]
+  shares      Share[]
+
+  @@map("posts")
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model Comment {
+  id          String   @id @default(uuid())
+  content     String
+  
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("comments")
+  @@index([postId])
+  @@index([authorId])
+}
+
+model Like {
+  id          String   @id @default(uuid())
+  
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@map("likes")
+  @@index([postId])
+  @@index([userId])
+}
+
+model Share {
+  id          String   @id @default(uuid())
+  
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+
+  @@map("shares")
+  @@index([postId])
+  @@index([userId])
 }
