@@ -505,10 +505,11 @@ app.post('/api/reset-password', async (req, res) => {
 
 // ==================== PROFILE ENDPOINTS ====================
 
-// Get user profile
+// Get user profile with privacy checks
 app.get('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    const viewerId = req.query.viewerId; // Optional: ID of the user viewing the profile
 
     const profile = await prisma.profile.findUnique({
       where: { userId },
@@ -527,7 +528,89 @@ app.get('/api/profile/:userId', async (req, res) => {
       return res.status(404).json({ message: 'Profile not found' });
     }
 
-    res.status(200).json({ profile });
+    // Privacy check logic
+    const isOwner = viewerId && viewerId === userId;
+    let canViewFullProfile = false;
+    let canViewPartialProfile = false;
+
+    if (isOwner) {
+      // Owner can always see their own profile
+      canViewFullProfile = true;
+      canViewPartialProfile = true;
+    } else if (profile.privacy === 'PUBLIC') {
+      // Public profiles can be viewed by anyone
+      canViewFullProfile = true;
+      canViewPartialProfile = true;
+    } else if (profile.privacy === 'FRIENDS_ONLY' && viewerId) {
+      // Friends-only: check if viewer is a friend
+      const friendship = await prisma.friendship.findFirst({
+        where: {
+          OR: [
+            { senderId: viewerId, receiverId: userId, status: 'ACCEPTED' },
+            { senderId: userId, receiverId: viewerId, status: 'ACCEPTED' }
+          ]
+        }
+      });
+      
+      if (friendship) {
+        canViewFullProfile = true;
+        canViewPartialProfile = true;
+      } else {
+        // Not friends - only show basic info
+        canViewPartialProfile = true;
+      }
+    } else if (profile.privacy === 'PRIVATE') {
+      // Private profiles - only show basic info to non-owners
+      if (viewerId) {
+        canViewPartialProfile = true;
+      } else {
+        // No viewer specified - treat as public but with limited info
+        canViewPartialProfile = true;
+      }
+    } else {
+      // No viewer ID provided - show partial info
+      canViewPartialProfile = true;
+    }
+
+    // Filter profile data based on privacy
+    let profileData = { ...profile };
+    
+    if (!canViewFullProfile) {
+      // Hide sensitive information for non-friends/private profiles
+      profileData = {
+        ...profileData,
+        bio: canViewPartialProfile ? profileData.bio : null,
+        major: canViewPartialProfile ? profileData.major : null,
+        department: canViewPartialProfile ? profileData.department : null,
+        graduationYear: canViewPartialProfile ? profileData.graduationYear : null,
+        classification: canViewPartialProfile ? profileData.classification : null,
+        clubs: canViewPartialProfile ? profileData.clubs : null,
+        instagramHandle: canViewPartialProfile ? profileData.instagramHandle : null,
+        linkedinUrl: canViewPartialProfile ? profileData.linkedinUrl : null,
+        facebookHandle: canViewPartialProfile ? profileData.facebookHandle : null,
+        email: canViewPartialProfile ? profile.user?.email : null
+      };
+      
+      // Always show name and pronouns if available
+      if (profileData.privacy === 'PRIVATE' && !isOwner) {
+        // For private profiles, hide more info
+        profileData.bio = null;
+        profileData.major = null;
+        profileData.department = null;
+        profileData.graduationYear = null;
+        profileData.classification = null;
+        profileData.clubs = null;
+        profileData.instagramHandle = null;
+        profileData.linkedinUrl = null;
+        profileData.facebookHandle = null;
+      }
+    }
+
+    res.status(200).json({ 
+      profile: profileData,
+      canViewFullProfile,
+      privacy: profile.privacy
+    });
 
   } catch (error) {
     console.error('Get profile error:', error);
@@ -551,43 +634,46 @@ app.put('/api/profile/update', async (req, res) => {
       instagramHandle,
       linkedinUrl,
       facebookHandle,
-      profilePictureUrl
+      profilePictureUrl,
+      privacy
     } = req.body;
 
     if (!userId) {
       return res.status(400).json({ message: 'User ID is required' });
     }
 
+    // Validate privacy level if provided
+    if (privacy && !['PUBLIC', 'FRIENDS_ONLY', 'PRIVATE'].includes(privacy)) {
+      return res.status(400).json({ message: 'Invalid privacy level. Must be PUBLIC, FRIENDS_ONLY, or PRIVATE' });
+    }
+
+    const updateData = {
+      name,
+      pronouns,
+      bio,
+      major,
+      department,
+      graduationYear,
+      classification,
+      clubs,
+      instagramHandle,
+      linkedinUrl,
+      facebookHandle,
+      profilePictureUrl
+    };
+
+    // Only update privacy if provided
+    if (privacy) {
+      updateData.privacy = privacy;
+    }
+
     const profile = await prisma.profile.upsert({
       where: { userId },
-      update: {
-        name,
-        pronouns,
-        bio,
-        major,
-        department,
-        graduationYear,
-        classification,
-        clubs,
-        instagramHandle,
-        linkedinUrl,
-        facebookHandle,
-        profilePictureUrl
-      },
+      update: updateData,
       create: {
         userId,
-        name,
-        pronouns,
-        bio,
-        major,
-        department,
-        graduationYear,
-        classification,
-        clubs,
-        instagramHandle,
-        linkedinUrl,
-        facebookHandle,
-        profilePictureUrl
+        ...updateData,
+        privacy: privacy || 'PUBLIC' // Default to PUBLIC if not specified
       }
     });
 
