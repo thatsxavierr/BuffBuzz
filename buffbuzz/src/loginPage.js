@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./loginPage.css";
 
@@ -10,6 +11,13 @@ export default function LoginPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      navigate("/main"); // already logged in → skip login page
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -40,12 +48,9 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-<<<<<<< HEAD
-=======
         // Store user data in localStorage for persistence
         localStorage.setItem('user', JSON.stringify(data.user));
         
->>>>>>> 85fcc12af745028f8bafe6bbc478cb07d093c80b
         navigate('/main', { state: { user: data.user } });
       } else {
         setError(data.message || 'Login failed. Please try again.');
