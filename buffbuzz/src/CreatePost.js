@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './CreatePost.css';
 import Header from './Header.js';
 import Footer from './Footer';
+import { getValidUser } from './sessionUtils';
 
 export default function CreatePost() {
   const navigate = useNavigate();
@@ -14,11 +15,11 @@ export default function CreatePost() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Get user from localStorage
-    const userData = JSON.parse(localStorage.getItem('user') || 'null');
+    // Get user with session validation (checks expiration)
+    const userData = getValidUser();
     
     if (!userData) {
-      // Redirect to login if not logged in
+      // Redirect to login if not logged in or session expired
       navigate('/login');
     } else {
       setUser(userData);
