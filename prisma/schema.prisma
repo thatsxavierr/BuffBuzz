@@ -18,6 +18,12 @@ enum VerificationStatus {
   FAILED
 }
 
+enum PrivacyLevel {
+  PUBLIC
+  FRIENDS_ONLY
+  PRIVATE
+}
+
 model User {
   id                    String              @id @default(uuid())
   email                 String              @unique
@@ -39,6 +45,10 @@ model User {
   comments              Comment[]
   likes                 Like[]
   shares                Share[]
+  
+  // Friendships
+  sentFriendships       Friendship[] @relation("FriendshipSender")
+  receivedFriendships   Friendship[] @relation("FriendshipReceiver")
 
   @@map("users")
 }
@@ -64,6 +74,10 @@ model Profile {
   
   // Profile Picture
   profilePictureUrl String?
+  
+  // Privacy Settings
+  privacy            PrivacyLevel  @default(PUBLIC)
+
   
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -142,4 +156,24 @@ model Share {
   @@map("shares")
   @@index([postId])
   @@index([userId])
+}
+
+model Friendship {
+  id              String   @id @default(uuid())
+  
+  senderId        String
+  sender          User     @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  receiverId      String
+  receiver        User     @relation("FriendshipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  status          String   @default("PENDING") // PENDING, ACCEPTED, BLOCKED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([senderId, receiverId])
+  @@map("friendships")
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
 }
