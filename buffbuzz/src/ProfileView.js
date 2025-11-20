@@ -26,11 +26,28 @@ export default function ProfileView() {
 
   const fetchProfile = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      // Get the current user's ID to pass as viewerId for privacy checks
+      const currentUser = getValidUser();
+      const viewerId = currentUser?.id;
+      
+      // Add viewerId as query parameter for privacy checking
+      const url = viewerId 
+        ? `http://localhost:5000/api/profile/${userId}?viewerId=${viewerId}`
+        : `http://localhost:5000/api/profile/${userId}`;
+      
+      const response = await fetch(url);
       
       if (response.ok) {
         const data = await response.json();
         setProfile(data.profile);
+        
+        // Show privacy notice if user can't see full profile
+        if (!data.canViewFullProfile && data.privacy === 'FRIENDS_ONLY') {
+          // You could set a state variable here to show a message
+          console.log('This profile is set to Friends Only. Send a friend request to see more.');
+        } else if (!data.canViewFullProfile && data.privacy === 'PRIVATE') {
+          console.log('This profile is set to Private.');
+        }
       } else if (response.status === 404) {
         // Profile doesn't exist yet
         setProfile(null);
@@ -106,12 +123,18 @@ export default function ProfileView() {
           </div>
 
           {/* Bio Section */}
-          {profile.bio && (
+          {profile.bio ? (
             <div className="profile-section">
               <h2>About Me</h2>
               <p className="bio-text">{profile.bio}</p>
             </div>
-          )}
+          ) : profile.privacy === 'PRIVATE' && user?.id !== profile.userId ? (
+            <div className="profile-section">
+              <p style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                This profile is set to private. Only the profile owner can see this information.
+              </p>
+            </div>
+          ) : null}
 
           {/* Academic Information */}
           {(profile.major || profile.department || profile.classification || profile.graduationYear) && (
