@@ -19,7 +19,8 @@ export default function ProfileEdit() {
     instagramHandle: '',
     linkedinUrl: '',
     facebookHandle: '',
-    profilePicture: null
+    profilePicture: null,
+    privacy: 'PUBLIC'
   });
   const [previewImage, setPreviewImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -54,7 +55,8 @@ export default function ProfileEdit() {
             instagramHandle: data.profile.instagramHandle || '',
             linkedinUrl: data.profile.linkedinUrl || '',
             facebookHandle: data.profile.facebookHandle || '',
-            profilePicture: null
+            profilePicture: null,
+            privacy: data.profile.privacy || 'PUBLIC'
           });
           if (data.profile.profilePictureUrl) {
             setPreviewImage(data.profile.profilePictureUrl);
@@ -140,7 +142,8 @@ export default function ProfileEdit() {
           instagramHandle: formData.instagramHandle,
           linkedinUrl: formData.linkedinUrl,
           facebookHandle: formData.facebookHandle,
-          profilePictureUrl: previewImage // Base64 or existing URL
+          profilePictureUrl: previewImage, // Base64 or existing URL
+          privacy: formData.privacy
         })
       });
 
@@ -332,6 +335,29 @@ export default function ProfileEdit() {
                 maxLength="300"
               />
               <span className="character-count">{formData.clubs.length}/300</span>
+            </div>
+
+            {/* Privacy Settings Section */}
+            <div className="section-header">Privacy Settings</div>
+
+            <div className="form-group">
+              <label htmlFor="privacy">Profile Privacy *</label>
+              <select
+                id="privacy"
+                name="privacy"
+                value={formData.privacy}
+                onChange={handleChange}
+                required
+              >
+                <option value="PUBLIC">🌐 Public - Anyone can see your profile</option>
+                <option value="FRIENDS_ONLY">👥 Friends Only - Only your friends can see your profile</option>
+                <option value="PRIVATE">🔒 Private - Only you can see your profile</option>
+              </select>
+              <p className="form-hint" style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
+                {formData.privacy === 'PUBLIC' && 'Your profile is visible to everyone on BuffBuzz.'}
+                {formData.privacy === 'FRIENDS_ONLY' && 'Your profile is only visible to users who have accepted your friend request.'}
+                {formData.privacy === 'PRIVATE' && 'Your profile is only visible to you. Others can only see your name and profile picture.'}
+              </p>
             </div>
 
             {/* Social Media Section */}
