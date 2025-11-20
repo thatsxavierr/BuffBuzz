@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import WelcomePage from './welcomePage';
 import LoginPage from './loginPage';
 import SignupPage from './signUpPage';
@@ -15,17 +15,26 @@ import Groups from './Groups';
 import Marketplace from './Marketplace';
 import Notifications from './Notifications';
 import Jobs from './Jobs';
+import { getValidUser } from './sessionUtils';
 
 function ProtectedRoute({ element }) {
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = getValidUser();
   return user ? element : <LoginPage />;
 }
 
+// Check session on app load and redirect accordingly
+function RootRedirect() {
+  const user = getValidUser();
+  // If user has valid session, go to main page, otherwise welcome page
+  return user ? <Navigate to="/main" replace /> : <WelcomePage />;
+}
+
 function App() {
+
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<WelcomePage />} />
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/verification" element={<VerificationPage />} />
