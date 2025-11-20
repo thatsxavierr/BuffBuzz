@@ -10,6 +10,11 @@ import MainPage from './MainPage';
 import CreatePost from './CreatePost';
 import ProfileEdit from './ProfileEdit';
 import ProfileView from './ProfileView';
+import LostFound from './LostFound';
+import Groups from './Groups';
+import Marketplace from './Marketplace';
+import Notifications from './Notifications';
+import Jobs from './Jobs';
 
 function ProtectedRoute({ element }) {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -30,7 +35,11 @@ function App() {
         <Route path="/create-post" element={<ProtectedRoute element={<CreatePost />} />} />
         <Route path="/profile" element={<ProtectedRoute element={<ProfileView />} />} />
         <Route path="/profile-edit" element={<ProtectedRoute element={<ProfileEdit />} />} />
-
+        <Route path="/lostfound" element={<LostFound />} />
+        <Route path="/groups" element={<Groups />} />
+        <Route path="/marketplace" element={<Marketplace />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/jobs" element={<Jobs />} />
       </Routes>
     </Router>
   );
