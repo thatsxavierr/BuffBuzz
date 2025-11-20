@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './ProfileView.css';
 import Header from './Header';
 import Footer from './Footer';
+import { getValidUser } from './sessionUtils';
 
 export default function ProfileView() {
   const navigate = useNavigate();
@@ -11,8 +12,8 @@ export default function ProfileView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get user from localStorage
-    const userData = JSON.parse(localStorage.getItem('user') || 'null');
+    // Get user with session validation (checks expiration)
+    const userData = getValidUser();
     
     if (!userData) {
       navigate('/login');

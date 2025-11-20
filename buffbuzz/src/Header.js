@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Header.css';
+import { clearSession } from './sessionUtils';
 
 export default function Header({ onBackClick, profilePictureUrl }) {
   const navigate = useNavigate();
@@ -13,8 +14,8 @@ export default function Header({ onBackClick, profilePictureUrl }) {
     const confirmLogout = window.confirm('Are you sure you want to logout?');
     
     if (confirmLogout) {
-      // Clear any stored user data
-      localStorage.removeItem('user');
+      // Clear session (user data and timestamp)
+      clearSession();
       sessionStorage.clear();
       
       // Navigate to login page

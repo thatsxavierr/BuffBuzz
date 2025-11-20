@@ -6,6 +6,7 @@ import LeftSidebar from './LeftSidebar';
 import RightSidebar from './RightSidebar';
 import Footer from './Footer';
 import PostCard from './PostCard';
+import { getValidUser } from './sessionUtils';
 
 export default function MainPage() {
   const navigate = useNavigate();
@@ -16,11 +17,11 @@ export default function MainPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in
-    const userData = location.state?.user || JSON.parse(localStorage.getItem('user') || 'null');
+    // Check if user has a valid session (not expired)
+    const userData = location.state?.user || getValidUser();
     
     if (!userData) {
-      // Redirect to login if not logged in
+      // Redirect to login if not logged in or session expired
       navigate('/login');
     } else {
       setUser(userData);

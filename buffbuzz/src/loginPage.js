@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./loginPage.css";
+import { isSessionValid, setSession, clearSession } from "./sessionUtils";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -10,6 +12,16 @@ export default function LoginPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Check if user has a valid session (not expired)
+    if (isSessionValid()) {
+      navigate("/main"); // already logged in with valid session → skip login page
+    } else {
+      // Clear expired session
+      clearSession();
+    }
+  }, [navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -40,12 +52,9 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-<<<<<<< HEAD
-=======
-        // Store user data in localStorage for persistence
-        localStorage.setItem('user', JSON.stringify(data.user));
+        // Store user data with session timestamp (2 hour expiration)
+        setSession(data.user);
         
->>>>>>> 85fcc12af745028f8bafe6bbc478cb07d093c80b
         navigate('/main', { state: { user: data.user } });
       } else {
         setError(data.message || 'Login failed. Please try again.');
