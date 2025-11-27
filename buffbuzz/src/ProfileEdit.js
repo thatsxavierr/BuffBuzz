@@ -25,9 +25,7 @@ export default function ProfileEdit() {
   const [previewImage, setPreviewImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch existing profile data on component mount
   useEffect(() => {
-    // Get user with session validation (checks expiration)
     const userData = getValidUser();
     
     if (!userData) {
@@ -62,7 +60,6 @@ export default function ProfileEdit() {
             setPreviewImage(data.profile.profilePictureUrl);
           }
         } else if (response.status === 404) {
-          // Profile doesn't exist yet, that's okay
           console.log('No profile found, will create new one on save');
         }
       } catch (error) {
@@ -84,13 +81,11 @@ export default function ProfileEdit() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file size (e.g., max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert('File size must be less than 5MB');
         return;
       }
 
-      // Validate file type
       if (!file.type.startsWith('image/')) {
         alert('Please select an image file');
         return;
@@ -101,7 +96,6 @@ export default function ProfileEdit() {
         profilePicture: file
       }));
       
-      // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewImage(reader.result);
@@ -113,6 +107,10 @@ export default function ProfileEdit() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    console.log('=== FORM SUBMITTED ===');
+    console.log('User:', user);
+    console.log('Form Data:', formData);
+    
     if (!user) {
       alert('You must be logged in to update profile');
       navigate('/login');
@@ -122,36 +120,50 @@ export default function ProfileEdit() {
     setIsLoading(true);
 
     try {
-      // For now, we'll send JSON data with base64 image
-      // Later you can implement proper image upload to a storage service
+      const payload = {
+        userId: user.id,
+        name: formData.name,
+        bio: formData.bio,
+        major: formData.major,
+        department: formData.department,
+        graduationYear: formData.graduationYear,
+        classification: formData.classification,
+        clubs: formData.clubs,
+        pronouns: formData.pronouns,
+        instagramHandle: formData.instagramHandle,
+        linkedinUrl: formData.linkedinUrl,
+        facebookHandle: formData.facebookHandle,
+        profilePictureUrl: previewImage,
+        privacy: formData.privacy
+      };
+      
+      console.log('=== SENDING UPDATE ===');
+      console.log('Payload:', payload);
+      
       const response = await fetch('http://localhost:5000/api/profile/update', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          userId: user.id,
-          name: formData.name,
-          bio: formData.bio,
-          major: formData.major,
-          department: formData.department,
-          graduationYear: formData.graduationYear,
-          classification: formData.classification,
-          clubs: formData.clubs,
-          pronouns: formData.pronouns,
-          instagramHandle: formData.instagramHandle,
-          linkedinUrl: formData.linkedinUrl,
-          facebookHandle: formData.facebookHandle,
-          profilePictureUrl: previewImage, // Base64 or existing URL
-          privacy: formData.privacy
-        })
+        body: JSON.stringify(payload)
       });
 
+      console.log('Response status:', response.status);
+      
       if (response.ok) {
+        const data = await response.json();
+        console.log('Response data:', data);
         alert('Profile updated successfully!');
-        navigate('/main');
+        navigate('/profile', { 
+          state: { 
+            userId: user.id, 
+            refresh: Date.now() 
+          },
+          replace: true 
+        });
       } else {
         const error = await response.json();
+        console.error('Error response:', error);
         alert(error.message || 'Failed to update profile');
       }
     } catch (error) {
@@ -163,15 +175,14 @@ export default function ProfileEdit() {
   };
 
   const handleCancel = () => {
-    navigate('/main');
+    navigate('/profile');
   };
 
-  // Generate graduation year options (current year to 10 years in future)
   const currentYear = new Date().getFullYear();
   const graduationYears = Array.from({ length: 11 }, (_, i) => currentYear + i);
 
   if (!user) {
-    return null; // or loading spinner
+    return null;
   }
 
   return (
@@ -206,7 +217,6 @@ export default function ProfileEdit() {
             {/* Basic Information Section */}
             <div className="section-header">Basic Information</div>
 
-            {/* Name Field */}
             <div className="form-group">
               <label htmlFor="name">Name *</label>
               <input
@@ -220,7 +230,6 @@ export default function ProfileEdit() {
               />
             </div>
 
-            {/* Pronouns Field */}
             <div className="form-group">
               <label htmlFor="pronouns">Pronouns</label>
               <select
@@ -238,9 +247,7 @@ export default function ProfileEdit() {
                 <option value="other">Other/Prefer not to say</option>
               </select>
             </div>
-        
 
-            {/* Bio Field */}
             <div className="form-group">
               <label htmlFor="bio">Bio</label>
               <textarea
@@ -258,7 +265,6 @@ export default function ProfileEdit() {
             {/* Academic Information Section */}
             <div className="section-header">Academic Information</div>
 
-            {/* Major Field */}
             <div className="form-group">
               <label htmlFor="major">Major</label>
               <input
@@ -271,7 +277,6 @@ export default function ProfileEdit() {
               />
             </div>
 
-            {/* Department Field */}
             <div className="form-group">
               <label htmlFor="department">Department</label>
               <input
@@ -284,7 +289,6 @@ export default function ProfileEdit() {
               />
             </div>
 
-            {/* Classification Field */}
             <div className="form-group">
               <label htmlFor="classification">Year in School</label>
               <select
@@ -303,7 +307,6 @@ export default function ProfileEdit() {
               </select>
             </div>
 
-            {/* Graduation Year Field */}
             <div className="form-group">
               <label htmlFor="graduationYear">Graduation Year</label>
               <select
@@ -322,7 +325,6 @@ export default function ProfileEdit() {
             {/* Campus Life Section */}
             <div className="section-header">Campus Life</div>
 
-            {/* Clubs/Organizations Field */}
             <div className="form-group">
               <label htmlFor="clubs">Clubs & Organizations</label>
               <textarea
@@ -363,7 +365,6 @@ export default function ProfileEdit() {
             {/* Social Media Section */}
             <div className="section-header">Social Media</div>
 
-            {/* Instagram Handle */}
             <div className="form-group">
               <label htmlFor="instagramHandle">Instagram</label>
               <div className="input-with-prefix">
@@ -379,7 +380,6 @@ export default function ProfileEdit() {
               </div>
             </div>
 
-            {/* LinkedIn URL */}
             <div className="form-group">
               <label htmlFor="linkedinUrl">LinkedIn</label>
               <input
@@ -392,7 +392,6 @@ export default function ProfileEdit() {
               />
             </div>
 
-            {/* Facebook Handle */}
             <div className="form-group">
               <label htmlFor="facebookHandle">Facebook</label>
               <div className="input-with-prefix">

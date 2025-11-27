@@ -25,38 +25,39 @@ enum PrivacyLevel {
 }
 
 model User {
-  id                    String              @id @default(uuid())
-  email                 String              @unique
-  password              String
-  firstName             String
-  lastName              String
-  userType              UserType
-  verificationStatus    VerificationStatus  @default(PENDING)
-  verificationCode      String?
-  verificationAttempts  Int                 @default(0)
-  resetToken            String?
-  resetTokenExpiry      DateTime?
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  id                          String                       @id @default(uuid())
+  email                       String                       @unique
+  password                    String
+  firstName                   String
+  lastName                    String
+  userType                    UserType
+  verificationStatus          VerificationStatus           @default(PENDING)
+  verificationCode            String?
+  verificationAttempts        Int                          @default(0)
+  resetToken                  String?
+  resetTokenExpiry            DateTime?
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
   
   // Relations
-  profile               Profile?
-  posts                 Post[]
-  comments              Comment[]
-  likes                 Like[]
-  shares                Share[]
+  profile                     Profile?
+  posts                       Post[]
+  comments                    Comment[]
+  likes                       Like[]
+  shares                      Share[]
+  notificationPreferences     NotificationPreferences?
   
   // Friendships
-  sentFriendships       Friendship[] @relation("FriendshipSender")
-  receivedFriendships   Friendship[] @relation("FriendshipReceiver")
+  sentFriendships             Friendship[]                 @relation("FriendshipSender")
+  receivedFriendships         Friendship[]                 @relation("FriendshipReceiver")
 
   @@map("users")
 }
 
 model Profile {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String        @id @default(uuid())
+  userId            String        @unique
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   name              String?
   pronouns          String?
@@ -76,13 +77,29 @@ model Profile {
   profilePictureUrl String?
   
   // Privacy Settings
-  privacy            PrivacyLevel  @default(PUBLIC)
+  privacy           PrivacyLevel  @default(PUBLIC)
 
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   @@map("profiles")
+}
+
+model NotificationPreferences {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  emailNotifications    Boolean  @default(true)
+  pushNotifications     Boolean  @default(true)
+  postLikes             Boolean  @default(true)
+  comments              Boolean  @default(true)
+  newFollowers          Boolean  @default(true)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("notification_preferences")
 }
 
 model Post {

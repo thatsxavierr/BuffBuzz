@@ -53,6 +53,7 @@
 }
 
 .profile-header-info h1 {
+  color: white;
   margin: 0 0 5px 0;
   font-size: 32px;
   font-weight: 600;
@@ -254,5 +255,123 @@
 
   .info-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+.privacy-notice-section {
+  background-color: #fff3cd;
+  border-bottom: 1px solid #ffc107;
+}
+
+.privacy-notice {
+  padding: 15px 40px;
+  margin: 0;
+  color: #856404;
+  font-size: 14px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .privacy-notice {
+    padding: 15px 20px;
+  }
+}
+
+/* Add these friend button styles to your existing ProfileView.css */
+
+.profile-action-buttons {
+  margin-top: 15px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.friend-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.friend-button.friend-add {
+  background: white;
+  color: #800000;
+  border: 2px solid white;
+}
+
+.friend-button.friend-add:hover {
+  background: #f0f0f0;
+  transform: translateY(-2px);
+}
+
+.friend-button.friend-pending {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+  border: 2px solid white;
+  cursor: default;
+}
+
+.friend-button.friend-accepted {
+  background: rgba(76, 175, 80, 0.2);
+  color: white;
+  border: 2px solid white;
+}
+
+.friend-button.friend-accepted:hover {
+  background: rgba(244, 67, 54, 0.3);
+}
+
+.friend-button.friend-loading {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+  border: 2px solid white;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.friend-request-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.friend-button.friend-accept {
+  background: rgba(76, 175, 80, 0.9);
+  color: white;
+  border: 2px solid white;
+}
+
+.friend-button.friend-accept:hover {
+  background: #4CAF50;
+  transform: translateY(-2px);
+}
+
+.friend-button.friend-decline {
+  background: rgba(244, 67, 54, 0.9);
+  color: white;
+  border: 2px solid white;
+}
+
+.friend-button.friend-decline:hover {
+  background: #f44336;
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .profile-action-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .friend-button {
+    width: 100%;
+  }
+
+  .friend-request-buttons {
+    flex-direction: column;
+    width: 100%;
   }
 }

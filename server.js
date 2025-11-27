@@ -509,13 +509,14 @@ app.post('/api/reset-password', async (req, res) => {
 app.get('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const viewerId = req.query.viewerId; // Optional: ID of the user viewing the profile
+    const viewerId = req.query.viewerId;
 
     const profile = await prisma.profile.findUnique({
       where: { userId },
       include: {
         user: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
             email: true
@@ -528,21 +529,21 @@ app.get('/api/profile/:userId', async (req, res) => {
       return res.status(404).json({ message: 'Profile not found' });
     }
 
-    // Privacy check logic
+    // Default to PUBLIC if privacy is not set
+    const privacy = profile.privacy || 'PUBLIC';
     const isOwner = viewerId && viewerId === userId;
     let canViewFullProfile = false;
-    let canViewPartialProfile = false;
+
+    console.log('Profile check:', { userId, viewerId, isOwner, privacy });
 
     if (isOwner) {
-      // Owner can always see their own profile
+      console.log('Owner viewing own profile');
       canViewFullProfile = true;
-      canViewPartialProfile = true;
-    } else if (profile.privacy === 'PUBLIC') {
-      // Public profiles can be viewed by anyone
+    } else if (privacy === 'PUBLIC') {
+      console.log('Public profile - allowing full view');
       canViewFullProfile = true;
-      canViewPartialProfile = true;
-    } else if (profile.privacy === 'FRIENDS_ONLY' && viewerId) {
-      // Friends-only: check if viewer is a friend
+    } else if (privacy === 'FRIENDS_ONLY' && viewerId) {
+      console.log('Checking friendship status');
       const friendship = await prisma.friendship.findFirst({
         where: {
           OR: [
@@ -551,65 +552,53 @@ app.get('/api/profile/:userId', async (req, res) => {
           ]
         }
       });
-      
-      if (friendship) {
-        canViewFullProfile = true;
-        canViewPartialProfile = true;
-      } else {
-        // Not friends - only show basic info
-        canViewPartialProfile = true;
-      }
-    } else if (profile.privacy === 'PRIVATE') {
-      // Private profiles - only show basic info to non-owners
-      if (viewerId) {
-        canViewPartialProfile = true;
-      } else {
-        // No viewer specified - treat as public but with limited info
-        canViewPartialProfile = true;
-      }
+      canViewFullProfile = !!friendship;
+      console.log('Friendship found:', !!friendship);
     } else {
-      // No viewer ID provided - show partial info
-      canViewPartialProfile = true;
+      console.log('Private profile or no viewer - hiding details');
     }
 
-    // Filter profile data based on privacy
-    let profileData = { ...profile };
-    
-    if (!canViewFullProfile) {
-      // Hide sensitive information for non-friends/private profiles
-      profileData = {
-        ...profileData,
-        bio: canViewPartialProfile ? profileData.bio : null,
-        major: canViewPartialProfile ? profileData.major : null,
-        department: canViewPartialProfile ? profileData.department : null,
-        graduationYear: canViewPartialProfile ? profileData.graduationYear : null,
-        classification: canViewPartialProfile ? profileData.classification : null,
-        clubs: canViewPartialProfile ? profileData.clubs : null,
-        instagramHandle: canViewPartialProfile ? profileData.instagramHandle : null,
-        linkedinUrl: canViewPartialProfile ? profileData.linkedinUrl : null,
-        facebookHandle: canViewPartialProfile ? profileData.facebookHandle : null,
-        email: canViewPartialProfile ? profile.user?.email : null
-      };
-      
-      // Always show name and pronouns if available
-      if (profileData.privacy === 'PRIVATE' && !isOwner) {
-        // For private profiles, hide more info
-        profileData.bio = null;
-        profileData.major = null;
-        profileData.department = null;
-        profileData.graduationYear = null;
-        profileData.classification = null;
-        profileData.clubs = null;
-        profileData.instagramHandle = null;
-        profileData.linkedinUrl = null;
-        profileData.facebookHandle = null;
-      }
+    // If can view full profile, return everything
+    if (canViewFullProfile) {
+      console.log('Returning full profile data');
+      return res.status(200).json({ 
+        profile: profile,
+        canViewFullProfile: true,
+        privacy: privacy
+      });
     }
+
+    // Otherwise, return limited data
+    console.log('Returning limited profile data');
+    const limitedProfile = {
+      id: profile.id,
+      userId: profile.userId,
+      name: profile.name,
+      pronouns: profile.pronouns,
+      profilePictureUrl: profile.profilePictureUrl,
+      privacy: privacy,
+      user: {
+        id: profile.user.id,
+        firstName: profile.user.firstName,
+        lastName: profile.user.lastName,
+        email: null // Hide email
+      },
+      // Hide everything else
+      bio: null,
+      major: null,
+      department: null,
+      graduationYear: null,
+      classification: null,
+      clubs: null,
+      instagramHandle: null,
+      linkedinUrl: null,
+      facebookHandle: null
+    };
 
     res.status(200).json({ 
-      profile: profileData,
-      canViewFullProfile,
-      privacy: profile.privacy
+      profile: limitedProfile,
+      canViewFullProfile: false,
+      privacy: privacy
     });
 
   } catch (error) {
@@ -1186,6 +1175,463 @@ app.get('/api/posts/:postId/shares', async (req, res) => {
   } catch (error) {
     console.error('Get shares error:', error);
     res.status(500).json({ message: 'An error occurred while fetching share count' });
+  }
+});
+
+// ==================== FRIENDSHIP ENDPOINTS ====================
+
+// Send friend request
+app.post('/api/friends/request', async (req, res) => {
+  try {
+    const { senderId, receiverId } = req.body;
+
+    if (!senderId || !receiverId) {
+      return res.status(400).json({ message: 'Sender and receiver IDs are required' });
+    }
+
+    if (senderId === receiverId) {
+      return res.status(400).json({ message: 'Cannot send friend request to yourself' });
+    }
+
+    // Check if friendship already exists
+    const existingFriendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { senderId, receiverId },
+          { senderId: receiverId, receiverId: senderId }
+        ]
+      }
+    });
+
+    if (existingFriendship) {
+      if (existingFriendship.status === 'PENDING') {
+        return res.status(400).json({ message: 'Friend request already sent' });
+      }
+      if (existingFriendship.status === 'ACCEPTED') {
+        return res.status(400).json({ message: 'Already friends' });
+      }
+    }
+
+    // Create friend request
+    const friendship = await prisma.friendship.create({
+      data: {
+        senderId,
+        receiverId,
+        status: 'PENDING'
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        receiver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      message: 'Friend request sent successfully',
+      friendship
+    });
+
+  } catch (error) {
+    console.error('Send friend request error:', error);
+    res.status(500).json({ message: 'An error occurred while sending friend request' });
+  }
+});
+
+// Accept friend request
+app.put('/api/friends/accept/:friendshipId', async (req, res) => {
+  try {
+    const { friendshipId } = req.params;
+    const { userId } = req.body;
+
+    const friendship = await prisma.friendship.findUnique({
+      where: { id: friendshipId }
+    });
+
+    if (!friendship) {
+      return res.status(404).json({ message: 'Friend request not found' });
+    }
+
+    // Only receiver can accept
+    if (friendship.receiverId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to accept this request' });
+    }
+
+    if (friendship.status !== 'PENDING') {
+      return res.status(400).json({ message: 'Request already processed' });
+    }
+
+    // Update to accepted
+    const updatedFriendship = await prisma.friendship.update({
+      where: { id: friendshipId },
+      data: { status: 'ACCEPTED' },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.status(200).json({
+      message: 'Friend request accepted',
+      friendship: updatedFriendship
+    });
+
+  } catch (error) {
+    console.error('Accept friend request error:', error);
+    res.status(500).json({ message: 'An error occurred while accepting friend request' });
+  }
+});
+
+// Reject/Cancel friend request
+app.delete('/api/friends/reject/:friendshipId', async (req, res) => {
+  try {
+    const { friendshipId } = req.params;
+    const { userId } = req.body;
+
+    const friendship = await prisma.friendship.findUnique({
+      where: { id: friendshipId }
+    });
+
+    if (!friendship) {
+      return res.status(404).json({ message: 'Friend request not found' });
+    }
+
+    // Only sender or receiver can reject/cancel
+    if (friendship.senderId !== userId && friendship.receiverId !== userId) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    await prisma.friendship.delete({
+      where: { id: friendshipId }
+    });
+
+    res.status(200).json({ message: 'Friend request removed' });
+
+  } catch (error) {
+    console.error('Reject friend request error:', error);
+    res.status(500).json({ message: 'An error occurred while rejecting friend request' });
+  }
+});
+
+// Remove friend (unfriend)
+app.delete('/api/friends/remove/:friendshipId', async (req, res) => {
+  try {
+    const { friendshipId } = req.params;
+    const { userId } = req.body;
+
+    const friendship = await prisma.friendship.findUnique({
+      where: { id: friendshipId }
+    });
+
+    if (!friendship) {
+      return res.status(404).json({ message: 'Friendship not found' });
+    }
+
+    // Only sender or receiver can remove
+    if (friendship.senderId !== userId && friendship.receiverId !== userId) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    await prisma.friendship.delete({
+      where: { id: friendshipId }
+    });
+
+    res.status(200).json({ message: 'Friend removed successfully' });
+
+  } catch (error) {
+    console.error('Remove friend error:', error);
+    res.status(500).json({ message: 'An error occurred while removing friend' });
+  }
+});
+
+// Get pending friend requests for a user
+app.get('/api/friends/requests/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const requests = await prisma.friendship.findMany({
+      where: {
+        receiverId: userId,
+        status: 'PENDING'
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            profile: {
+              select: {
+                profilePictureUrl: true,
+                bio: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.status(200).json({ requests });
+
+  } catch (error) {
+    console.error('Get friend requests error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching friend requests' });
+  }
+});
+
+// Get friends list for a user
+app.get('/api/friends/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        OR: [
+          { senderId: userId, status: 'ACCEPTED' },
+          { receiverId: userId, status: 'ACCEPTED' }
+        ]
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true,
+                bio: true
+              }
+            }
+          }
+        },
+        receiver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true,
+                bio: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Map to get the other user (friend)
+    const friends = friendships.map(friendship => {
+      const friend = friendship.senderId === userId ? friendship.receiver : friendship.sender;
+      return {
+        friendshipId: friendship.id,
+        ...friend
+      };
+    });
+
+    res.status(200).json({ friends });
+
+  } catch (error) {
+    console.error('Get friends error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching friends' });
+  }
+});
+
+// Check friendship status between two users
+app.get('/api/friends/status/:userId/:otherUserId', async (req, res) => {
+  try {
+    const { userId, otherUserId } = req.params;
+
+    const friendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: otherUserId },
+          { senderId: otherUserId, receiverId: userId }
+        ]
+      }
+    });
+
+    if (!friendship) {
+      return res.status(200).json({ 
+        status: 'NONE',
+        friendshipId: null,
+        isSender: false
+      });
+    }
+
+    res.status(200).json({ 
+      status: friendship.status,
+      friendshipId: friendship.id,
+      isSender: friendship.senderId === userId
+    });
+
+  } catch (error) {
+    console.error('Check friendship status error:', error);
+    res.status(500).json({ message: 'An error occurred while checking friendship status' });
+  }
+});
+
+// ==================== SETTINGS ENDPOINTS ====================
+
+// Update Password
+app.put('/api/settings/password', async (req, res) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters' });
+    }
+
+    // Get user
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify current password
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isValid) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword }
+    });
+
+    console.log(`Password updated for user: ${user.email}`);
+
+    res.status(200).json({ message: 'Password updated successfully' });
+
+  } catch (error) {
+    console.error('Password update error:', error);
+    res.status(500).json({ message: 'An error occurred while updating password' });
+  }
+});
+
+// Get Notification Preferences
+app.get('/api/settings/notifications/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    let preferences = await prisma.notificationPreferences.findUnique({
+      where: { userId }
+    });
+
+    // If no preferences exist, return defaults
+    if (!preferences) {
+      return res.status(200).json({
+        preferences: {
+          emailNotifications: true,
+          pushNotifications: true,
+          postLikes: true,
+          comments: true,
+          newFollowers: true
+        }
+      });
+    }
+
+    res.status(200).json({ preferences });
+
+  } catch (error) {
+    console.error('Get preferences error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching preferences' });
+  }
+});
+
+// Update Notification Preferences
+app.put('/api/settings/notifications', async (req, res) => {
+  try {
+    const {
+      userId,
+      emailNotifications,
+      pushNotifications,
+      postLikes,
+      comments,
+      newFollowers
+    } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    // Upsert preferences
+    const preferences = await prisma.notificationPreferences.upsert({
+      where: { userId },
+      update: {
+        emailNotifications,
+        pushNotifications,
+        postLikes,
+        comments,
+        newFollowers
+      },
+      create: {
+        userId,
+        emailNotifications,
+        pushNotifications,
+        postLikes,
+        comments,
+        newFollowers
+      }
+    });
+
+    res.status(200).json({
+      message: 'Notification preferences updated successfully',
+      preferences
+    });
+
+  } catch (error) {
+    console.error('Update preferences error:', error);
+    res.status(500).json({ message: 'An error occurred while updating preferences' });
   }
 });
 

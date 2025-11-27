@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './PostCard.css';
 import CommentModel from './CommentModel';
 
 export default function PostCard({ post, currentUserId }) {
+  const navigate = useNavigate();
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [isSaved, setIsSaved] = useState(false);
   const [likeCount, setLikeCount] = useState(post._count?.likes || 0);
   const [commentCount, setCommentCount] = useState(post._count?.comments || 0);
+
+  // Debug: Log the post data
+  console.log('Post data:', post);
+  console.log('Image URL:', post.imageUrl);
+  console.log('Image URL length:', post.imageUrl?.length);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -22,6 +29,10 @@ export default function PostCard({ post, currentUserId }) {
     if (diffInHours < 24) return `${diffInHours}h ago`;
     if (diffInDays < 7) return `${diffInDays}d ago`;
     return date.toLocaleDateString();
+  };
+
+  const handleAuthorClick = () => {
+    navigate('/profile', { state: { userId: post.author.id } });
   };
 
   const handleLike = async () => {
@@ -68,8 +79,9 @@ export default function PostCard({ post, currentUserId }) {
     setIsSaved(!isSaved);
   };
 
-  const handleFollow = () => {
-    alert('Follow functionality coming soon!');
+  // FIXED: Navigate to user's profile instead of showing alert
+  const handleAdd = () => {
+    navigate('/profile', { state: { userId: post.author.id } });
   };
 
   const handleCommentAdded = () => {
@@ -81,7 +93,7 @@ export default function PostCard({ post, currentUserId }) {
       <div className="post-card">
         {/* Post Header */}
         <div className="post-header">
-          <div className="author-section">
+          <div className="author-section" onClick={handleAuthorClick} style={{ cursor: 'pointer' }}>
             <div className="author-avatar">
               {post.author.profile?.profilePictureUrl ? (
                 <img src={post.author.profile.profilePictureUrl} alt={post.author.firstName} />
@@ -91,23 +103,40 @@ export default function PostCard({ post, currentUserId }) {
             </div>
             <div className="author-info">
               <div className="author-name-row">
-                <span className="author-username">{post.author.firstName.toLowerCase()}{post.author.lastName.toLowerCase()}</span>
+                <span className="author-username" style={{ color: '#800000', fontWeight: '600' }}>
+                  {post.author.firstName.toLowerCase()}{post.author.lastName.toLowerCase()}
+                </span>
                 <span className="post-time-dot">•</span>
                 <span className="post-time">{formatDate(post.createdAt)}</span>
               </div>
             </div>
           </div>
           <div className="header-actions">
-            <button className="follow-button" onClick={handleFollow}>
-              Follow
-            </button>
+            {post.author.id !== currentUserId && (
+              <button className="add-button" onClick={handleAdd}>
+                Add
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Post Image */}
+        {/* Post Image - Fixed to handle base64 properly */}
         {post.imageUrl && (
           <div className="post-image-container">
-            <img src={post.imageUrl} alt="Post" className="post-image" />
+            <img 
+              src={post.imageUrl} 
+              alt="Post content" 
+              className="post-image"
+              onError={(e) => {
+                console.error('Image failed to load');
+                console.error('Image src:', e.target.src);
+                console.error('Starts with data:', post.imageUrl.startsWith('data:'));
+                e.target.style.display = 'none';
+              }}
+              onLoad={() => {
+                console.log('Image loaded successfully!');
+              }}
+            />
           </div>
         )}
 
@@ -159,7 +188,13 @@ export default function PostCard({ post, currentUserId }) {
 
         {/* Post Content */}
         <div className="post-content">
-          <span className="content-username">{post.author.firstName.toLowerCase()}{post.author.lastName.toLowerCase()}</span>
+          <span 
+            className="content-username" 
+            onClick={handleAuthorClick}
+            style={{ cursor: 'pointer', color: '#800000', fontWeight: '600' }}
+          >
+            {post.author.firstName.toLowerCase()}{post.author.lastName.toLowerCase()}
+          </span>
           <span className="content-title"> {post.title}</span>
           {post.content && <p className="content-text">{post.content}</p>}
         </div>

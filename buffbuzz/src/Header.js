@@ -10,6 +10,22 @@ export default function Header({ onBackClick, profilePictureUrl }) {
     navigate('/profile');
   };
   
+  const handleSettingsClick = () => {
+    navigate('/settings');
+  };
+
+  const handleHomeClick = () => {
+    navigate('/main');
+  };
+
+  const handleFriendsClick = () => {
+    navigate('/friends');
+  };
+
+  const handleFriendRequestsClick = () => {
+    navigate('/friend-requests');
+  };
+  
   const handleLogout = () => {
     const confirmLogout = window.confirm('Are you sure you want to logout?');
     
@@ -47,8 +63,10 @@ export default function Header({ onBackClick, profilePictureUrl }) {
 
         {/* Right side */}
         <div className="header-right">
-          <button className="header-button">🏠 Home</button>
-          <button className="header-button">⚙️ Settings</button>
+          <button className="header-button" onClick={handleHomeClick}>🏠 Home</button>
+          <button className="header-button" onClick={handleFriendsClick}>👥 Friends</button>
+          <button className="header-button" onClick={handleFriendRequestsClick}>📬 Requests</button>
+          <button className="header-button" onClick={handleSettingsClick}>⚙️ Settings</button>
           <div 
             className="profile-circle" 
             onClick={handleProfileClick}

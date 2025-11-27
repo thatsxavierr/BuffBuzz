@@ -10,11 +10,14 @@ import MainPage from './MainPage';
 import CreatePost from './CreatePost';
 import ProfileEdit from './ProfileEdit';
 import ProfileView from './ProfileView';
+import Friends from './Friends';
+import FriendRequests from './FriendRequests';
 import LostFound from './LostFound';
 import Groups from './Groups';
 import Marketplace from './Marketplace';
 import Notifications from './Notifications';
 import Jobs from './Jobs';
+import SettingsPage from './SettingsPage';
 import { getValidUser } from './sessionUtils';
 
 function ProtectedRoute({ element }) {
@@ -30,7 +33,6 @@ function RootRedirect() {
 }
 
 function App() {
-
   return (
     <Router>
       <Routes>
@@ -44,6 +46,9 @@ function App() {
         <Route path="/create-post" element={<ProtectedRoute element={<CreatePost />} />} />
         <Route path="/profile" element={<ProtectedRoute element={<ProfileView />} />} />
         <Route path="/profile-edit" element={<ProtectedRoute element={<ProfileEdit />} />} />
+        <Route path="/friends" element={<ProtectedRoute element={<Friends />} />} />
+        <Route path="/friend-requests" element={<ProtectedRoute element={<FriendRequests />} />} />
+        <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
         <Route path="/lostfound" element={<LostFound />} />
         <Route path="/groups" element={<Groups />} />
         <Route path="/marketplace" element={<Marketplace />} />
