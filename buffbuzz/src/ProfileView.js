@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import './ProfileView.css';
 import Header from './Header';
 import Footer from './Footer';
@@ -7,9 +7,12 @@ import { getValidUser } from './sessionUtils';
 
 export default function ProfileView() {
   const navigate = useNavigate();
+  const { userId: routeUserId } = useParams();
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const isOwnProfile = !routeUserId || routeUserId === user?.id;
 
   useEffect(() => {
     // Get user with session validation (checks expiration)
@@ -21,15 +24,12 @@ export default function ProfileView() {
     }
     
     setUser(userData);
-    fetchProfile(userData.id);
-  }, [navigate]);
+    const targetUserId = routeUserId || userData.id;
+    fetchProfile(targetUserId, userData.id);
+  }, [navigate, routeUserId]);
 
-  const fetchProfile = async (userId) => {
+  const fetchProfile = async (userId, viewerId) => {
     try {
-      // Get the current user's ID to pass as viewerId for privacy checks
-      const currentUser = getValidUser();
-      const viewerId = currentUser?.id;
-      
       // Add viewerId as query parameter for privacy checking
       const url = viewerId 
         ? `http://localhost:5000/api/profile/${userId}?viewerId=${viewerId}`
@@ -40,6 +40,7 @@ export default function ProfileView() {
       if (response.ok) {
         const data = await response.json();
         setProfile(data.profile);
+        setNotFound(false);
         
         // Show privacy notice if user can't see full profile
         if (!data.canViewFullProfile && data.privacy === 'FRIENDS_ONLY') {
@@ -51,6 +52,7 @@ export default function ProfileView() {
       } else if (response.status === 404) {
         // Profile doesn't exist yet
         setProfile(null);
+        setNotFound(true);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -66,7 +68,7 @@ export default function ProfileView() {
   if (loading) {
     return (
       <div>
-        <Header onBackClick={() => navigate('/main')} />
+        <Header onBackClick={() => navigate('/main')} currentUserId={user?.id} />
         <div className="profile-view-container">
           <div className="loading">Loading profile...</div>
         </div>
@@ -77,26 +79,43 @@ export default function ProfileView() {
   if (!profile) {
     return (
       <div>
-        <Header onBackClick={() => navigate('/main')} />
+        <Header onBackClick={() => navigate('/main')} currentUserId={user?.id} />
         <div className="profile-view-container">
-          <div className="no-profile-card">
-            <h2>No Profile Yet</h2>
-            <p>Create your profile to get started!</p>
-            <button onClick={handleEditProfile} className="create-profile-button">
-              Create Profile
-            </button>
-          </div>
+          {notFound && !isOwnProfile ? (
+            <div className="no-profile-card">
+              <h2>Profile Not Found</h2>
+              <p>This user hasn't set up a profile yet.</p>
+            </div>
+          ) : (
+            <div className="no-profile-card">
+              <h2>No Profile Yet</h2>
+              <p>Create your profile to get started!</p>
+              {isOwnProfile && (
+                <button onClick={handleEditProfile} className="create-profile-button">
+                  Create Profile
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <Footer />
       </div>
     );
   }
 
+  const fallbackName = user ? `${user.firstName} ${user.lastName}` : 'Profile';
+  const profileOwnerName = profile.user
+    ? `${profile.user.firstName} ${profile.user.lastName}`.trim()
+    : fallbackName;
+  const displayName = profile.name || profileOwnerName || fallbackName;
+  const displayEmail = profile.email || profile.user?.email || (isOwnProfile ? user?.email : '');
+
   return (
     <div>
       <Header 
         onBackClick={() => navigate('/main')} 
-        profilePictureUrl={profile.profilePictureUrl} 
+        profilePictureUrl={profile.profilePictureUrl}
+        currentUserId={user.id}
       />
       
       <div className="profile-view-container">
@@ -111,14 +130,16 @@ export default function ProfileView() {
               )}
             </div>
             <div className="profile-header-info">
-              <h1>{profile.name || `${user.firstName} ${user.lastName}`}</h1>
+              <h1>{displayName}</h1>
               {profile.pronouns && (
                 <p className="pronouns">({profile.pronouns})</p>
               )}
-              <p className="email">{user.email}</p>
-              <button onClick={handleEditProfile} className="edit-profile-button">
-                ✏️ Edit Profile
-              </button>
+              {displayEmail && <p className="email">{displayEmail}</p>}
+              {isOwnProfile && (
+                <button onClick={handleEditProfile} className="edit-profile-button">
+                  ✏️ Edit Profile
+                </button>
+              )}
             </div>
           </div>
 
