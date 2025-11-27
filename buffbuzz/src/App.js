@@ -45,6 +45,7 @@ function App() {
         <Route path="/main" element={<ProtectedRoute element={<MainPage />} />} />
         <Route path="/create-post" element={<ProtectedRoute element={<CreatePost />} />} />
         <Route path="/profile" element={<ProtectedRoute element={<ProfileView />} />} />
+        <Route path="/profile-view/:userId" element={<ProtectedRoute element={<ProfileView />} />} />
         <Route path="/profile-edit" element={<ProtectedRoute element={<ProfileEdit />} />} />
         <Route path="/friends" element={<ProtectedRoute element={<Friends />} />} />
         <Route path="/friend-requests" element={<ProtectedRoute element={<FriendRequests />} />} />

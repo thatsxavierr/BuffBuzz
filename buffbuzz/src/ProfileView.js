@@ -160,7 +160,6 @@ export default function ProfileView() {
         if (accept) {
           setFriendshipStatus('ACCEPTED');
           alert('Friend request accepted!');
-          // Refresh profile to update privacy view
           window.location.reload();
         } else {
           setFriendshipStatus('NONE');
@@ -198,7 +197,6 @@ export default function ProfileView() {
         setFriendshipId(null);
         setIsSender(false);
         alert('Friend removed');
-        // Refresh profile to update privacy view
         window.location.reload();
       } else {
         const data = await response.json();
@@ -262,7 +260,10 @@ export default function ProfileView() {
   if (loading) {
     return (
       <div>
-        <Header onBackClick={() => navigate('/main')} />
+        <Header 
+          onBackClick={() => navigate('/main')} 
+          currentUserId={currentUserId}
+        />
         <div className="profile-view-container">
           <div className="loading">Loading profile...</div>
         </div>
@@ -273,7 +274,10 @@ export default function ProfileView() {
   if (!profile) {
     return (
       <div>
-        <Header onBackClick={() => navigate('/main')} />
+        <Header 
+          onBackClick={() => navigate('/main')} 
+          currentUserId={currentUserId}
+        />
         <div className="profile-view-container">
           <div className="no-profile-card">
             <h2>{isOwnProfile ? 'No Profile Yet' : 'Profile Not Found'}</h2>
@@ -299,7 +303,8 @@ export default function ProfileView() {
     <div>
       <Header 
         onBackClick={() => navigate('/main')} 
-        profilePictureUrl={isOwnProfile ? profile.profilePictureUrl : null} 
+        profilePictureUrl={isOwnProfile ? profile.profilePictureUrl : null}
+        currentUserId={currentUserId}
       />
       
       <div className="profile-view-container">

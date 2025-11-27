@@ -364,6 +364,51 @@ app.post('/api/verify', async (req, res) => {
   }
 });
 
+// ----------- SEARCH USERS -------------
+app.get('/api/search-users', async (req, res) => {
+  try {
+    const query = (req.query.query || req.query.q || '').trim();
+
+    if (!query) {
+      return res.json({ users: [] });
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { firstName: { contains: query, mode: 'insensitive' } },
+          { lastName: { contains: query, mode: 'insensitive' } },
+          { email: { contains: query, mode: 'insensitive' } }
+        ]
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        profile: {
+          select: { profilePictureUrl: true }
+        }
+      },
+      take: 10
+    });
+
+    const formattedUsers = users.map((user) => ({
+      id: user.id,
+      fullName: `${user.firstName} ${user.lastName}`.trim(),
+      email: user.email,
+      profilePictureUrl: user.profile?.profilePictureUrl || null
+    }));
+
+    res.json({ users: formattedUsers });
+
+  } catch (err) {
+    console.error('Search error:', err);
+    res.status(500).json({ message: 'Server error searching users' });
+  }
+});
+
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   try {
