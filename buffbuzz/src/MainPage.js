@@ -30,6 +30,29 @@ export default function MainPage() {
     }
   }, [navigate, location]);
 
+  const [searchResults, setSearchResults] = useState([]);
+const [searching, setSearching] = useState(false);
+
+const handleSearch = async (query) => {
+  if (!query.trim()) {
+    setSearchResults([]);
+    return;
+  }
+
+  setSearching(true);
+
+  try {
+    const res = await fetch(`http://localhost:5000/api/search?q=${query}`);
+    const data = await res.json();
+    setSearchResults(data.users);
+  } catch (err) {
+    console.error("Search error:", err);
+  }
+
+  setSearching(false);
+};
+
+
   const fetchProfilePicture = async (userId) => {
     try {
       const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
