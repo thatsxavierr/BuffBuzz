@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './Jobs.css';
 import Header from './Header.js';
 import Footer from './Footer';
+import { getValidUser } from './sessionUtils';
 
 export default function Jobs() {
   const navigate = useNavigate();
@@ -16,16 +17,16 @@ export default function Jobs() {
     title: '',
     company: '',
     location: '',
-    type: 'full-time',
-    category: 'internship',
+    jobType: 'FULL_TIME',
+    category: 'INTERNSHIP',
     description: '',
     requirements: '',
     salary: '',
-    applicationUrl: ''
+    applicationLink: ''
   });
 
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('user') || 'null');
+    const userData = getValidUser();
     
     if (!userData) {
       navigate('/login');
@@ -51,9 +52,13 @@ export default function Jobs() {
     }
   };
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (category = null) => {
     try {
-      const response = await fetch('http://localhost:5000/api/jobs');
+      const url = category && category !== 'all' 
+        ? `http://localhost:5000/api/jobs?category=${category.toUpperCase()}`
+        : 'http://localhost:5000/api/jobs';
+      
+      const response = await fetch(url);
       
       if (response.ok) {
         const data = await response.json();
@@ -85,6 +90,8 @@ export default function Jobs() {
         })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         alert('Job posted successfully!');
         setShowCreateModal(false);
@@ -92,16 +99,15 @@ export default function Jobs() {
           title: '',
           company: '',
           location: '',
-          type: 'full-time',
-          category: 'internship',
+          jobType: 'FULL_TIME',
+          category: 'INTERNSHIP',
           description: '',
           requirements: '',
           salary: '',
-          applicationUrl: ''
+          applicationLink: ''
         });
         fetchJobs();
       } else {
-        const data = await response.json();
         alert(data.message || 'Failed to post job');
       }
     } catch (error) {
@@ -111,26 +117,69 @@ export default function Jobs() {
   };
 
   const handleApply = (job) => {
-    if (job.applicationUrl) {
-      window.open(job.applicationUrl, '_blank');
+    if (job.applicationLink) {
+      window.open(job.applicationLink, '_blank');
     } else {
       alert('Application link not available');
     }
   };
 
-  const filteredJobs = jobs.filter(job => {
-    if (filter === 'all') return true;
-    return job.category === filter;
-  });
+  const handleDeleteJob = async (jobId) => {
+  if (!window.confirm('Are you sure you want to delete this job posting?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: user.id
+      })
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      alert('Job deleted successfully!');
+      fetchJobs(filter === 'all' ? null : filter);
+    } else {
+      alert(data.message || 'Failed to delete job');
+    }
+  } catch (error) {
+    console.error('Error deleting job:', error);
+    alert('An error occurred while deleting the job');
+  }
+};
+
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+    setLoading(true);
+    fetchJobs(newFilter);
+  };
 
   const getTypeIcon = (type) => {
     const icons = {
-      'full-time': '💼',
-      'part-time': '⏰',
-      'internship': '🎓',
-      'contract': '📝'
+      'FULL_TIME': '💼',
+      'PART_TIME': '⏰',
+      'INTERNSHIP': '🎓',
+      'CONTRACT': '📝'
     };
     return icons[type] || '💼';
+  };
+
+  const formatJobType = (type) => {
+    return type.replace('_', '-').toLowerCase().split('-').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join('-');
+  };
+
+  const formatCategory = (category) => {
+    return category.replace('_', '-').toLowerCase().split('-').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
   };
 
   if (!user) {
@@ -158,31 +207,31 @@ export default function Jobs() {
           <div className="filter-buttons">
             <button 
               className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilter('all')}
+              onClick={() => handleFilterChange('all')}
             >
               All Jobs
             </button>
             <button 
               className={`filter-btn ${filter === 'internship' ? 'active' : ''}`}
-              onClick={() => setFilter('internship')}
+              onClick={() => handleFilterChange('internship')}
             >
               Internships
             </button>
             <button 
-              className={`filter-btn ${filter === 'on-campus' ? 'active' : ''}`}
-              onClick={() => setFilter('on-campus')}
+              className={`filter-btn ${filter === 'on_campus' ? 'active' : ''}`}
+              onClick={() => handleFilterChange('on_campus')}
             >
               On-Campus
             </button>
             <button 
               className={`filter-btn ${filter === 'remote' ? 'active' : ''}`}
-              onClick={() => setFilter('remote')}
+              onClick={() => handleFilterChange('remote')}
             >
               Remote
             </button>
             <button 
               className={`filter-btn ${filter === 'local' ? 'active' : ''}`}
-              onClick={() => setFilter('local')}
+              onClick={() => handleFilterChange('local')}
             >
               Local
             </button>
@@ -192,22 +241,33 @@ export default function Jobs() {
         <div className="jobs-list">
           {loading ? (
             <div className="loading">Loading jobs...</div>
-          ) : filteredJobs.length === 0 ? (
+          ) : jobs.length === 0 ? (
             <div className="no-jobs">
               <h3>No jobs available</h3>
               <p>Check back later for new opportunities!</p>
             </div>
           ) : (
-            filteredJobs.map(job => (
+            jobs.map(job => (
               <div key={job.id} className="job-card">
                 <div className="job-header">
                   <div className="job-title-section">
                     <h3>{job.title}</h3>
                     <p className="company-name">{job.company}</p>
                   </div>
-                  <span className={`job-type-badge ${job.type}`}>
-                    {getTypeIcon(job.type)} {job.type.replace('-', ' ')}
-                  </span>
+                  <div className="job-header-right">
+                    <span className={`job-type-badge ${job.jobType.toLowerCase()}`}>
+                      {getTypeIcon(job.jobType)} {formatJobType(job.jobType)}
+                    </span>
+                    {user.id === job.posterId && (
+                      <button 
+                        className="delete-job-button"
+                        onClick={() => handleDeleteJob(job.id)}
+                        title="Delete this job"
+                      >
+                        🗑️
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="job-meta">
@@ -215,7 +275,7 @@ export default function Jobs() {
                   {job.salary && (
                     <span className="job-salary">💰 {job.salary}</span>
                   )}
-                  <span className="job-category">🏷️ {job.category}</span>
+                  <span className="job-category">🏷️ {formatCategory(job.category)}</span>
                 </div>
 
                 <p className="job-description">{job.description}</p>
@@ -299,17 +359,17 @@ export default function Jobs() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="type">Job Type *</label>
+                  <label htmlFor="jobType">Job Type *</label>
                   <select
-                    id="type"
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    id="jobType"
+                    value={formData.jobType}
+                    onChange={(e) => setFormData({ ...formData, jobType: e.target.value })}
                     required
                   >
-                    <option value="full-time">Full-Time</option>
-                    <option value="part-time">Part-Time</option>
-                    <option value="internship">Internship</option>
-                    <option value="contract">Contract</option>
+                    <option value="FULL_TIME">Full-Time</option>
+                    <option value="PART_TIME">Part-Time</option>
+                    <option value="INTERNSHIP">Internship</option>
+                    <option value="CONTRACT">Contract</option>
                   </select>
                 </div>
 
@@ -321,10 +381,10 @@ export default function Jobs() {
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     required
                   >
-                    <option value="internship">Internship</option>
-                    <option value="on-campus">On-Campus</option>
-                    <option value="remote">Remote</option>
-                    <option value="local">Local</option>
+                    <option value="INTERNSHIP">Internship</option>
+                    <option value="ON_CAMPUS">On-Campus</option>
+                    <option value="REMOTE">Remote</option>
+                    <option value="LOCAL">Local</option>
                   </select>
                 </div>
               </div>
@@ -366,12 +426,12 @@ export default function Jobs() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="applicationUrl">Application Link *</label>
+                  <label htmlFor="applicationLink">Application Link *</label>
                   <input
                     type="url"
-                    id="applicationUrl"
-                    value={formData.applicationUrl}
-                    onChange={(e) => setFormData({ ...formData, applicationUrl: e.target.value })}
+                    id="applicationLink"
+                    value={formData.applicationLink}
+                    onChange={(e) => setFormData({ ...formData, applicationLink: e.target.value })}
                     placeholder="https://..."
                     required
                   />

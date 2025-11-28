@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './LostFound.css';
 import Header from './Header.js';
 import Footer from './Footer';
+import { getValidUser } from './sessionUtils';
 
 export default function LostFound() {
   const navigate = useNavigate();
@@ -10,12 +11,12 @@ export default function LostFound() {
   const [profilePicture, setProfilePicture] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all', 'lost', 'found'
+  const [filter, setFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    category: 'lost',
+    category: 'LOST',
     location: '',
     date: '',
     contactInfo: '',
@@ -23,7 +24,7 @@ export default function LostFound() {
   });
 
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('user') || 'null');
+    const userData = getValidUser();
     
     if (!userData) {
       navigate('/login');
@@ -49,9 +50,13 @@ export default function LostFound() {
     }
   };
 
-  const fetchItems = async () => {
+  const fetchItems = async (category = null) => {
     try {
-      const response = await fetch('http://localhost:5000/api/lostfound');
+      const url = category && category !== 'all' 
+        ? `http://localhost:5000/api/lostfound?category=${category.toUpperCase()}`
+        : 'http://localhost:5000/api/lostfound';
+      
+      const response = await fetch(url);
       
       if (response.ok) {
         const data = await response.json();
@@ -94,13 +99,15 @@ export default function LostFound() {
         })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         alert('Item posted successfully!');
         setShowCreateModal(false);
         setFormData({
           title: '',
           description: '',
-          category: 'lost',
+          category: 'LOST',
           location: '',
           date: '',
           contactInfo: '',
@@ -108,7 +115,6 @@ export default function LostFound() {
         });
         fetchItems();
       } else {
-        const data = await response.json();
         alert(data.message || 'Failed to post item');
       }
     } catch (error) {
@@ -117,10 +123,41 @@ export default function LostFound() {
     }
   };
 
-  const filteredItems = items.filter(item => {
-    if (filter === 'all') return true;
-    return item.category === filter;
-  });
+  const handleDeleteItem = async (itemId) => {
+    if (!window.confirm('Are you sure you want to delete this item?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/lostfound/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('Item deleted successfully!');
+        fetchItems(filter === 'all' ? null : filter);
+      } else {
+        alert(data.message || 'Failed to delete item');
+      }
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      alert('An error occurred while deleting the item');
+    }
+  };
+
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+    setLoading(true);
+    fetchItems(newFilter);
+  };
 
   if (!user) {
     return null;
@@ -147,19 +184,19 @@ export default function LostFound() {
           <div className="filter-buttons">
             <button 
               className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilter('all')}
+              onClick={() => handleFilterChange('all')}
             >
               All Items
             </button>
             <button 
               className={`filter-btn ${filter === 'lost' ? 'active' : ''}`}
-              onClick={() => setFilter('lost')}
+              onClick={() => handleFilterChange('lost')}
             >
               Lost
             </button>
             <button 
               className={`filter-btn ${filter === 'found' ? 'active' : ''}`}
-              onClick={() => setFilter('found')}
+              onClick={() => handleFilterChange('found')}
             >
               Found
             </button>
@@ -169,17 +206,27 @@ export default function LostFound() {
         <div className="items-grid">
           {loading ? (
             <div className="loading">Loading items...</div>
-          ) : filteredItems.length === 0 ? (
+          ) : items.length === 0 ? (
             <div className="no-items">
               <h3>No items to display</h3>
               <p>Be the first to post a lost or found item!</p>
             </div>
           ) : (
-            filteredItems.map(item => (
+            items.map(item => (
               <div key={item.id} className="item-card">
-                <div className={`item-badge ${item.category}`}>
-                  {item.category === 'lost' ? '🔍 Lost' : '✨ Found'}
+                <div className={`item-badge ${item.category.toLowerCase()}`}>
+                  {item.category === 'LOST' ? '🔍 Lost' : '✨ Found'}
                 </div>
+                
+                {user.id === item.userId && (
+                  <button 
+                    className="delete-item-button"
+                    onClick={() => handleDeleteItem(item.id)}
+                    title="Delete this item"
+                  >
+                    🗑️
+                  </button>
+                )}
                 
                 {item.imageUrl && (
                   <img src={item.imageUrl} alt={item.title} className="item-image" />
@@ -215,7 +262,6 @@ export default function LostFound() {
         </div>
       </div>
 
-      {/* Create Item Modal */}
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -235,15 +281,15 @@ export default function LostFound() {
                 <div className="category-selector">
                   <button
                     type="button"
-                    className={`category-option ${formData.category === 'lost' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, category: 'lost' })}
+                    className={`category-option ${formData.category === 'LOST' ? 'selected' : ''}`}
+                    onClick={() => setFormData({ ...formData, category: 'LOST' })}
                   >
                     🔍 Lost
                   </button>
                   <button
                     type="button"
-                    className={`category-option ${formData.category === 'found' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, category: 'found' })}
+                    className={`category-option ${formData.category === 'FOUND' ? 'selected' : ''}`}
+                    onClick={() => setFormData({ ...formData, category: 'FOUND' })}
                   >
                     ✨ Found
                   </button>

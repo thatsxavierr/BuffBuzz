@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './Marketplace.css';
 import Header from './Header.js';
 import Footer from './Footer.js';
+import { getValidUser } from './sessionUtils';
 
 export default function Marketplace() {
   const navigate = useNavigate();
@@ -16,13 +17,13 @@ export default function Marketplace() {
     title: '',
     description: '',
     price: '',
-    category: 'textbooks',
-    condition: 'new',
+    category: 'TEXTBOOKS',
+    condition: 'NEW',
     imageUrl: ''
   });
 
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('user') || 'null');
+    const userData = getValidUser();
     
     if (!userData) {
       navigate('/login');
@@ -48,9 +49,13 @@ export default function Marketplace() {
     }
   };
 
-  const fetchItems = async () => {
+  const fetchItems = async (category = null) => {
     try {
-      const response = await fetch('http://localhost:5000/api/marketplace');
+      const url = category && category !== 'all' 
+        ? `http://localhost:5000/api/marketplace?category=${category.toUpperCase()}`
+        : 'http://localhost:5000/api/marketplace';
+      
+      const response = await fetch(url);
       
       if (response.ok) {
         const data = await response.json();
@@ -93,6 +98,8 @@ export default function Marketplace() {
         })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         alert('Item listed successfully!');
         setShowCreateModal(false);
@@ -100,13 +107,12 @@ export default function Marketplace() {
           title: '',
           description: '',
           price: '',
-          category: 'textbooks',
-          condition: 'new',
+          category: 'TEXTBOOKS',
+          condition: 'NEW',
           imageUrl: ''
         });
         fetchItems();
       } else {
-        const data = await response.json();
         alert(data.message || 'Failed to list item');
       }
     } catch (error) {
@@ -115,10 +121,57 @@ export default function Marketplace() {
     }
   };
 
-  const filteredItems = items.filter(item => {
-    if (filter === 'all') return true;
-    return item.category === filter;
-  });
+  const handleDeleteItem = async (itemId) => {
+    if (!window.confirm('Are you sure you want to delete this listing?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/marketplace/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('Item deleted successfully!');
+        fetchItems(filter === 'all' ? null : filter);
+      } else {
+        alert(data.message || 'Failed to delete item');
+      }
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      alert('An error occurred while deleting the item');
+    }
+  };
+
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+    setLoading(true);
+    fetchItems(newFilter);
+  };
+
+  const formatCondition = (condition) => {
+    const conditionMap = {
+      'NEW': '✨ New',
+      'LIKE_NEW': '⭐ Like New',
+      'GOOD': '👍 Good',
+      'FAIR': '📦 Fair'
+    };
+    return conditionMap[condition] || condition;
+  };
+
+  const formatCategory = (category) => {
+    return category.replace('_', ' ').toLowerCase().split(' ').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  };
 
   if (!user) {
     return null;
@@ -145,31 +198,31 @@ export default function Marketplace() {
           <div className="filter-buttons">
             <button 
               className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilter('all')}
+              onClick={() => handleFilterChange('all')}
             >
               All Items
             </button>
             <button 
               className={`filter-btn ${filter === 'textbooks' ? 'active' : ''}`}
-              onClick={() => setFilter('textbooks')}
+              onClick={() => handleFilterChange('textbooks')}
             >
               Textbooks
             </button>
             <button 
               className={`filter-btn ${filter === 'electronics' ? 'active' : ''}`}
-              onClick={() => setFilter('electronics')}
+              onClick={() => handleFilterChange('electronics')}
             >
               Electronics
             </button>
             <button 
               className={`filter-btn ${filter === 'furniture' ? 'active' : ''}`}
-              onClick={() => setFilter('furniture')}
+              onClick={() => handleFilterChange('furniture')}
             >
               Furniture
             </button>
             <button 
               className={`filter-btn ${filter === 'other' ? 'active' : ''}`}
-              onClick={() => setFilter('other')}
+              onClick={() => handleFilterChange('other')}
             >
               Other
             </button>
@@ -179,13 +232,13 @@ export default function Marketplace() {
         <div className="items-grid">
           {loading ? (
             <div className="loading">Loading items...</div>
-          ) : filteredItems.length === 0 ? (
+          ) : items.length === 0 ? (
             <div className="no-items">
               <h3>No items available</h3>
               <p>Be the first to list an item!</p>
             </div>
           ) : (
-            filteredItems.map(item => (
+            items.map(item => (
               <div key={item.id} className="marketplace-card">
                 {item.imageUrl ? (
                   <img src={item.imageUrl} alt={item.title} className="marketplace-image" />
@@ -195,21 +248,29 @@ export default function Marketplace() {
                   </div>
                 )}
                 
+                {user.id === item.sellerId && (
+                  <button 
+                    className="delete-item-button"
+                    onClick={() => handleDeleteItem(item.id)}
+                    title="Delete this listing"
+                  >
+                    🗑️
+                  </button>
+                )}
+                
                 <div className="marketplace-content">
                   <div className="item-header">
                     <h3>{item.title}</h3>
-                    <span className="price">${item.price}</span>
+                    <span className="price">${parseFloat(item.price).toFixed(2)}</span>
                   </div>
                   
                   <p className="item-description">{item.description}</p>
                   
                   <div className="item-meta">
-                    <span className={`condition-badge ${item.condition}`}>
-                      {item.condition === 'new' ? '✨ New' : 
-                       item.condition === 'like-new' ? '⭐ Like New' :
-                       item.condition === 'good' ? '👍 Good' : '📦 Fair'}
+                    <span className={`condition-badge ${item.condition.toLowerCase().replace('_', '-')}`}>
+                      {formatCondition(item.condition)}
                     </span>
-                    <span className="category-tag">{item.category}</span>
+                    <span className="category-tag">{formatCategory(item.category)}</span>
                   </div>
 
                   <div className="item-footer">
@@ -223,7 +284,6 @@ export default function Marketplace() {
         </div>
       </div>
 
-      {/* Create Listing Modal */}
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -285,12 +345,12 @@ export default function Marketplace() {
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     required
                   >
-                    <option value="textbooks">Textbooks</option>
-                    <option value="electronics">Electronics</option>
-                    <option value="furniture">Furniture</option>
-                    <option value="clothing">Clothing</option>
-                    <option value="school-supplies">School Supplies</option>
-                    <option value="other">Other</option>
+                    <option value="TEXTBOOKS">Textbooks</option>
+                    <option value="ELECTRONICS">Electronics</option>
+                    <option value="FURNITURE">Furniture</option>
+                    <option value="CLOTHING">Clothing</option>
+                    <option value="SCHOOL_SUPPLIES">School Supplies</option>
+                    <option value="OTHER">Other</option>
                   </select>
                 </div>
               </div>
@@ -300,29 +360,29 @@ export default function Marketplace() {
                 <div className="condition-selector">
                   <button
                     type="button"
-                    className={`condition-option ${formData.condition === 'new' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, condition: 'new' })}
+                    className={`condition-option ${formData.condition === 'NEW' ? 'selected' : ''}`}
+                    onClick={() => setFormData({ ...formData, condition: 'NEW' })}
                   >
                     ✨ New
                   </button>
                   <button
                     type="button"
-                    className={`condition-option ${formData.condition === 'like-new' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, condition: 'like-new' })}
+                    className={`condition-option ${formData.condition === 'LIKE_NEW' ? 'selected' : ''}`}
+                    onClick={() => setFormData({ ...formData, condition: 'LIKE_NEW' })}
                   >
                     ⭐ Like New
                   </button>
                   <button
                     type="button"
-                    className={`condition-option ${formData.condition === 'good' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, condition: 'good' })}
+                    className={`condition-option ${formData.condition === 'GOOD' ? 'selected' : ''}`}
+                    onClick={() => setFormData({ ...formData, condition: 'GOOD' })}
                   >
                     👍 Good
                   </button>
                   <button
                     type="button"
-                    className={`condition-option ${formData.condition === 'fair' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, condition: 'fair' })}
+                    className={`condition-option ${formData.condition === 'FAIR' ? 'selected' : ''}`}
+                    onClick={() => setFormData({ ...formData, condition: 'FAIR' })}
                   >
                     📦 Fair
                   </button>
@@ -330,14 +390,13 @@ export default function Marketplace() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="image">Add Image *</label>
+                <label htmlFor="image">Add Image (Optional)</label>
                 <input
                   type="file"
                   id="image"
                   accept="image/*"
                   onChange={handleImageChange}
                   className="file-input"
-                  required
                 />
                 {formData.imageUrl && (
                   <div className="image-preview-small">

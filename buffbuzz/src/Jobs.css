@@ -428,3 +428,30 @@
     width: 100%;
   }
 }
+
+.job-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.delete-job-button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-job-button:hover {
+  background-color: #fee2e2;
+}
+
+.delete-job-button:active {
+  transform: scale(0.95);
+}
