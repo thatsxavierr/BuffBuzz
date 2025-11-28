@@ -22,6 +22,13 @@ const SettingsPage = () => {
     newFollowers: true
   });
 
+  const [deleteAccountData, setDeleteAccountData] = useState({
+    password: '',
+    confirmText: ''
+  });
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
 
@@ -52,11 +59,18 @@ const SettingsPage = () => {
     const name = e.target.name;
     const checked = e.target.checked;
     
-    console.log(`Checkbox ${name} changed to ${checked}`); // Debug log
+    console.log(`Checkbox ${name} changed to ${checked}`);
     
     setNotifications({
       ...notifications,
       [name]: checked
+    });
+  };
+
+  const handleDeleteAccountChange = (e) => {
+    setDeleteAccountData({
+      ...deleteAccountData,
+      [e.target.name]: e.target.value
     });
   };
 
@@ -107,7 +121,7 @@ const SettingsPage = () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
 
-    console.log('Saving notifications:', notifications); // Debug log
+    console.log('Saving notifications:', notifications);
 
     try {
       const response = await fetch('http://localhost:5000/api/settings/notifications', {
@@ -125,6 +139,54 @@ const SettingsPage = () => {
         setMessage({ type: 'success', text: 'Preferences saved successfully!' });
       } else {
         setMessage({ type: 'error', text: data.message || 'Failed to update preferences' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'An error occurred. Please try again.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    setMessage({ type: '', text: '' });
+
+    if (deleteAccountData.confirmText !== 'DELETE') {
+      setMessage({ type: 'error', text: 'Please type DELETE to confirm' });
+      return;
+    }
+
+    if (!deleteAccountData.password) {
+      setMessage({ type: 'error', text: 'Please enter your password' });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:5000/api/settings/delete-account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          password: deleteAccountData.password
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Clear session storage
+        sessionStorage.removeItem('user');
+        
+        // Show success message briefly then redirect
+        setMessage({ type: 'success', text: 'Account deleted successfully. Redirecting...' });
+        
+        setTimeout(() => {
+          navigate('/');
+        }, 2000);
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Failed to delete account' });
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'An error occurred. Please try again.' });
@@ -281,6 +343,91 @@ const SettingsPage = () => {
           </button>
         </form>
       </section>
+
+      {/* Delete Account Section */}
+      <section className="settings-section danger-zone">
+        <h2>Danger Zone</h2>
+        <div className="danger-content">
+          <div className="danger-info">
+            <h3>Delete Account</h3>
+            <p>Once you delete your account, there is no going back. This will permanently delete:</p>
+            <ul>
+              <li>Your profile and personal information</li>
+              <li>All your posts and comments</li>
+              <li>Your likes and shares</li>
+              <li>All friend connections</li>
+              <li>Your notification preferences</li>
+            </ul>
+          </div>
+          <button 
+            onClick={() => setShowDeleteModal(true)} 
+            className="delete-account-button"
+          >
+            Delete Account
+          </button>
+        </div>
+      </section>
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Delete Account</h2>
+            <p className="modal-warning">
+              ⚠️ This action cannot be undone. All your data will be permanently deleted.
+            </p>
+            
+            <form onSubmit={handleDeleteAccount}>
+              <div className="form-group">
+                <label htmlFor="deletePassword">Enter your password to confirm</label>
+                <input
+                  type="password"
+                  id="deletePassword"
+                  name="password"
+                  value={deleteAccountData.password}
+                  onChange={handleDeleteAccountChange}
+                  placeholder="Enter your password"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirmText">Type "DELETE" to confirm</label>
+                <input
+                  type="text"
+                  id="confirmText"
+                  name="confirmText"
+                  value={deleteAccountData.confirmText}
+                  onChange={handleDeleteAccountChange}
+                  placeholder="Type DELETE"
+                  required
+                />
+              </div>
+
+              <div className="modal-buttons">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeleteAccountData({ password: '', confirmText: '' });
+                  }} 
+                  className="cancel-button"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="confirm-delete-button"
+                  disabled={loading}
+                >
+                  {loading ? 'Deleting...' : 'Delete My Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
