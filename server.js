@@ -364,7 +364,7 @@ app.post('/api/verify', async (req, res) => {
   }
 });
 
-// Search users endpoint
+// ----------- SEARCH USERS -------------
 app.get('/api/search-users', async (req, res) => {
   try {
     const query = (req.query.query || req.query.q || '').trim();
@@ -407,6 +407,7 @@ app.get('/api/search-users', async (req, res) => {
     res.status(500).json({ message: 'Server error searching users' });
   }
 });
+
 
 // Login endpoint
 app.post('/api/login', async (req, res) => {
@@ -1727,6 +1728,8 @@ app.get('/api/block-status/:userId/:otherUserId', async (req, res) => {
   }
 });
 
+
+
 // ==================== SETTINGS ENDPOINTS ====================
 
 // Update Password
@@ -1855,6 +1858,48 @@ app.put('/api/settings/notifications', async (req, res) => {
   } catch (error) {
     console.error('Update preferences error:', error);
     res.status(500).json({ message: 'An error occurred while updating preferences' });
+  }
+});
+
+// Delete Account
+app.delete('/api/settings/delete-account', async (req, res) => {
+  try {
+    const { userId, password } = req.body;
+
+    if (!userId || !password) {
+      return res.status(400).json({ message: 'User ID and password are required' });
+    }
+
+    // Get user
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify password before deletion
+    const isValid = await bcrypt.compare(password, user.password);
+
+    if (!isValid) {
+      return res.status(401).json({ message: 'Incorrect password' });
+    }
+
+    // Delete user (will cascade delete all related data)
+    await prisma.user.delete({
+      where: { id: userId }
+    });
+
+    console.log(`Account deleted for user: ${user.email}`);
+
+    res.status(200).json({ 
+      message: 'Account deleted successfully. All your data has been removed.' 
+    });
+
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting account' });
   }
 });
 
