@@ -1903,6 +1903,727 @@ app.delete('/api/settings/delete-account', async (req, res) => {
   }
 });
 
+// ==================== JOB ENDPOINTS ====================
+
+// Create a job posting
+app.post('/api/jobs/create', async (req, res) => {
+  try {
+    const {
+      title,
+      company,
+      location,
+      jobType,
+      category,
+      description,
+      requirements,
+      salary,
+      applicationLink,
+      posterId
+    } = req.body;
+
+    if (!title || !company || !location || !jobType || !category || !description || !requirements || !applicationLink || !posterId) {
+      return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    const job = await prisma.job.create({
+      data: {
+        title,
+        company,
+        location,
+        jobType,
+        category,
+        description,
+        requirements,
+        salary: salary || null,
+        applicationLink,
+        posterId
+      },
+      include: {
+        poster: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      message: 'Job posted successfully',
+      job
+    });
+
+  } catch (error) {
+    console.error('Create job error:', error);
+    res.status(500).json({ message: 'An error occurred while posting the job' });
+  }
+});
+
+// Get all jobs with optional filtering
+app.get('/api/jobs', async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const whereClause = category && category !== 'ALL_JOBS' ? { category } : {};
+
+    const jobs = await prisma.job.findMany({
+      where: whereClause,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        poster: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ jobs });
+
+  } catch (error) {
+    console.error('Get jobs error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching jobs' });
+  }
+});
+
+// Get single job
+app.get('/api/jobs/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      include: {
+        poster: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
+    res.status(200).json({ job });
+
+  } catch (error) {
+    console.error('Get job error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the job' });
+  }
+});
+
+// Delete a job
+app.delete('/api/jobs/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { userId } = req.body;
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId }
+    });
+
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
+    if (job.posterId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to delete this job' });
+    }
+
+    await prisma.job.delete({
+      where: { id: jobId }
+    });
+
+    res.status(200).json({ message: 'Job deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete job error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the job' });
+  }
+});
+
+// ==================== MARKETPLACE ENDPOINTS ====================
+
+// Create a marketplace listing
+app.post('/api/marketplace/create', async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      price,
+      category,
+      condition,
+      imageUrl,
+      sellerId
+    } = req.body;
+
+    if (!title || !description || !price || !category || !condition || !sellerId) {
+      return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    const item = await prisma.marketplaceItem.create({
+      data: {
+        title,
+        description,
+        price: parseFloat(price),
+        category,
+        condition,
+        imageUrl: imageUrl || null,
+        sellerId
+      },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      message: 'Item listed successfully',
+      item
+    });
+
+  } catch (error) {
+    console.error('Create marketplace item error:', error);
+    res.status(500).json({ message: 'An error occurred while listing the item' });
+  }
+});
+
+// Get all marketplace items with optional filtering
+app.get('/api/marketplace', async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const whereClause = category && category !== 'all' ? { category } : {};
+
+    const items = await prisma.marketplaceItem.findMany({
+      where: whereClause,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    // Format items with seller name
+    const formattedItems = items.map(item => ({
+      ...item,
+      sellerName: `${item.seller.firstName} ${item.seller.lastName}`
+    }));
+
+    res.status(200).json({ items: formattedItems });
+
+  } catch (error) {
+    console.error('Get marketplace items error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching items' });
+  }
+});
+
+// Get single marketplace item
+app.get('/api/marketplace/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+
+    const item = await prisma.marketplaceItem.findUnique({
+      where: { id: itemId },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    res.status(200).json({ item });
+
+  } catch (error) {
+    console.error('Get marketplace item error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the item' });
+  }
+});
+
+// Delete a marketplace item
+app.delete('/api/marketplace/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { userId } = req.body;
+
+    const item = await prisma.marketplaceItem.findUnique({
+      where: { id: itemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sellerId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to delete this item' });
+    }
+
+    await prisma.marketplaceItem.delete({
+      where: { id: itemId }
+    });
+
+    res.status(200).json({ message: 'Item deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete marketplace item error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the item' });
+  }
+});
+
+// ==================== LOST & FOUND ENDPOINTS ====================
+
+// Create a lost/found item
+app.post('/api/lostfound/create', async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      category,
+      location,
+      date,
+      contactInfo,
+      imageUrl,
+      userId
+    } = req.body;
+
+    if (!title || !description || !category || !location || !date || !contactInfo || !userId) {
+      return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    const item = await prisma.lostFoundItem.create({
+      data: {
+        title,
+        description,
+        category,
+        location,
+        date: new Date(date),
+        contactInfo,
+        imageUrl: imageUrl || null,
+        userId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      message: 'Item posted successfully',
+      item
+    });
+
+  } catch (error) {
+    console.error('Create lost/found item error:', error);
+    res.status(500).json({ message: 'An error occurred while posting the item' });
+  }
+});
+
+// Get all lost/found items with optional filtering
+app.get('/api/lostfound', async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const whereClause = category && category !== 'all' ? { category } : {};
+
+    const items = await prisma.lostFoundItem.findMany({
+      where: whereClause,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    // Format items with user name
+    const formattedItems = items.map(item => ({
+      ...item,
+      userName: `${item.user.firstName} ${item.user.lastName}`
+    }));
+
+    res.status(200).json({ items: formattedItems });
+
+  } catch (error) {
+    console.error('Get lost/found items error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching items' });
+  }
+});
+
+// Get single lost/found item
+app.get('/api/lostfound/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+
+    const item = await prisma.lostFoundItem.findUnique({
+      where: { id: itemId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    res.status(200).json({ item });
+
+  } catch (error) {
+    console.error('Get lost/found item error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the item' });
+  }
+});
+
+// Delete a lost/found item
+app.delete('/api/lostfound/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { userId } = req.body;
+
+    const item = await prisma.lostFoundItem.findUnique({
+      where: { id: itemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.userId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to delete this item' });
+    }
+
+    await prisma.lostFoundItem.delete({
+      where: { id: itemId }
+    });
+
+    res.status(200).json({ message: 'Item deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete lost/found item error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the item' });
+  }
+});
+
+// ==================== GROUP ENDPOINTS ====================
+
+// Create a group
+app.post('/api/groups/create', async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      category,
+      privacy,
+      imageUrl,
+      creatorId
+    } = req.body;
+
+    if (!name || !description || !category || !privacy || !creatorId) {
+      return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    const group = await prisma.group.create({
+      data: {
+        name,
+        description,
+        category,
+        privacy,
+        imageUrl: imageUrl || null,
+        creatorId
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    // Automatically add creator as admin member
+    await prisma.groupMember.create({
+      data: {
+        groupId: group.id,
+        userId: creatorId,
+        role: 'ADMIN'
+      }
+    });
+
+    res.status(201).json({
+      message: 'Group created successfully',
+      group
+    });
+
+  } catch (error) {
+    console.error('Create group error:', error);
+    res.status(500).json({ message: 'An error occurred while creating the group' });
+  }
+});
+
+// Get all groups
+app.get('/api/groups', async (req, res) => {
+  try {
+    const groups = await prisma.group.findMany({
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        members: {
+          select: {
+            userId: true
+          }
+        },
+        _count: {
+          select: {
+            members: true
+          }
+        }
+      }
+    });
+
+    // Format groups with member info
+    const formattedGroups = groups.map(group => ({
+      ...group,
+      memberCount: group._count.members,
+      members: group.members.map(m => m.userId)
+    }));
+
+    res.status(200).json({ groups: formattedGroups });
+
+  } catch (error) {
+    console.error('Get groups error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching groups' });
+  }
+});
+
+// Get single group
+app.get('/api/groups/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    res.status(200).json({ group });
+
+  } catch (error) {
+    console.error('Get group error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the group' });
+  }
+});
+
+// Join a group
+app.post('/api/groups/:groupId/join', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    // Check if group exists
+    const group = await prisma.group.findUnique({
+      where: { id: groupId }
+    });
+
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    // Only allow joining public groups instantly
+    if (group.privacy === 'PRIVATE') {
+      return res.status(400).json({ message: 'Cannot join private groups yet. Approval system coming soon!' });
+    }
+
+    // Check if already a member
+    const existingMember = await prisma.groupMember.findUnique({
+      where: {
+        groupId_userId: {
+          groupId,
+          userId
+        }
+      }
+    });
+
+    if (existingMember) {
+      return res.status(400).json({ message: 'Already a member of this group' });
+    }
+
+    // Add user to group
+    const member = await prisma.groupMember.create({
+      data: {
+        groupId,
+        userId,
+        role: 'MEMBER'
+      }
+    });
+
+    res.status(201).json({
+      message: 'Successfully joined the group',
+      member
+    });
+
+  } catch (error) {
+    console.error('Join group error:', error);
+    res.status(500).json({ message: 'An error occurred while joining the group' });
+  }
+});
+
+// Leave a group
+app.delete('/api/groups/:groupId/leave', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    const membership = await prisma.groupMember.findUnique({
+      where: {
+        groupId_userId: {
+          groupId,
+          userId
+        }
+      }
+    });
+
+    if (!membership) {
+      return res.status(404).json({ message: 'Not a member of this group' });
+    }
+
+    await prisma.groupMember.delete({
+      where: {
+        groupId_userId: {
+          groupId,
+          userId
+        }
+      }
+    });
+
+    res.status(200).json({ message: 'Successfully left the group' });
+
+  } catch (error) {
+    console.error('Leave group error:', error);
+    res.status(500).json({ message: 'An error occurred while leaving the group' });
+  }
+});
+
+// Delete a group
+app.delete('/api/groups/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { userId } = req.body;
+
+    const group = await prisma.group.findUnique({
+      where: { id: groupId }
+    });
+
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    if (group.creatorId !== userId) {
+      return res.status(403).json({ message: 'Only the group creator can delete this group' });
+    }
+
+    await prisma.group.delete({
+      where: { id: groupId }
+    });
+
+    res.status(200).json({ message: 'Group deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete group error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the group' });
+  }
+});
+
 // ==================== HEALTH CHECK ====================
 
 // Health check endpoint
