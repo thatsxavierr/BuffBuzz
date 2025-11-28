@@ -233,31 +233,6 @@
   box-shadow: 0 4px 12px rgba(128, 0, 0, 0.3);
 }
 
-@media (max-width: 768px) {
-  .profile-header {
-    flex-direction: column;
-    text-align: center;
-    padding: 30px 20px;
-  }
-
-  .profile-picture-large {
-    width: 120px;
-    height: 120px;
-  }
-
-  .profile-header-info h1 {
-    font-size: 24px;
-  }
-
-  .profile-section {
-    padding: 20px;
-  }
-
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 .privacy-notice-section {
   background-color: #fff3cd;
   border-bottom: 1px solid #ffc107;
@@ -270,14 +245,6 @@
   font-size: 14px;
   text-align: center;
 }
-
-@media (max-width: 768px) {
-  .privacy-notice {
-    padding: 15px 20px;
-  }
-}
-
-/* Add these friend button styles to your existing ProfileView.css */
 
 .profile-action-buttons {
   margin-top: 15px;
@@ -356,11 +323,60 @@
 }
 
 .friend-button.friend-decline:hover {
-  background: #f44336;
+  background: #800000;
   transform: translateY(-2px);
 }
 
+.block-button {
+  padding: 8px 16px;
+  background-color: #800000;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.block-button:hover {
+  background-color: #800000;
+  transform: translateY(-1px);
+}
+
+.block-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    padding: 30px 20px;
+  }
+
+  .profile-picture-large {
+    width: 120px;
+    height: 120px;
+  }
+
+  .profile-header-info h1 {
+    font-size: 24px;
+  }
+
+  .profile-section {
+    padding: 20px;
+  }
+
+  .privacy-notice {
+    padding: 15px 20px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
   .profile-action-buttons {
     flex-direction: column;
     width: 100%;
@@ -372,6 +388,10 @@
 
   .friend-request-buttons {
     flex-direction: column;
+    width: 100%;
+  }
+
+  .block-button {
     width: 100%;
   }
 }

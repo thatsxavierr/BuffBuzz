@@ -22,6 +22,11 @@ export default function ProfileView() {
   const [friendshipId, setFriendshipId] = useState(null);
   const [isSender, setIsSender] = useState(false);
   const [friendButtonLoading, setFriendButtonLoading] = useState(false);
+  
+  // Block states
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [isBlockedBy, setIsBlockedBy] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
 
   useEffect(() => {
     const userData = getValidUser();
@@ -60,9 +65,10 @@ export default function ProfileView() {
     
     fetchProfile();
 
-    // Fetch friendship status if viewing another user's profile
+    // Fetch friendship and block status if viewing another user's profile
     if (targetUserId !== userData.id) {
       fetchFriendshipStatus(userData.id, targetUserId);
+      fetchBlockStatus(userData.id, targetUserId);
     }
   }, [location.state?.userId, location.state?.refresh, navigate]);
 
@@ -78,6 +84,20 @@ export default function ProfileView() {
       }
     } catch (err) {
       console.error('Error fetching friendship status:', err);
+    }
+  };
+
+  const fetchBlockStatus = async (userId, otherUserId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/block-status/${userId}/${otherUserId}`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setIsBlocked(data.isBlocked);
+        setIsBlockedBy(data.isBlockedBy);
+      }
+    } catch (err) {
+      console.error('Error fetching block status:', err);
     }
   };
 
@@ -210,46 +230,119 @@ export default function ProfileView() {
     }
   };
 
+  const handleBlock = async () => {
+    if (!window.confirm('Are you sure you want to block this user? This will remove any friendship and prevent future interactions.')) return;
+    
+    setBlockLoading(true);
+    try {
+      const response = await fetch(`http://localhost:5000/api/block/${viewingUserId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blockerId: currentUserId })
+      });
+
+      if (response.ok) {
+        setIsBlocked(true);
+        setFriendshipStatus('NONE');
+        setFriendshipId(null);
+        alert('User blocked successfully');
+        navigate('/main');
+      } else {
+        const data = await response.json();
+        alert(data.message || 'Failed to block user');
+      }
+    } catch (err) {
+      console.error('Error blocking user:', err);
+      alert('An error occurred');
+    } finally {
+      setBlockLoading(false);
+    }
+  };
+
+  const handleUnblock = async () => {
+    if (!window.confirm('Are you sure you want to unblock this user?')) return;
+    
+    setBlockLoading(true);
+    try {
+      const response = await fetch(`http://localhost:5000/api/unblock/${viewingUserId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blockerId: currentUserId })
+      });
+
+      if (response.ok) {
+        setIsBlocked(false);
+        alert('User unblocked successfully');
+      } else {
+        const data = await response.json();
+        alert(data.message || 'Failed to unblock user');
+      }
+    } finally {
+      setBlockLoading(false);
+    }
+  };
+
   const renderFriendButton = () => {
     if (isOwnProfile) return null;
-
-    if (friendButtonLoading) {
-      return <button className="friend-button friend-loading" disabled>Loading...</button>;
+    
+    // If you're blocked by them, show nothing
+    if (isBlockedBy) {
+      return <p style={{ color: '#ccc', fontSize: '14px', margin: 0 }}>This user is unavailable</p>;
     }
 
-    if (friendshipStatus === 'ACCEPTED') {
+    // Show unblock button if you blocked them
+    if (isBlocked) {
       return (
-        <button className="friend-button friend-accepted" onClick={handleUnfriend}>
-          ✓ Friends
+        <button 
+          className="friend-button friend-decline" 
+          onClick={handleUnblock}
+          disabled={blockLoading}
+        >
+          {blockLoading ? 'Loading...' : 'Unblock User'}
         </button>
       );
     }
 
-    if (friendshipStatus === 'PENDING') {
-      if (isSender) {
-        return (
-          <button className="friend-button friend-pending" onClick={handleCancelRequest}>
-            ⏱️ Request Sent
-          </button>
-        );
-      } else {
-        return (
-          <div className="friend-request-buttons">
-            <button className="friend-button friend-accept" onClick={() => handleRespondToRequest(true)}>
-              ✓ Accept
-            </button>
-            <button className="friend-button friend-decline" onClick={() => handleRespondToRequest(false)}>
-              ✗ Decline
-            </button>
-          </div>
-        );
-      }
-    }
-
+    // Show friend buttons and block option
     return (
-      <button className="friend-button friend-add" onClick={handleAddFriend}>
-        + Add Friend
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {/* Friend button logic */}
+        {friendButtonLoading ? (
+          <button className="friend-button friend-loading" disabled>Loading...</button>
+        ) : friendshipStatus === 'ACCEPTED' ? (
+          <button className="friend-button friend-accepted" onClick={handleUnfriend}>
+            ✓ Friends
+          </button>
+        ) : friendshipStatus === 'PENDING' ? (
+          isSender ? (
+            <button className="friend-button friend-pending" onClick={handleCancelRequest}>
+              ⏱️ Request Sent
+            </button>
+          ) : (
+            <div className="friend-request-buttons">
+              <button className="friend-button friend-accept" onClick={() => handleRespondToRequest(true)}>
+                ✓ Accept
+              </button>
+              <button className="friend-button friend-decline" onClick={() => handleRespondToRequest(false)}>
+                ✗ Decline
+              </button>
+            </div>
+          )
+        ) : (
+          <button className="friend-button friend-add" onClick={handleAddFriend}>
+            + Add Friend
+          </button>
+        )}
+        
+        {/* Block button */}
+        <button 
+          className="block-button"
+          onClick={handleBlock}
+          disabled={blockLoading}
+        >
+          {blockLoading ? 'Loading...' : '🚫 Block User'}
+        </button>
+      </div>
     );
   };
 

@@ -364,7 +364,7 @@ app.post('/api/verify', async (req, res) => {
   }
 });
 
-// ----------- SEARCH USERS -------------
+// Search users endpoint
 app.get('/api/search-users', async (req, res) => {
   try {
     const query = (req.query.query || req.query.q || '').trim();
@@ -407,7 +407,6 @@ app.get('/api/search-users', async (req, res) => {
     res.status(500).json({ message: 'Server error searching users' });
   }
 });
-
 
 // Login endpoint
 app.post('/api/login', async (req, res) => {
@@ -1546,6 +1545,185 @@ app.get('/api/friends/status/:userId/:otherUserId', async (req, res) => {
   } catch (error) {
     console.error('Check friendship status error:', error);
     res.status(500).json({ message: 'An error occurred while checking friendship status' });
+  }
+});
+
+// ==================== BLOCK ENDPOINTS ====================
+
+// Block a user
+app.post('/api/block/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params; // User to block
+    const { blockerId } = req.body; // Current user doing the blocking
+
+    if (!blockerId) {
+      return res.status(400).json({ message: 'Blocker ID is required' });
+    }
+
+    if (blockerId === userId) {
+      return res.status(400).json({ message: 'Cannot block yourself' });
+    }
+
+    // Check if already blocked
+    const existingBlock = await prisma.block.findUnique({
+      where: {
+        blockerId_blockedId: {
+          blockerId,
+          blockedId: userId
+        }
+      }
+    });
+
+    if (existingBlock) {
+      return res.status(400).json({ message: 'User already blocked' });
+    }
+
+    // Create block
+    const block = await prisma.block.create({
+      data: {
+        blockerId,
+        blockedId: userId
+      }
+    });
+
+    // Remove any existing friendship
+    await prisma.friendship.deleteMany({
+      where: {
+        OR: [
+          { senderId: blockerId, receiverId: userId },
+          { senderId: userId, receiverId: blockerId }
+        ]
+      }
+    });
+
+    res.status(201).json({
+      message: 'User blocked successfully',
+      block
+    });
+
+  } catch (error) {
+    console.error('Block user error:', error);
+    res.status(500).json({ message: 'An error occurred while blocking user' });
+  }
+});
+
+// Unblock a user
+app.delete('/api/unblock/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params; // User to unblock
+    const { blockerId } = req.body; // Current user doing the unblocking
+
+    if (!blockerId) {
+      return res.status(400).json({ message: 'Blocker ID is required' });
+    }
+
+    // Find and delete block
+    const existingBlock = await prisma.block.findUnique({
+      where: {
+        blockerId_blockedId: {
+          blockerId,
+          blockedId: userId
+        }
+      }
+    });
+
+    if (!existingBlock) {
+      return res.status(404).json({ message: 'Block not found' });
+    }
+
+    await prisma.block.delete({
+      where: {
+        blockerId_blockedId: {
+          blockerId,
+          blockedId: userId
+        }
+      }
+    });
+
+    res.status(200).json({ message: 'User unblocked successfully' });
+
+  } catch (error) {
+    console.error('Unblock user error:', error);
+    res.status(500).json({ message: 'An error occurred while unblocking user' });
+  }
+});
+
+// Get list of blocked users
+app.get('/api/blocked/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const blocks = await prisma.block.findMany({
+      where: {
+        blockerId: userId
+      },
+      include: {
+        blocked: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            profile: {
+              select: {
+                profilePictureUrl: true,
+                bio: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const blockedUsers = blocks.map(block => ({
+      blockId: block.id,
+      ...block.blocked
+    }));
+
+    res.status(200).json({ blockedUsers });
+
+  } catch (error) {
+    console.error('Get blocked users error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching blocked users' });
+  }
+});
+
+// Check if user is blocked
+app.get('/api/block-status/:userId/:otherUserId', async (req, res) => {
+  try {
+    const { userId, otherUserId } = req.params;
+
+    // Check if userId has blocked otherUserId
+    const isBlocked = await prisma.block.findUnique({
+      where: {
+        blockerId_blockedId: {
+          blockerId: userId,
+          blockedId: otherUserId
+        }
+      }
+    });
+
+    // Check if otherUserId has blocked userId (you're blocked by them)
+    const isBlockedBy = await prisma.block.findUnique({
+      where: {
+        blockerId_blockedId: {
+          blockerId: otherUserId,
+          blockedId: userId
+        }
+      }
+    });
+
+    res.status(200).json({ 
+      isBlocked: !!isBlocked,
+      isBlockedBy: !!isBlockedBy
+    });
+
+  } catch (error) {
+    console.error('Check block status error:', error);
+    res.status(500).json({ message: 'An error occurred while checking block status' });
   }
 });
 

@@ -65,6 +65,8 @@
   cursor: pointer;
   font-size: 14px;
   color: #374151;
+  position: relative;
+  transition: background-color 0.2s;
 }
 
 .header-button:hover {
@@ -72,7 +74,7 @@
 }
 
 .header-button.logout {
-  color: #dc2626;
+  color: #800000;
 }
 
 .profile-circle {
@@ -89,7 +91,41 @@
 
 .profile-circle:hover {
   transform: scale(1.05);
-  box-shadow: 0 0 0 3px rgba(74, 30, 124, 0.3);
+  box-shadow: 0 0 0 3px rgba(128, 0, 0, 0.3);
+}
+
+/* Friend Requests Button with Badge */
+.friend-requests-button {
+  position: relative;
+  padding-right: 24px;
+}
+
+.notification-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background-color: #800000;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
 }
 
 /* Search Results Dropdown Styles */
@@ -176,4 +212,33 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .header-content {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header-center {
+    order: 3;
+    width: 100%;
+    margin: 0;
+  }
+
+  .header-right {
+    gap: 8px;
+  }
+
+  .header-button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .notification-badge {
+    font-size: 10px;
+    min-width: 16px;
+    height: 16px;
+  }
 }

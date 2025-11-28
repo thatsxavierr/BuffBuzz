@@ -32,6 +32,27 @@ export default function LoginPage() {
     setError("");
   };
 
+  // Check if user has a profile
+  const checkUserProfile = async (userId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      
+      if (response.ok) {
+        // Profile exists
+        return true;
+      } else if (response.status === 404) {
+        // Profile doesn't exist
+        return false;
+      }
+      // For other errors, assume profile exists to avoid redirect loop
+      return true;
+    } catch (error) {
+      console.error('Error checking profile:', error);
+      // On error, assume profile exists
+      return true;
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -55,7 +76,16 @@ export default function LoginPage() {
         // Store user data with session timestamp (2 hour expiration)
         setSession(data.user);
         
-        navigate('/main', { state: { user: data.user } });
+        // Check if user has a profile
+        const hasProfile = await checkUserProfile(data.user.id);
+        
+        if (hasProfile) {
+          // User has profile, go to main page
+          navigate('/main', { state: { user: data.user } });
+        } else {
+          // User doesn't have profile, go to profile edit
+          navigate('/profile-edit', { state: { isFirstTime: true } });
+        }
       } else {
         setError(data.message || 'Login failed. Please try again.');
       }

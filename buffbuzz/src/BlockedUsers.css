@@ -1,4 +1,4 @@
-.friend-requests-container {
+.blocked-users-container {
   max-width: 800px;
   margin: 0 auto;
   padding: 40px 20px;
@@ -6,26 +6,26 @@
   background-color: #f9fafb;
 }
 
-.friend-requests-header {
+.blocked-users-header {
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 2px solid #800000;
 }
 
-.friend-requests-header h1 {
+.blocked-users-header h1 {
   color: #800000;
   margin: 0 0 10px 0;
   font-size: 32px;
   font-weight: 600;
 }
 
-.request-count {
+.blocked-count {
   color: #6b7280;
   font-size: 14px;
   margin: 0;
 }
 
-.no-requests {
+.no-blocked {
   text-align: center;
   padding: 60px 20px;
   background: white;
@@ -33,7 +33,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.no-requests p {
+.no-blocked p {
   color: #6b7280;
   font-size: 18px;
   margin-bottom: 20px;
@@ -57,13 +57,13 @@
   box-shadow: 0 4px 12px rgba(128, 0, 0, 0.3);
 }
 
-.requests-list {
+.blocked-list {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
 
-.request-card {
+.blocked-card {
   display: flex;
   align-items: center;
   gap: 15px;
@@ -74,15 +74,15 @@
   transition: box-shadow 0.2s;
 }
 
-.request-card:hover {
+.blocked-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.request-profile-pic {
+.blocked-profile-pic {
   flex-shrink: 0;
 }
 
-.request-profile-pic img {
+.blocked-profile-pic img {
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -102,41 +102,27 @@
   font-weight: bold;
 }
 
-.request-info {
+.blocked-info {
   flex: 1;
 }
 
-.request-info h3 {
+.blocked-info h3 {
   margin: 0 0 5px 0;
   color: #1f2937;
   font-size: 18px;
   font-weight: 600;
 }
 
-.request-info h3:hover {
-  color: #800000;
-}
-
-.request-bio {
-  margin: 5px 0;
+.blocked-email {
+  margin: 0;
   color: #6b7280;
   font-size: 14px;
 }
 
-.request-time {
-  margin: 5px 0 0 0;
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.request-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.accept-button,
-.decline-button {
+.unblock-button {
   padding: 10px 20px;
+  background-color: #4CAF50;
+  color: white;
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -145,26 +131,10 @@
   transition: all 0.2s;
 }
 
-.accept-button {
-  background-color: #4CAF50;
-  color: white;
-}
-
-.accept-button:hover {
+.unblock-button:hover {
   background-color: #45a049;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
-}
-
-.decline-button {
-  background-color: #800000;
-  color: white;
-}
-
-.decline-button:hover {
-  background-color: #800000;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
 }
 
 .loading,
@@ -183,18 +153,12 @@
 }
 
 @media (max-width: 768px) {
-  .request-card {
+  .blocked-card {
     flex-direction: column;
     text-align: center;
   }
 
-  .request-actions {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  .accept-button,
-  .decline-button {
+  .unblock-button {
     width: 100%;
   }
 }

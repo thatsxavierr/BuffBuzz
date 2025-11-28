@@ -50,6 +50,10 @@ model User {
   // Friendships
   sentFriendships             Friendship[]                 @relation("FriendshipSender")
   receivedFriendships         Friendship[]                 @relation("FriendshipReceiver")
+  
+  // Blocks
+  blocksMade                  Block[]                      @relation("BlockerRelation")
+  blocksReceived              Block[]                      @relation("BlockedRelation")
 
   @@map("users")
 }
@@ -184,7 +188,7 @@ model Friendship {
   receiverId      String
   receiver        User     @relation("FriendshipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   
-  status          String   @default("PENDING") // PENDING, ACCEPTED, BLOCKED
+  status          String   @default("PENDING") // PENDING, ACCEPTED
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -193,4 +197,19 @@ model Friendship {
   @@index([senderId])
   @@index([receiverId])
   @@index([status])
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String   // User who is blocking
+  blockedId String   // User being blocked
+  createdAt DateTime @default(now())
+
+  blocker User @relation("BlockerRelation", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlockedRelation", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@map("blocks")
+  @@index([blockerId])
+  @@index([blockedId])
 }

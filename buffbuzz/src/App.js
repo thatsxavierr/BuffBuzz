@@ -18,6 +18,7 @@ import Marketplace from './Marketplace';
 import Notifications from './Notifications';
 import Jobs from './Jobs';
 import SettingsPage from './SettingsPage';
+import BlockedUsers from './BlockedUsers';
 import { getValidUser } from './sessionUtils';
 
 function ProtectedRoute({ element }) {
@@ -55,6 +56,7 @@ function App() {
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/jobs" element={<Jobs />} />
+        <Route path="/blocked-users" element={<BlockedUsers />} />
       </Routes>
     </Router>
   );

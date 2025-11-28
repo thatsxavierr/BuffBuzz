@@ -40,6 +40,11 @@ const FriendRequests = () => {
     }
   };
 
+  const refreshHeaderCount = () => {
+    // Trigger a custom event that Header listens to
+    window.dispatchEvent(new Event('friendRequestsUpdated'));
+  };
+
   const handleAccept = async (friendshipId) => {
     const currentUser = getValidUser();
     if (!currentUser) return;
@@ -53,6 +58,7 @@ const FriendRequests = () => {
 
       if (response.ok) {
         setRequests(requests.filter(req => req.id !== friendshipId));
+        refreshHeaderCount(); // Update header count
         alert('Friend request accepted!');
       } else {
         const data = await response.json();
@@ -77,6 +83,7 @@ const FriendRequests = () => {
 
       if (response.ok) {
         setRequests(requests.filter(req => req.id !== friendshipId));
+        refreshHeaderCount(); // Update header count
         alert('Friend request declined');
       } else {
         const data = await response.json();
