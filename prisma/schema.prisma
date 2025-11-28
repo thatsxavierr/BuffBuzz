@@ -46,6 +46,11 @@ model User {
   likes                       Like[]
   shares                      Share[]
   notificationPreferences     NotificationPreferences?
+  jobs                        Job[]
+  marketplaceItems            MarketplaceItem[]
+  lostFoundItems              LostFoundItem[]
+  createdGroups               Group[]         @relation("GroupCreator")
+  groupMemberships            GroupMember[]
   
   // Friendships
   sentFriendships             Friendship[]                 @relation("FriendshipSender")
@@ -212,4 +217,162 @@ model Block {
   @@map("blocks")
   @@index([blockerId])
   @@index([blockedId])
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+}
+
+enum JobCategory {
+  INTERNSHIP
+  ON_CAMPUS
+  REMOTE
+  LOCAL
+}
+
+model Job {
+  id              String      @id @default(uuid())
+  title           String
+  company         String
+  location        String
+  jobType         JobType
+  category        JobCategory
+  description     String      @db.Text
+  requirements    String      @db.Text
+  salary          String?
+  applicationLink String
+  
+  posterId        String
+  poster          User        @relation(fields: [posterId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("jobs")
+  @@index([posterId])
+  @@index([category])
+  @@index([jobType])
+  @@index([createdAt])
+}
+
+enum MarketplaceCategory {
+  TEXTBOOKS
+  ELECTRONICS
+  FURNITURE
+  CLOTHING
+  SCHOOL_SUPPLIES
+  OTHER
+}
+
+enum ItemCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+}
+
+model MarketplaceItem {
+  id          String              @id @default(uuid())
+  title       String
+  description String              @db.Text
+  price       Decimal             @db.Decimal(10, 2)
+  category    MarketplaceCategory
+  condition   ItemCondition
+  imageUrl    String?             @db.Text
+  
+  sellerId    String
+  seller      User                @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@map("marketplace_items")
+  @@index([sellerId])
+  @@index([category])
+  @@index([createdAt])
+}
+
+enum LostFoundCategory {
+  LOST
+  FOUND
+}
+
+model LostFoundItem {
+  id          String              @id @default(uuid())
+  title       String
+  description String              @db.Text
+  category    LostFoundCategory
+  location    String
+  date        DateTime
+  contactInfo String
+  imageUrl    String?             @db.Text
+  
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@map("lostfound_items")
+  @@index([userId])
+  @@index([category])
+  @@index([createdAt])
+}
+
+enum GroupCategory {
+  ACADEMIC
+  SPORTS
+  ARTS
+  SOCIAL
+  PROFESSIONAL
+  VOLUNTEER
+  OTHER
+}
+
+enum GroupPrivacy {
+  PUBLIC
+  PRIVATE
+}
+
+model Group {
+  id          String        @id @default(uuid())
+  name        String
+  description String        @db.Text
+  category    GroupCategory
+  privacy     GroupPrivacy  @default(PUBLIC)
+  imageUrl    String?       @db.Text
+  
+  creatorId   String
+  creator     User          @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  
+  members     GroupMember[]
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("groups")
+  @@index([creatorId])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  role      String   @default("MEMBER") // ADMIN, MEMBER
+  joinedAt  DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+  @@index([groupId])
+  @@index([userId])
 }
