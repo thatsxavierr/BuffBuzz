@@ -375,6 +375,7 @@ app.get('/api/search-users', async (req, res) => {
 
     const users = await prisma.user.findMany({
       where: {
+        verificationStatus: 'VERIFIED', // Only show verified accounts
         OR: [
           { firstName: { contains: query, mode: 'insensitive' } },
           { lastName: { contains: query, mode: 'insensitive' } },
