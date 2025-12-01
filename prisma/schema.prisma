@@ -49,8 +49,11 @@ model User {
   jobs                        Job[]
   marketplaceItems            MarketplaceItem[]
   lostFoundItems              LostFoundItem[]
-  createdGroups               Group[]         @relation("GroupCreator")
+  createdGroups               Group[]                      @relation("GroupCreator")
   groupMemberships            GroupMember[]
+  conversations               ConversationParticipant[]
+  messages                    Message[]                    @relation("MessageSender")
+  messageReactions            MessageReaction[]
   
   // Friendships
   sentFriendships             Friendship[]                 @relation("FriendshipSender")
@@ -374,5 +377,94 @@ model GroupMember {
   @@unique([groupId, userId])
   @@map("group_members")
   @@index([groupId])
+  @@index([userId])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+}
+
+model Conversation {
+  id            String    @id @default(uuid())
+  isGroupChat   Boolean   @default(false)
+  name          String?   // For group chats
+  imageUrl      String?   @db.Text // For group chat image
+  creatorId     String?
+  
+  participants  ConversationParticipant[]
+  messages      Message[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("conversations")
+  @@index([createdAt])
+}
+
+model ConversationParticipant {
+  id              String       @id @default(uuid())
+  
+  conversationId  String
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  lastReadAt      DateTime?    // When user last read messages
+  joinedAt        DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+  @@index([conversationId])
+  @@index([userId])
+}
+
+model Message {
+  id              String            @id @default(uuid())
+  content         String            @db.Text
+  type            MessageType       @default(TEXT)
+  imageUrl        String?           @db.Text
+  
+  conversationId  String
+  conversation    Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  senderId        String
+  sender          User              @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  replyToId       String?
+  replyTo         Message?          @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies         Message[]         @relation("MessageReplies")
+  
+  reactions       MessageReaction[]
+  
+  deletedAt       DateTime?
+  editedAt        DateTime?
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("messages")
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  emoji     String   // The emoji used for reaction
+  
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId]) // One reaction per user per message
+  @@map("message_reactions")
+  @@index([messageId])
   @@index([userId])
 }
