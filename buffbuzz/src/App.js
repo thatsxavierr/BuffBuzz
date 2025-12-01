@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import WelcomePage from './welcomePage';
 import LoginPage from './loginPage';
 import SignupPage from './signUpPage';
@@ -22,7 +22,35 @@ import BlockedUsers from './BlockedUsers';
 import { getValidUser } from './sessionUtils';
 
 function ProtectedRoute({ element }) {
-  const user = getValidUser();
+  const [user, setUser] = useState(null);
+  const [isChecking, setIsChecking] = useState(true);
+  const location = useLocation();
+
+  useEffect(() => {
+    // Check session on mount and when location changes
+    const checkSession = () => {
+      // First check if user is passed in location state (from login)
+      const stateUser = location.state?.user;
+      if (stateUser) {
+        setUser(stateUser);
+        setIsChecking(false);
+        return;
+      }
+
+      // Otherwise check localStorage
+      const validUser = getValidUser();
+      setUser(validUser);
+      setIsChecking(false);
+    };
+
+    checkSession();
+  }, [location]);
+
+  if (isChecking) {
+    // Show loading state while checking session
+    return <div>Loading...</div>;
+  }
+
   return user ? element : <LoginPage />;
 }
 
