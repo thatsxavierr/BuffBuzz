@@ -2624,6 +2624,739 @@ app.delete('/api/groups/:groupId', async (req, res) => {
   }
 });
 
+// ==================== MESSAGING ENDPOINTS ====================
+
+// Get or create a conversation between users
+app.post('/api/conversations/get-or-create', async (req, res) => {
+  try {
+    const { userId, otherUserId } = req.body;
+
+    if (!userId || !otherUserId) {
+      return res.status(400).json({ message: 'Both user IDs are required' });
+    }
+
+    // Check if conversation already exists between these two users
+    const existingConversation = await prisma.conversation.findFirst({
+      where: {
+        isGroupChat: false,
+        participants: {
+          every: {
+            userId: {
+              in: [userId, otherUserId]
+            }
+          }
+        }
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: {
+                  select: {
+                    profilePictureUrl: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        messages: {
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1
+        }
+      }
+    });
+
+    if (existingConversation) {
+      return res.status(200).json({ conversation: existingConversation });
+    }
+
+    // Create new conversation
+    const conversation = await prisma.conversation.create({
+      data: {
+        isGroupChat: false,
+        participants: {
+          create: [
+            { userId: userId },
+            { userId: otherUserId }
+          ]
+        }
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: {
+                  select: {
+                    profilePictureUrl: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        messages: true
+      }
+    });
+
+    res.status(201).json({ conversation });
+
+  } catch (error) {
+    console.error('Get or create conversation error:', error);
+    res.status(500).json({ message: 'An error occurred while getting conversation' });
+  }
+});
+
+// Get all conversations for a user
+app.get('/api/conversations/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        participants: {
+          some: {
+            userId: userId
+          }
+        }
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: {
+                  select: {
+                    profilePictureUrl: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        messages: {
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1,
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        updatedAt: 'desc'
+      }
+    });
+
+    // Calculate unread count for each conversation
+    const conversationsWithUnread = await Promise.all(
+      conversations.map(async (conv) => {
+        const participant = conv.participants.find(p => p.userId === userId);
+        const unreadCount = await prisma.message.count({
+          where: {
+            conversationId: conv.id,
+            senderId: { not: userId },
+            createdAt: {
+              gt: participant?.lastReadAt || new Date(0)
+            },
+            deletedAt: null
+          }
+        });
+
+        return {
+          ...conv,
+          unreadCount
+        };
+      })
+    );
+
+    res.status(200).json({ conversations: conversationsWithUnread });
+
+  } catch (error) {
+    console.error('Get conversations error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching conversations' });
+  }
+});
+
+// Get messages in a conversation
+// Get messages in a conversation
+app.get('/api/conversations/:conversationId/messages', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+
+    const messages = await prisma.message.findMany({
+      where: {
+        conversationId: conversationId,
+        deletedAt: null
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+        reactions: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    });
+
+    // Get conversation data with participants
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: {
+          select: {
+            userId: true,
+            lastReadAt: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ 
+      messages,
+      conversation
+    });
+
+  } catch (error) {
+    console.error('Get messages error:', error);
+    console.error('Error details:', error.message); // ADD THIS LINE
+    res.status(500).json({ message: 'An error occurred while fetching messages', error: error.message });
+  }
+});
+
+// Send a message
+app.post('/api/messages/send', async (req, res) => {
+  try {
+    const { conversationId, senderId, content, type, imageUrl, replyToId } = req.body;
+
+    if (!conversationId || !senderId || !content) {
+      return res.status(400).json({ message: 'Conversation ID, sender ID, and content are required' });
+    }
+
+    const message = await prisma.message.create({
+      data: {
+        conversationId,
+        senderId,
+        content,
+        type: type || 'TEXT',
+        imageUrl: imageUrl || null,
+        replyToId: replyToId || null
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Update conversation updatedAt
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { updatedAt: new Date() }
+    });
+
+    res.status(201).json({ message });
+
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ message: 'An error occurred while sending message' });
+  }
+});
+
+// Mark messages as read
+app.put('/api/conversations/:conversationId/read', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    await prisma.conversationParticipant.updateMany({
+      where: {
+        conversationId,
+        userId
+      },
+      data: {
+        lastReadAt: new Date()
+      }
+    });
+
+    res.status(200).json({ message: 'Messages marked as read' });
+
+  } catch (error) {
+    console.error('Mark as read error:', error);
+    res.status(500).json({ message: 'An error occurred while marking messages as read' });
+  }
+});
+
+// Delete a message
+app.delete('/api/messages/:messageId', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { userId } = req.body;
+
+    const message = await prisma.message.findUnique({
+      where: { id: messageId }
+    });
+
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+
+    if (message.senderId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to delete this message' });
+    }
+
+    // Soft delete
+    await prisma.message.update({
+      where: { id: messageId },
+      data: { deletedAt: new Date() }
+    });
+
+    res.status(200).json({ message: 'Message deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete message error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting message' });
+  }
+});
+
+// Create group chat
+app.post('/api/conversations/group/create', async (req, res) => {
+  try {
+    const { creatorId, name, participantIds, imageUrl } = req.body;
+
+    if (!creatorId || !name || !participantIds || participantIds.length === 0) {
+      return res.status(400).json({ message: 'Creator ID, name, and participants are required' });
+    }
+
+    // Create group chat
+    const conversation = await prisma.conversation.create({
+      data: {
+        isGroupChat: true,
+        name,
+        imageUrl: imageUrl || null,
+        creatorId: creatorId,
+        participants: {
+          create: [
+            { userId: creatorId },
+            ...participantIds.map(id => ({ userId: id }))
+          ]
+        }
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: {
+                  select: {
+                    profilePictureUrl: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.status(201).json({ conversation });
+
+  } catch (error) {
+    console.error('Create group chat error:', error);
+    res.status(500).json({ message: 'An error occurred while creating group chat' });
+  }
+});
+
+// Delete a conversation (group chat)
+app.delete('/api/conversations/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: true
+      }
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Only allow deleting group chats
+    if (!conversation.isGroupChat) {
+      return res.status(400).json({ message: 'Cannot delete direct conversations' });
+    }
+
+    // Check if user is the creator
+    if (conversation.creatorId !== userId) {
+      return res.status(403).json({ message: 'Only the group creator can delete this group' });
+    }
+
+    // Delete the conversation
+    await prisma.conversation.delete({
+      where: { id: conversationId }
+    });
+
+    res.status(200).json({ message: 'Group chat deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete conversation error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the conversation' });
+  }
+});
+
+// Leave a conversation (group chat)
+app.post('/api/conversations/:conversationId/leave', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId }
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    if (!conversation.isGroupChat) {
+      return res.status(400).json({ message: 'Cannot leave direct conversations' });
+    }
+
+    // Remove user from conversation participants
+    await prisma.conversationParticipant.deleteMany({
+      where: {
+        conversationId,
+        userId
+      }
+    });
+
+    res.status(200).json({ message: 'Successfully left the conversation' });
+
+  } catch (error) {
+    console.error('Leave conversation error:', error);
+    res.status(500).json({ message: 'An error occurred while leaving the conversation' });
+  }
+});
+
+// Edit a message
+app.put('/api/messages/:messageId/edit', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { userId, content } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ message: 'Content is required' });
+    }
+
+    const message = await prisma.message.findUnique({
+      where: { id: messageId }
+    });
+
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+
+    if (message.senderId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to edit this message' });
+    }
+
+    const updatedMessage = await prisma.message.update({
+      where: { id: messageId },
+      data: { 
+        content,
+        editedAt: new Date()
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+        reactions: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ message: updatedMessage });
+
+  } catch (error) {
+    console.error('Edit message error:', error);
+    res.status(500).json({ message: 'An error occurred while editing the message' });
+  }
+});
+
+// React to a message
+app.post('/api/messages/:messageId/react', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { userId, emoji } = req.body;
+
+    if (!userId || !emoji) {
+      return res.status(400).json({ message: 'User ID and emoji are required' });
+    }
+
+    // Check if user already reacted with this emoji
+    const existingReaction = await prisma.messageReaction.findUnique({
+      where: {
+        messageId_userId: {
+          messageId,
+          userId
+        }
+      }
+    });
+
+    if (existingReaction) {
+      // If same emoji, remove reaction
+      if (existingReaction.emoji === emoji) {
+        await prisma.messageReaction.delete({
+          where: {
+            messageId_userId: {
+              messageId,
+              userId
+            }
+          }
+        });
+        return res.status(200).json({ message: 'Reaction removed' });
+      } else {
+        // Update to new emoji
+        const reaction = await prisma.messageReaction.update({
+          where: {
+            messageId_userId: {
+              messageId,
+              userId
+            }
+          },
+          data: { emoji },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        });
+        return res.status(200).json({ reaction });
+      }
+    }
+
+    // Create new reaction
+    const reaction = await prisma.messageReaction.create({
+      data: {
+        messageId,
+        userId,
+        emoji
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({ reaction });
+
+  } catch (error) {
+    console.error('React to message error:', error);
+    res.status(500).json({ message: 'An error occurred while reacting to the message' });
+  }
+});
+
+// Get message reactions
+app.get('/api/messages/:messageId/reactions', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    const reactions = await prisma.messageReaction.findMany({
+      where: { messageId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ reactions });
+
+  } catch (error) {
+    console.error('Get reactions error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching reactions' });
+  }
+});
+
+// Get user's friends for group chat creation
+app.get('/api/friends/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        OR: [
+          { senderId: userId, status: 'ACCEPTED' },
+          { receiverId: userId, status: 'ACCEPTED' }
+        ]
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        receiver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const friends = friendships.map(friendship => {
+      return friendship.senderId === userId ? friendship.receiver : friendship.sender;
+    });
+
+    res.status(200).json({ friends });
+
+  } catch (error) {
+    console.error('Get friends error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching friends' });
+  }
+});
+
 // ==================== HEALTH CHECK ====================
 
 // Health check endpoint
