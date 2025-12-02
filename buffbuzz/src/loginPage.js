@@ -73,28 +73,27 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Store user data with session timestamp (2 hour expiration)
-        setSession(data.user);
-        
-        // Verify session was set correctly
-        if (!isSessionValid()) {
-          setError('Session setup failed. Please try again.');
-          setLoading(false);
-          return;
-        }
-        
-        // Check if user has a profile
-        const hasProfile = await checkUserProfile(data.user.id);
-        
-        if (hasProfile) {
-          // User has profile, go to main page - use replace to prevent back button issues
-          // Pass user in state so ProtectedRoute can use it immediately
-          navigate('/main', { state: { user: data.user }, replace: true });
-        } else {
-          // User doesn't have profile, go to profile edit
-          navigate('/profile-edit', { state: { isFirstTime: true, user: data.user }, replace: true });
-        }
+      // Store user data with session timestamp (2 hour expiration)
+      setSession(data.user);
+      
+      // Verify session was set correctly
+      if (!isSessionValid()) {
+        setError('Session setup failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+      
+      // Check if user has a profile
+      const hasProfile = await checkUserProfile(data.user.id);
+      
+      if (hasProfile) {
+        // User has profile, go to main page
+        navigate('/main', { state: { user: data.user }, replace: true });
       } else {
+        // User doesn't have profile, go to profile edit with first-time flag
+        navigate('/profile-edit', { state: { isFirstTime: true, user: data.user }, replace: true });
+      }
+    } else {
         setError(data.message || 'Login failed. Please try again.');
       }
     } catch (error) {

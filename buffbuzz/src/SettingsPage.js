@@ -176,16 +176,22 @@ const SettingsPage = () => {
       const data = await response.json();
 
       if (response.ok) {
-        // Clear session storage
-        sessionStorage.removeItem('user');
-        
-        // Show success message briefly then redirect
-        setMessage({ type: 'success', text: 'Account deleted successfully. Redirecting...' });
-        
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
-      } else {
+  // Show success message
+  setMessage({ type: 'success', text: 'Account deleted successfully. Redirecting to login...' });
+  
+  // Close the modal
+  setShowDeleteModal(false);
+  
+  // Clear ALL storage
+  sessionStorage.clear();
+  localStorage.clear();
+  
+  // Use setTimeout to show the message briefly, then hard redirect
+  setTimeout(() => {
+    // Force a complete page reload to the login page
+    window.location.href = '/login';
+  }, 1500);
+} else {
         setMessage({ type: 'error', text: data.message || 'Failed to delete account' });
       }
     } catch (error) {

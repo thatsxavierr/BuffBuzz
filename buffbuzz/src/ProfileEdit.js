@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './ProfileEdit.css';
 import Header from './Header';
 import { getValidUser } from './sessionUtils';
 
+
 export default function ProfileEdit() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
+  const [isFirstTime, setIsFirstTime] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     pronouns: '',
@@ -34,6 +37,11 @@ export default function ProfileEdit() {
     }
     
     setUser(userData);
+
+    // Check if this is first-time profile creation from location state
+    if (location.state?.isFirstTime) {
+      setIsFirstTime(true);
+    }
 
     const fetchProfile = async () => {
       try {
@@ -190,7 +198,7 @@ export default function ProfileEdit() {
       <Header onBackClick={() => navigate('/main')} profilePictureUrl={previewImage} />
       <div className="profile-edit-container">
         <div className="profile-edit-card">
-          <h1>Edit Profile</h1>
+          <h1>{isFirstTime ? 'Create Your Profile' : 'Edit Profile'}</h1>
           
           <form onSubmit={handleSubmit}>
             {/* Profile Picture Section */}
@@ -418,12 +426,12 @@ export default function ProfileEdit() {
                 Cancel
               </button>
               <button 
-                type="submit" 
-                className="save-button"
-                disabled={isLoading}
-              >
-                {isLoading ? 'Saving...' : 'Save Changes'}
-              </button>
+              type="submit" 
+              className="save-button"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Saving...' : (isFirstTime ? 'Create Profile' : 'Save Changes')}
+            </button>
             </div>
           </form>
         </div>

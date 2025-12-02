@@ -84,13 +84,10 @@ function VerificationPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess(data.message);
-        // Set session before navigating
-        if (data.user) {
-          setSession(data.user);
-        }
+        setSuccess(data.message + ' Redirecting to login...');
+        // Don't set session - force them to login
         setTimeout(() => {
-          navigate('/main', { state: { user: data.user }, replace: true }); // Changed to /main and pass user data
+          navigate('/login', { replace: true }); // Send to login page
         }, 2000);
       } else {
         setError(data.message || 'Verification failed');

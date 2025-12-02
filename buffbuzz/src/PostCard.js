@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import './PostCard.css';
 import CommentModel from './CommentModel';
 
-export default function PostCard({ post, currentUserId }) {
+export default function PostCard({ post, currentUserId, onDelete, friendIds = new Set() }) {
   const navigate = useNavigate();
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [isSaved, setIsSaved] = useState(false);
   const [likeCount, setLikeCount] = useState(post._count?.likes || 0);
   const [commentCount, setCommentCount] = useState(post._count?.comments || 0);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Debug: Log the post data
   console.log('Post data:', post);
@@ -84,6 +85,40 @@ export default function PostCard({ post, currentUserId }) {
     navigate('/profile', { state: { userId: post.author.id } });
   };
 
+  const handleDelete = async () => {
+    const confirmDelete = window.confirm('Are you sure you want to delete this post? This action cannot be undone.');
+    
+    if (!confirmDelete) {
+      return;
+    }
+
+    setIsDeleting(true);
+    
+    try {
+      const response = await fetch(`http://localhost:5000/api/posts/${post.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Call the onDelete callback to remove the post from the feed
+        if (onDelete) {
+          onDelete(post.id);
+        }
+      } else {
+        alert(data.message || 'Failed to delete post');
+        setIsDeleting(false);
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      alert('An error occurred while deleting the post');
+      setIsDeleting(false);
+    }
+  };
+
   const handleCommentAdded = () => {
     setCommentCount(commentCount + 1);
   };
@@ -112,9 +147,28 @@ export default function PostCard({ post, currentUserId }) {
             </div>
           </div>
           <div className="header-actions">
-            {post.author.id !== currentUserId && (
+            {post.author.id !== currentUserId && !friendIds.has(post.author.id) && (
               <button className="add-button" onClick={handleAdd}>
                 Add
+              </button>
+            )}
+            {post.author.id === currentUserId && (
+              <button 
+                className="delete-button" 
+                onClick={handleDelete}
+                disabled={isDeleting}
+                title="Delete post"
+              >
+                {isDeleting ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6M12 18h.01"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                )}
               </button>
             )}
           </div>
