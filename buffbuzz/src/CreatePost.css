@@ -66,6 +66,23 @@
   min-height: 150px;
 }
 
+/* Image upload hint and error */
+.create-post-image-hint {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.create-post-image-error {
+  margin: 10px 0 0 0;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #b91c1c;
+  background-color: #fef2f2;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+}
+
 /* Image Upload Styles */
 .image-upload-area {
   position: relative;
