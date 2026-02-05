@@ -121,15 +121,16 @@ const handleSearch = async (query) => {
         <LeftSidebar />
         
         <div className="main-content">
-          <button 
-            onClick={() => navigate('/create-post')} 
-            className="create-post-button"
-          >
-            + Create New Post
-          </button>
-          
-          {/* Posts Feed */}
-          <div className="posts-feed">
+          <div className="main-content-feed">
+            <button 
+              onClick={() => navigate('/create-post')} 
+              className="create-post-button"
+            >
+              + Create New Post
+            </button>
+            
+            {/* Posts Feed */}
+            <div className="posts-feed">
             {loading ? (
               <div className="loading-posts">Loading posts...</div>
             ) : posts.length === 0 ? (
@@ -148,6 +149,7 @@ const handleSearch = async (query) => {
                 />
               ))
             )}
+            </div>
           </div>
         </div>
         
