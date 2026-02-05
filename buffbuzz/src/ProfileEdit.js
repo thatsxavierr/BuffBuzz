@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './ProfileEdit.css';
 import Header from './Header';
 import { getValidUser } from './sessionUtils';
-
+import ImageCropModal from './ImageCropModal';
 
 export default function ProfileEdit() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [user, setUser] = useState(null);
-  const [isFirstTime, setIsFirstTime] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     pronouns: '',
@@ -27,6 +25,8 @@ export default function ProfileEdit() {
   });
   const [previewImage, setPreviewImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState(null);
 
   useEffect(() => {
     const userData = getValidUser();
@@ -37,11 +37,6 @@ export default function ProfileEdit() {
     }
     
     setUser(userData);
-
-    // Check if this is first-time profile creation from location state
-    if (location.state?.isFirstTime) {
-      setIsFirstTime(true);
-    }
 
     const fetchProfile = async () => {
       try {
@@ -99,6 +94,7 @@ export default function ProfileEdit() {
         return;
       }
 
+      // Store the file and show crop modal
       setFormData(prev => ({
         ...prev,
         profilePicture: file
@@ -106,10 +102,29 @@ export default function ProfileEdit() {
       
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreviewImage(reader.result);
+        setImageToCrop(reader.result);
+        setShowCropModal(true);
       };
       reader.readAsDataURL(file);
     }
+    // Reset the input so the same file can be selected again
+    e.target.value = '';
+  };
+
+  const handleCropComplete = (croppedImageUrl) => {
+    setPreviewImage(croppedImageUrl);
+    setShowCropModal(false);
+    setImageToCrop(null);
+  };
+
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    setImageToCrop(null);
+    // Reset the file input
+    setFormData(prev => ({
+      ...prev,
+      profilePicture: null
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -196,9 +211,16 @@ export default function ProfileEdit() {
   return (
     <div>
       <Header onBackClick={() => navigate('/main')} profilePictureUrl={previewImage} />
+      {showCropModal && imageToCrop && (
+        <ImageCropModal
+          image={imageToCrop}
+          onClose={handleCropCancel}
+          onCropComplete={handleCropComplete}
+        />
+      )}
       <div className="profile-edit-container">
         <div className="profile-edit-card">
-          <h1>{isFirstTime ? 'Create Your Profile' : 'Edit Profile'}</h1>
+          <h1>Edit Profile</h1>
           
           <form onSubmit={handleSubmit}>
             {/* Profile Picture Section */}
@@ -426,12 +448,12 @@ export default function ProfileEdit() {
                 Cancel
               </button>
               <button 
-              type="submit" 
-              className="save-button"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Saving...' : (isFirstTime ? 'Create Profile' : 'Save Changes')}
-            </button>
+                type="submit" 
+                className="save-button"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Saving...' : 'Save Changes'}
+              </button>
             </div>
           </form>
         </div>
