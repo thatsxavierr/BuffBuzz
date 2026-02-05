@@ -5,6 +5,10 @@ import Header from './Header.js';
 import Footer from './Footer';
 import { getValidUser } from './sessionUtils';
 
+// Max image size for post uploads (5MB) – users are informed when exceeded
+const MAX_POST_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_POST_IMAGE_SIZE_MB = 5;
+
 export default function CreatePost() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -12,6 +16,7 @@ export default function CreatePost() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imagePreview, setImagePreview] = useState(null);
+  const [imageError, setImageError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -48,17 +53,33 @@ export default function CreatePost() {
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    setImageError('');
+
+    if (!file.type.startsWith('image/')) {
+      setImageError('Please select an image file (e.g. JPEG, PNG, GIF).');
+      e.target.value = '';
+      return;
     }
+
+    if (file.size > MAX_POST_IMAGE_SIZE_BYTES) {
+      setImageError(`Image is too large. Maximum size is ${MAX_POST_IMAGE_SIZE_MB}MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)}MB.`);
+      setImagePreview(null);
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRemoveImage = () => {
     setImagePreview(null);
+    setImageError('');
   };
 
   const handleSubmit = async (e) => {
@@ -92,7 +113,15 @@ export default function CreatePost() {
         alert('Post created successfully!');
         navigate('/main');
       } else {
-        alert(data.message || 'Failed to create post');
+        const message = data.message || 'Failed to create post';
+        if (response.status === 413) {
+          setImageError(message);
+          setImagePreview(null);
+          const fileInput = document.getElementById('create-post-image-input');
+          if (fileInput) fileInput.value = '';
+        } else {
+          alert(message);
+        }
       }
     } catch (error) {
       console.error('Create post error:', error);
@@ -144,20 +173,22 @@ export default function CreatePost() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="image">Add Image (Optional)</label>
+              <label htmlFor="create-post-image-input">Add Image (Optional)</label>
+              <p className="create-post-image-hint">Maximum size: {MAX_POST_IMAGE_SIZE_MB}MB</p>
               {!imagePreview ? (
                 <div className="image-upload-area">
                   <input
                     type="file"
-                    id="image"
+                    id="create-post-image-input"
                     accept="image/*"
                     onChange={handleImageChange}
                     className="image-input"
                   />
-                  <label htmlFor="image" className="image-upload-label">
+                  <label htmlFor="create-post-image-input" className="image-upload-label">
                     <span className="upload-icon">📷</span>
                     <span>Click to upload image</span>
                   </label>
+                  {imageError && <p className="create-post-image-error" role="alert">{imageError}</p>}
                 </div>
               ) : (
                 <div className="image-preview-container">
