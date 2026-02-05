@@ -75,7 +75,7 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    const fullEmail = formData.email + getEmailDomain();
+    const fullEmail = (formData.email.trim() + getEmailDomain()).toLowerCase();
 
     const userData = {
       userType: formData.userType,
