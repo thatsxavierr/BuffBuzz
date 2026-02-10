@@ -2,6 +2,38 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./signUpPage.css";
 
+// WTAMU Departments List
+const WTAMU_DEPARTMENTS = [
+  // College of Agriculture and Natural Sciences
+  "Agricultural Sciences",
+  "Chemistry and Physics",
+  "Life, Earth and Environmental Sciences",
+  
+  // College of Business
+  "Business",
+  
+  // College of Education and Social Sciences
+  "Education",
+  "Political Science and Criminal Justice",
+  "Psychology, Sociology and Social Work",
+  
+  // College of Engineering
+  "Engineering",
+  
+  // College of Fine Arts and Humanities
+  "Art, Theatre and Dance",
+  "Communication",
+  "English, Philosophy and Modern Languages",
+  "History",
+  "Music",
+  "General Majors",
+  
+  // College of Nursing and Health Sciences
+  "Speech and Hearing Sciences",
+  "Nursing",
+  "Sports and Exercise Sciences"
+].sort(); 
+
 export default function SignupPage() {
   const navigate = useNavigate();
   
@@ -11,7 +43,8 @@ export default function SignupPage() {
     lastName: "",
     email: "",
     password: "",
-    confirmPassword: ""
+    confirmPassword: "",
+    department: "" // Added department field
   });
 
   const [errors, setErrors] = useState({
@@ -20,7 +53,8 @@ export default function SignupPage() {
     lastName: false,
     email: false,
     password: false,
-    confirmPassword: false
+    confirmPassword: false,
+    department: false // Added department error
   });
 
   const [loading, setLoading] = useState(false);
@@ -59,7 +93,8 @@ export default function SignupPage() {
       lastName: formData.lastName.trim() === "",
       email: formData.email.trim() === "" || !/^[a-zA-Z0-9._-]+$/.test(formData.email),
       password: formData.password.length < 8,
-      confirmPassword: formData.confirmPassword !== formData.password
+      confirmPassword: formData.confirmPassword !== formData.password,
+      department: formData.department === "" // Added department validation
     };
 
     setErrors(newErrors);
@@ -82,7 +117,8 @@ export default function SignupPage() {
       firstName: formData.firstName,
       lastName: formData.lastName,
       email: fullEmail,
-      password: formData.password
+      password: formData.password,
+      department: formData.department // Added department to userData
     };
 
     try {
@@ -139,6 +175,28 @@ export default function SignupPage() {
               <option value="professor">Professor</option>
             </select>
             {errors.userType && <span className="error">Please select a user type</span>}
+          </div>
+
+          {/* DEPARTMENT FIELD - Added here */}
+          <div className="form-group">
+            <label htmlFor="department">Department</label>
+            <select
+              id="department"
+              name="department"
+              value={formData.department}
+              onChange={handleInputChange}
+              className={errors.department ? "invalid" : ""}
+              required
+              disabled={loading}
+            >
+              <option value="">Select Department...</option>
+              {WTAMU_DEPARTMENTS.map((dept, index) => (
+                <option key={index} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
+            {errors.department && <span className="error">Please select a department</span>}
           </div>
 
           <div className="form-group">
