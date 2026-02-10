@@ -1,9 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LostFound.css';
 import Header from './Header.js';
 import Footer from './Footer';
+import ImageCarousel from './ImageCarousel';
 import { getValidUser } from './sessionUtils';
+
+const MAX_LISTING_IMAGES = 5;
+
+function getItemImages(item) {
+  if (!item) return [];
+  if (item.imageUrls && Array.isArray(item.imageUrls) && item.imageUrls.length > 0) return item.imageUrls;
+  const raw = item.imageUrl;
+  if (!raw) return [];
+  if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+    try {
+      const arr = JSON.parse(raw.trim());
+      return Array.isArray(arr) ? arr : [raw];
+    } catch (_) {
+      return [raw];
+    }
+  }
+  return [raw];
+}
 
 export default function LostFound() {
   const navigate = useNavigate();
@@ -13,6 +32,8 @@ export default function LostFound() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [detailItem, setDetailItem] = useState(null);
+  const imageUrlsRef = useRef([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -20,7 +41,7 @@ export default function LostFound() {
     location: '',
     date: '',
     contactInfo: '',
-    imageUrl: ''
+    imageUrls: []
   });
 
   useEffect(() => {
@@ -74,19 +95,42 @@ export default function LostFound() {
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const current = formData.imageUrls.length;
+    const remaining = MAX_LISTING_IMAGES - current;
+    const toAdd = files.slice(0, remaining);
+    if (toAdd.length === 0) {
+      alert(`Maximum ${MAX_LISTING_IMAGES} images allowed.`);
+      e.target.value = '';
+      return;
+    }
+    toAdd.forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
       const reader = new FileReader();
       reader.onloadend = () => {
-        setFormData({ ...formData, imageUrl: reader.result });
+        const next = [...imageUrlsRef.current, reader.result].slice(0, MAX_LISTING_IMAGES);
+        imageUrlsRef.current = next;
+        setFormData((prev) => ({ ...prev, imageUrls: next }));
       };
       reader.readAsDataURL(file);
-    }
+    });
+    e.target.value = '';
+  };
+
+  const removeImage = (index) => {
+    const next = formData.imageUrls.filter((_, i) => i !== index);
+    imageUrlsRef.current = next;
+    setFormData((prev) => ({ ...prev, imageUrls: next }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    const urlsToSend = imageUrlsRef.current.length > 0 ? imageUrlsRef.current : formData.imageUrls;
+    if (urlsToSend.length === 0 && formData.imageUrls.length > 0) {
+      alert('Images are still loading. Please wait a moment and try again.');
+      return;
+    }
     try {
       const response = await fetch('http://localhost:5000/api/lostfound/create', {
         method: 'POST',
@@ -94,7 +138,13 @@ export default function LostFound() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ...formData,
+          title: formData.title,
+          description: formData.description,
+          category: formData.category,
+          location: formData.location,
+          date: formData.date,
+          contactInfo: formData.contactInfo,
+          imageUrls: urlsToSend,
           userId: user.id
         })
       });
@@ -111,8 +161,9 @@ export default function LostFound() {
           location: '',
           date: '',
           contactInfo: '',
-          imageUrl: ''
+          imageUrls: []
         });
+        imageUrlsRef.current = [];
         fetchItems();
       } else {
         alert(data.message || 'Failed to post item');
@@ -212,25 +263,36 @@ export default function LostFound() {
               <p>Be the first to post a lost or found item!</p>
             </div>
           ) : (
-            items.map(item => (
-              <div key={item.id} className="item-card">
+            items.map(item => {
+              const images = getItemImages(item);
+              return (
+              <div
+                key={item.id}
+                className="item-card item-card-clickable"
+                onClick={() => setDetailItem(item)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailItem(item); } }}
+                aria-label={`View ${item.title}`}
+              >
                 <div className={`item-badge ${item.category.toLowerCase()}`}>
                   {item.category === 'LOST' ? '🔍 Lost' : '✨ Found'}
                 </div>
                 
                 {user.id === item.userId && (
-                  <button 
+                  <button
+                    type="button"
                     className="delete-item-button"
-                    onClick={() => handleDeleteItem(item.id)}
+                    onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
                     title="Delete this item"
                   >
                     🗑️
                   </button>
                 )}
                 
-                {item.imageUrl && (
-                  <img src={item.imageUrl} alt={item.title} className="item-image" />
-                )}
+                {images.length > 0 ? (
+                  <ImageCarousel images={images} alt={item.title} className="lostfound-carousel" />
+                ) : null}
                 
                 <div className="item-content">
                   <h3>{item.title}</h3>
@@ -253,14 +315,52 @@ export default function LostFound() {
 
                   <div className="item-footer">
                     <span className="posted-by">Posted by {item.userName || 'Anonymous'}</span>
-                    <button className="contact-button">Contact</button>
+                    <button type="button" className="contact-button" onClick={(e) => e.stopPropagation()}>Contact</button>
                   </div>
                 </div>
               </div>
-            ))
+            ); })
           )}
         </div>
       </div>
+
+      {detailItem && (
+        <div className="modal-overlay listing-detail-overlay" onClick={() => setDetailItem(null)}>
+          <div className="listing-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="listing-detail-close" onClick={() => setDetailItem(null)} aria-label="Close">×</button>
+            <div className="listing-detail-carousel-wrap">
+              {getItemImages(detailItem).length > 0 ? (
+                <ImageCarousel images={getItemImages(detailItem)} alt={detailItem.title} className="listing-detail-carousel" />
+              ) : (
+                <div className="listing-detail-placeholder"><span className="placeholder-icon">📦</span></div>
+              )}
+            </div>
+            <div className="listing-detail-body">
+              <div className={`item-badge ${detailItem.category?.toLowerCase()}`} style={{ marginBottom: 12 }}>
+                {detailItem.category === 'LOST' ? '🔍 Lost' : '✨ Found'}
+              </div>
+              <h2 className="listing-detail-title">{detailItem.title}</h2>
+              <p className="listing-detail-description">{detailItem.description}</p>
+              <div className="item-details" style={{ marginBottom: 12 }}>
+                {detailItem.location && (
+                  <div className="detail-item">
+                    <span className="detail-icon">📍</span>
+                    <span>{detailItem.location}</span>
+                  </div>
+                )}
+                {detailItem.date && (
+                  <div className="detail-item">
+                    <span className="detail-icon">📅</span>
+                    <span>{new Date(detailItem.date).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
+              <p className="listing-detail-seller">Posted by {detailItem.userName || 'Anonymous'}</p>
+              <button type="button" className="listing-detail-message" onClick={(e) => e.stopPropagation()}>Contact</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
@@ -358,18 +458,27 @@ export default function LostFound() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="image">Add Image (Optional)</label>
+                <label htmlFor="lostfound-images">Photos (optional, up to {MAX_LISTING_IMAGES})</label>
                 <input
                   type="file"
-                  id="image"
+                  id="lostfound-images"
                   accept="image/*"
+                  multiple
                   onChange={handleImageChange}
                   className="file-input"
                 />
-                {formData.imageUrl && (
-                  <div className="image-preview-small">
-                    <img src={formData.imageUrl} alt="Preview" />
+                {formData.imageUrls.length > 0 && (
+                  <div className="listing-preview-grid">
+                    {formData.imageUrls.map((url, i) => (
+                      <div key={i} className="listing-preview-wrap">
+                        <img src={url} alt={`Preview ${i + 1}`} />
+                        <button type="button" className="listing-preview-remove" onClick={() => removeImage(i)} aria-label="Remove photo">×</button>
+                      </div>
+                    ))}
                   </div>
+                )}
+                {formData.imageUrls.length >= MAX_LISTING_IMAGES && (
+                  <p className="listing-image-hint">Maximum {MAX_LISTING_IMAGES} images.</p>
                 )}
               </div>
 
