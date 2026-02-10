@@ -1,0 +1,156 @@
+.signup-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #800000 0%, #a00000 100%);
+  padding: 20px;
+}
+
+.signup-container {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  max-width: 450px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+.logo-section {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.logo-section h1 {
+  font-size: 36px;
+  color: #800000;
+  margin-bottom: 5px;
+  font-weight: 700;
+}
+
+.logo-section p {
+  color: #666;
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #800000;
+}
+
+.form-group input.invalid,
+.form-group select.invalid {
+  border-color: #ff4444;
+}
+
+.email-display {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.email-display input {
+  flex: 1;
+}
+
+.email-domain {
+  color: #666;
+  font-size: 14px;
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.error {
+  color: #ff4444;
+  font-size: 12px;
+  margin-top: 5px;
+  display: block;
+}
+
+.error-message-box {
+  background-color: #fee;
+  color: #c33;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  text-align: center;
+  font-size: 14px;
+  border: 1px solid #fcc;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #800000 0%, #a00000 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(128, 0, 0, 0.4);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.login-link {
+  text-align: center;
+  margin-top: 20px;
+  color: #666;
+  font-size: 14px;
+}
+
+.login-link a {
+  color: #800000;
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-link a:hover {
+  text-decoration: underline;
+}
+
+/* Responsive design */
+@media (max-width: 600px) {
+  .signup-container {
+    padding: 30px 20px;
+  }
+
+  .logo-section h1 {
+    font-size: 28px;
+  }
+}

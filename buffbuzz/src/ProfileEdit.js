@@ -1,0 +1,476 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import './ProfileEdit.css';
+import Header from './Header';
+import { getValidUser } from './sessionUtils';
+
+
+export default function ProfileEdit() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [user, setUser] = useState(null);
+  const [isFirstTime, setIsFirstTime] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    pronouns: '',
+    bio: '',
+    major: '',
+    department: '',
+    graduationYear: '',
+    classification: '',
+    clubs: '',
+    instagramHandle: '',
+    linkedinUrl: '',
+    facebookHandle: '',
+    profilePicture: null,
+    privacy: 'PUBLIC'
+  });
+  const [previewImage, setPreviewImage] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const userData = getValidUser();
+    
+    if (!userData) {
+      navigate('/login');
+      return;
+    }
+    
+    setUser(userData);
+
+    setFormData(prev => ({
+      ...prev,
+      firstName: userData.firstName || '',
+      lastName: userData.lastName || ''
+    }));
+
+    // Check if this is first-time profile creation from location state
+    if (location.state?.isFirstTime) {
+      setIsFirstTime(true);
+    }
+
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/profile/${userData.id}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          const profileUser = data.profile?.user || {};
+          let firstName = profileUser.firstName || userData.firstName || '';
+          let lastName = profileUser.lastName || userData.lastName || '';
+
+          if ((!firstName || !lastName) && data.profile?.name) {
+            const nameParts = data.profile.name.trim().split(/\s+/);
+            if (!firstName && nameParts[0]) {
+              firstName = nameParts[0];
+            }
+            if (!lastName && nameParts.length > 1) {
+              lastName = nameParts.slice(1).join(' ');
+            }
+          }
+
+          setFormData({
+            firstName,
+            lastName,
+            bio: data.profile.bio || '',
+            major: data.profile.major || '',
+            department: data.profile.department || '',
+            graduationYear: data.profile.graduationYear || '',
+            classification: data.profile.classification || '',
+            clubs: data.profile.clubs || '',
+            pronouns: data.profile.pronouns || '',
+            instagramHandle: data.profile.instagramHandle || '',
+            linkedinUrl: data.profile.linkedinUrl || '',
+            facebookHandle: data.profile.facebookHandle || '',
+            profilePicture: null,
+            privacy: data.profile.privacy || 'PUBLIC'
+          });
+          if (data.profile.profilePictureUrl) {
+            setPreviewImage(data.profile.profilePictureUrl);
+          }
+        } else if (response.status === 404) {
+          // No profile found, will create new one on save
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      }
+    };
+
+    fetchProfile();
+  }, [navigate]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        profilePicture: file
+      }));
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewImage(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    console.log('=== FORM SUBMITTED ===');
+    console.log('User:', user);
+    console.log('Form Data:', formData);
+    
+    if (!user) {
+      alert('You must be logged in to update profile');
+      navigate('/login');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const firstName = formData.firstName.trim();
+      const lastName = formData.lastName.trim();
+      const fullName = `${firstName} ${lastName}`.trim();
+      const payload = {
+        userId: user.id,
+        name: fullName,
+        bio: formData.bio,
+        major: formData.major,
+        department: formData.department,
+        graduationYear: formData.graduationYear,
+        classification: formData.classification,
+        clubs: formData.clubs,
+        pronouns: formData.pronouns,
+        instagramHandle: formData.instagramHandle,
+        linkedinUrl: formData.linkedinUrl,
+        facebookHandle: formData.facebookHandle,
+        profilePictureUrl: previewImage,
+        privacy: formData.privacy
+      };
+      
+      const response = await fetch('http://localhost:5000/api/profile/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      console.log('Response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Response data:', data);
+        alert('Profile updated successfully!');
+        navigate('/profile', { 
+          state: { 
+            userId: user.id, 
+            refresh: Date.now() 
+          },
+          replace: true 
+        });
+      } else {
+        const error = await response.json();
+        console.error('Error response:', error);
+        alert(error.message || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('Error updating profile: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    navigate('/profile');
+  };
+
+  const currentYear = new Date().getFullYear();
+  const graduationYears = Array.from({ length: 11 }, (_, i) => currentYear + i);
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div>
+      <Header onBackClick={() => navigate('/main')} profilePictureUrl={previewImage} />
+      <div className="profile-edit-container">
+        <div className="profile-edit-card">
+          <h1>{isFirstTime ? 'Create Your Profile' : 'Edit Profile'}</h1>
+          
+          <form onSubmit={handleSubmit}>
+            {/* Profile Picture Section */}
+            <div className="profile-picture-section">
+              <div className="profile-picture-preview">
+                {previewImage ? (
+                  <img src={previewImage} alt="Profile preview" />
+                ) : (
+                  <div className="profile-placeholder">📷</div>
+                )}
+              </div>
+              <label htmlFor="profile-picture-input" className="upload-button">
+                Change Picture
+              </label>
+              <input
+                id="profile-picture-input"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                style={{ display: 'none' }}
+              />
+            </div>
+
+            {/* Basic Information Section */}
+            <div className="section-header">Basic Information</div>
+
+            <div className="form-group">
+              <label htmlFor="firstName">First Name *</label>
+              <input
+                id="firstName"
+                type="text"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                placeholder="Enter your first name"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="lastName">Last Name *</label>
+              <input
+                id="lastName"
+                type="text"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                placeholder="Enter your last name"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="pronouns">Pronouns</label>
+              <select
+                id="pronouns"
+                name="pronouns"
+                value={formData.pronouns}
+                onChange={handleChange}
+              >
+                <option value="">Select pronouns</option>
+                <option value="he/him">He/Him</option>
+                <option value="she/her">She/Her</option>
+                <option value="they/them">They/Them</option>
+                <option value="he/they">He/They</option>
+                <option value="she/they">She/They</option>
+                <option value="other">Other/Prefer not to say</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="bio">Bio</label>
+              <textarea
+                id="bio"
+                name="bio"
+                value={formData.bio}
+                onChange={handleChange}
+                placeholder="Tell us about yourself..."
+                rows="4"
+                maxLength="500"
+              />
+              <span className="character-count">{formData.bio.length}/500</span>
+            </div>
+
+            {/* Academic Information Section */}
+            <div className="section-header">Academic Information</div>
+
+            <div className="form-group">
+              <label htmlFor="major">Major</label>
+              <input
+                id="major"
+                type="text"
+                name="major"
+                value={formData.major}
+                onChange={handleChange}
+                placeholder="e.g., Computer Science"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="department">Department</label>
+              <input
+                id="department"
+                type="text"
+                name="department"
+                value={formData.department}
+                onChange={handleChange}
+                placeholder="e.g., College of Engineering"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="classification">Year in School</label>
+              <select
+                id="classification"
+                name="classification"
+                value={formData.classification}
+                onChange={handleChange}
+              >
+                <option value="">Select classification</option>
+                <option value="freshman">Freshman</option>
+                <option value="sophomore">Sophomore</option>
+                <option value="junior">Junior</option>
+                <option value="senior">Senior</option>
+                <option value="graduate">Graduate Student</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="graduationYear">Graduation Year</label>
+              <select
+                id="graduationYear"
+                name="graduationYear"
+                value={formData.graduationYear}
+                onChange={handleChange}
+              >
+                <option value="">Select year</option>
+                {graduationYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Campus Life Section */}
+            <div className="section-header">Campus Life</div>
+
+            <div className="form-group">
+              <label htmlFor="clubs">Clubs & Organizations</label>
+              <textarea
+                id="clubs"
+                name="clubs"
+                value={formData.clubs}
+                onChange={handleChange}
+                placeholder="e.g., ColorStack, Student Government, Robotics Club"
+                rows="3"
+                maxLength="300"
+              />
+              <span className="character-count">{formData.clubs.length}/300</span>
+            </div>
+
+            {/* Privacy Settings Section */}
+            <div className="section-header">Privacy Settings</div>
+
+            <div className="form-group">
+              <label htmlFor="privacy">Profile Privacy *</label>
+              <select
+                id="privacy"
+                name="privacy"
+                value={formData.privacy}
+                onChange={handleChange}
+                required
+              >
+                <option value="PUBLIC">🌐 Public - Anyone can see your profile</option>
+                <option value="FRIENDS_ONLY">👥 Friends Only - Only your friends can see your profile</option>
+                <option value="PRIVATE">🔒 Private - Only you can see your profile</option>
+              </select>
+              <p className="form-hint" style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
+                {formData.privacy === 'PUBLIC' && 'Your profile is visible to everyone on BuffBuzz.'}
+                {formData.privacy === 'FRIENDS_ONLY' && 'Your profile is only visible to users who have accepted your friend request.'}
+                {formData.privacy === 'PRIVATE' && 'Your profile is only visible to you. Others can only see your name and profile picture.'}
+              </p>
+            </div>
+
+            {/* Social Media Section */}
+            <div className="section-header">Social Media</div>
+
+            <div className="form-group">
+              <label htmlFor="instagramHandle">Instagram</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">@</span>
+                <input
+                  id="instagramHandle"
+                  type="text"
+                  name="instagramHandle"
+                  value={formData.instagramHandle}
+                  onChange={handleChange}
+                  placeholder="username"
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="linkedinUrl">LinkedIn</label>
+              <input
+                id="linkedinUrl"
+                type="url"
+                name="linkedinUrl"
+                value={formData.linkedinUrl}
+                onChange={handleChange}
+                placeholder="https://linkedin.com/in/yourprofile"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="facebookHandle">Facebook</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">@</span>
+                <input
+                  id="facebookHandle"
+                  type="text"
+                  name="facebookHandle"
+                  value={formData.facebookHandle}
+                  onChange={handleChange}
+                  placeholder="username"
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="form-actions">
+              <button 
+                type="button" 
+                className="cancel-button" 
+                onClick={handleCancel}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button 
+              type="submit" 
+              className="save-button"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Saving...' : (isFirstTime ? 'Create Profile' : 'Save Changes')}
+            </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}

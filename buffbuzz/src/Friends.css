@@ -1,0 +1,184 @@
+.friends-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  min-height: calc(100vh - 120px);
+  background-color: #f9fafb;
+}
+
+.friends-header {
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #800000;
+}
+
+.friends-header h1 {
+  color: #800000;
+  margin: 0 0 10px 0;
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.friend-count {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0;
+}
+
+.no-friends {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.no-friends p {
+  color: #6b7280;
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.browse-button {
+  padding: 12px 24px;
+  background-color: #800000;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.browse-button:hover {
+  background-color: #600000;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(128, 0, 0, 0.3);
+}
+
+.friends-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.friend-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  transition: box-shadow 0.2s;
+}
+
+.friend-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.friend-profile-pic {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.friend-profile-pic img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-placeholder {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: #800000;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.friend-info {
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.friend-info h3 {
+  margin: 0 0 10px 0;
+  color: #1f2937;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.friend-info h3:hover {
+  color: #800000;
+}
+
+.friend-bio {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.friend-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.view-profile-button,
+.unfriend-button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-profile-button {
+  background-color: #800000;
+  color: white;
+}
+
+.view-profile-button:hover {
+  background-color: #600000;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(128, 0, 0, 0.3);
+}
+
+.unfriend-button {
+  background-color: #f44336;
+  color: white;
+}
+
+.unfriend-button:hover {
+  background-color: #d32f2f;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+  font-size: 18px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.error {
+  color: #f44336;
+}
+
+@media (max-width: 768px) {
+  .friends-grid {
+    grid-template-columns: 1fr;
+  }
+}
