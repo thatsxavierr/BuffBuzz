@@ -2118,6 +2118,27 @@ app.delete('/api/jobs/:jobId', async (req, res) => {
 
 // ==================== MARKETPLACE ENDPOINTS ====================
 
+const MAX_LISTING_IMAGES = 5;
+
+// Normalize stored imageUrl (string or JSON array) to imageUrls array for API responses
+function getImageUrlsFromItem(item) {
+  if (!item || item.imageUrl == null || item.imageUrl === '') return [];
+  const v = item.imageUrl;
+  if (typeof v !== 'string') return [];
+  const trimmed = v.trim();
+  if (trimmed.length === 0) return [];
+  if (trimmed.startsWith('[')) {
+    try {
+      const arr = JSON.parse(trimmed);
+      if (!Array.isArray(arr)) return [v];
+      return arr.filter(Boolean);
+    } catch (_) {
+      return [v];
+    }
+  }
+  return [v];
+}
+
 // Create a marketplace listing
 app.post('/api/marketplace/create', async (req, res) => {
   try {
@@ -2128,11 +2149,19 @@ app.post('/api/marketplace/create', async (req, res) => {
       category,
       condition,
       imageUrl,
+      imageUrls,
       sellerId
     } = req.body;
 
     if (!title || !description || !price || !category || !condition || !sellerId) {
       return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    let urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
+    urls = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
+    if (urls.length > 0) {
+      console.log('Marketplace create: saving', urls.length, 'image(s)');
     }
 
     const item = await prisma.marketplaceItem.create({
@@ -2142,7 +2171,7 @@ app.post('/api/marketplace/create', async (req, res) => {
         price: parseFloat(price),
         category,
         condition,
-        imageUrl: imageUrl || null,
+        imageUrl: imageUrlStorage,
         sellerId
       },
       include: {
@@ -2156,9 +2185,10 @@ app.post('/api/marketplace/create', async (req, res) => {
       }
     });
 
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
     res.status(201).json({
       message: 'Item listed successfully',
-      item
+      item: itemWithUrls
     });
 
   } catch (error) {
@@ -2190,10 +2220,11 @@ app.get('/api/marketplace', async (req, res) => {
       }
     });
 
-    // Format items with seller name
+    // Format items with seller name and imageUrls array
     const formattedItems = items.map(item => ({
       ...item,
-      sellerName: `${item.seller.firstName} ${item.seller.lastName}`
+      sellerName: `${item.seller.firstName} ${item.seller.lastName}`,
+      imageUrls: getImageUrlsFromItem(item)
     }));
 
     res.status(200).json({ items: formattedItems });
@@ -2227,7 +2258,8 @@ app.get('/api/marketplace/:itemId', async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    res.status(200).json({ item });
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(200).json({ item: itemWithUrls });
 
   } catch (error) {
     console.error('Get marketplace item error:', error);
@@ -2278,11 +2310,19 @@ app.post('/api/lostfound/create', async (req, res) => {
       date,
       contactInfo,
       imageUrl,
+      imageUrls,
       userId
     } = req.body;
 
     if (!title || !description || !category || !location || !date || !contactInfo || !userId) {
       return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    let urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
+    urls = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
+    if (urls.length > 0) {
+      console.log('Lost/Found create: saving', urls.length, 'image(s)');
     }
 
     const item = await prisma.lostFoundItem.create({
@@ -2293,7 +2333,7 @@ app.post('/api/lostfound/create', async (req, res) => {
         location,
         date: new Date(date),
         contactInfo,
-        imageUrl: imageUrl || null,
+        imageUrl: imageUrlStorage,
         userId
       },
       include: {
@@ -2307,9 +2347,10 @@ app.post('/api/lostfound/create', async (req, res) => {
       }
     });
 
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
     res.status(201).json({
       message: 'Item posted successfully',
-      item
+      item: itemWithUrls
     });
 
   } catch (error) {
@@ -2341,10 +2382,11 @@ app.get('/api/lostfound', async (req, res) => {
       }
     });
 
-    // Format items with user name
+    // Format items with user name and imageUrls array
     const formattedItems = items.map(item => ({
       ...item,
-      userName: `${item.user.firstName} ${item.user.lastName}`
+      userName: `${item.user.firstName} ${item.user.lastName}`,
+      imageUrls: getImageUrlsFromItem(item)
     }));
 
     res.status(200).json({ items: formattedItems });
@@ -2378,7 +2420,8 @@ app.get('/api/lostfound/:itemId', async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    res.status(200).json({ item });
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(200).json({ item: itemWithUrls });
 
   } catch (error) {
     console.error('Get lost/found item error:', error);
