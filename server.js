@@ -11,8 +11,11 @@ import crypto from 'crypto';
 // Load environment variables
 dotenv.config();
 
+<<<<<<< HEAD
 dotenv.config({ path: new URL("./.env", import.meta.url) });
 
+=======
+>>>>>>> origin/main
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
@@ -116,7 +119,11 @@ async function sendVerificationEmail(email, verificationCode, firstName) {
 
 // Send password reset email
 async function sendPasswordResetEmail(email, resetToken, firstName) {
+<<<<<<< HEAD
   const resetLink = `http://localhost:5001/reset-password?token=${resetToken}`;
+=======
+  const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+>>>>>>> origin/main
   
   const mailOptions = {
     from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
@@ -186,27 +193,41 @@ async function sendPasswordResetEmail(email, resetToken, firstName) {
 // Registration endpoint
 app.post('/api/register', async (req, res) => {
   try {
+<<<<<<< HEAD
     
     console.log('Register request received:', req.body);
 
+=======
+    console.log('Register request received:', req.body);
+    
+>>>>>>> origin/main
     const { email, password, firstName, lastName, userType } = req.body;
 
     if (!email || !password || !firstName || !lastName || !userType) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
+<<<<<<< HEAD
     if (/\s/.test(password)) {
       return res.status(400).json({ message: 'Password cannot contain spaces' });
     }
 
+=======
+>>>>>>> origin/main
     if (userType !== 'student' && userType !== 'professor') {
       return res.status(400).json({ message: 'Invalid user type' });
     }
 
     const emailNormalized = normalizeEmail(email);
+<<<<<<< HEAD
     
     const existingUser = await prisma.user.findUnique({ where: { email: emailNormalized } });
     
+=======
+
+    const existingUser = await prisma.user.findUnique({ where: { email: emailNormalized } });
+
+>>>>>>> origin/main
     if (existingUser) {
       return res.status(409).json({ message: 'User with this email already exists' });
     }
@@ -268,7 +289,10 @@ app.post('/api/resend-code', async (req, res) => {
       where: { email: { equals: emailNormalized, mode: 'insensitive' } }
     });
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -280,8 +304,12 @@ app.post('/api/resend-code', async (req, res) => {
     // Generate new verification code
     const verificationCode = generateVerificationCode();
 
+<<<<<<< HEAD
         // Update user with new code and reset attempts (use id so casing doesn't matter)
 
+=======
+    // Update user with new code and reset attempts (use id so casing doesn't matter)
+>>>>>>> origin/main
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -292,6 +320,17 @@ app.post('/api/resend-code', async (req, res) => {
 
     console.log(`New verification code generated for ${emailNormalized}: ${verificationCode}`);
 
+<<<<<<< HEAD
+=======
+    // Optionally normalize stored email to lowercase
+    if (user.email !== emailNormalized) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { email: emailNormalized }
+      });
+    }
+
+>>>>>>> origin/main
     // Send verification email
     try {
       await sendVerificationEmail(emailNormalized, verificationCode, user.firstName);
@@ -327,7 +366,10 @@ app.post('/api/verify', async (req, res) => {
       where: { email: { equals: emailNormalized, mode: 'insensitive' } }
     });
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -347,7 +389,11 @@ app.post('/api/verify', async (req, res) => {
     if (user.verificationCode !== verificationCode) {
       // Increment failed attempts
       const updatedUser = await prisma.user.update({
+<<<<<<< HEAD
         where: { email },
+=======
+        where: { id: user.id },
+>>>>>>> origin/main
         data: { verificationAttempts: user.verificationAttempts + 1 }
       });
 
@@ -368,6 +414,10 @@ app.post('/api/verify', async (req, res) => {
     const verifiedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
+<<<<<<< HEAD
+=======
+        email: emailNormalized,
+>>>>>>> origin/main
         verificationStatus: 'VERIFIED',
         verificationCode: null,
         verificationAttempts: 0
@@ -442,7 +492,23 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
+<<<<<<< HEAD
     const user = await prisma.user.findUnique({ where: { email } });
+=======
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
+
+    // Normalize stored email to lowercase when user logs in (one-time migration)
+    if (user && user.email !== emailNormalized) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { email: emailNormalized }
+      });
+      user.email = emailNormalized;
+    }
+>>>>>>> origin/main
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
@@ -480,7 +546,14 @@ app.post('/api/request-reset', async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
+<<<<<<< HEAD
     const user = await prisma.user.findUnique({ where: { email } });
+=======
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
+>>>>>>> origin/main
 
     // Don't reveal if user exists or not for security
     if (!user) {
@@ -493,20 +566,42 @@ app.post('/api/request-reset', async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
 
+<<<<<<< HEAD
     // Store reset token in database
     await prisma.user.update({
       where: { email },
+=======
+    // Store reset token in database (use id)
+    await prisma.user.update({
+      where: { id: user.id },
+>>>>>>> origin/main
       data: {
         resetToken,
         resetTokenExpiry
       }
     });
 
+<<<<<<< HEAD
     console.log(`Reset token generated for ${email}`);
 
     // Send reset email
     try {
       await sendPasswordResetEmail(email, resetToken, user.firstName);
+=======
+    console.log(`Reset token generated for ${emailNormalized}`);
+
+    // Normalize stored email to lowercase
+    if (user.email !== emailNormalized) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { email: emailNormalized }
+      });
+    }
+
+    // Send reset email
+    try {
+      await sendPasswordResetEmail(emailNormalized, resetToken, user.firstName);
+>>>>>>> origin/main
       
       res.status(200).json({ 
         message: 'If an account exists with this email, you will receive a reset link.' 
@@ -603,11 +698,24 @@ app.get('/api/profile/:userId', async (req, res) => {
     const isOwner = viewerId && viewerId === userId;
     let canViewFullProfile = false;
 
+<<<<<<< HEAD
     if (isOwner) {
       canViewFullProfile = true;
     } else if (privacy === 'PUBLIC') {
       canViewFullProfile = true;
     } else if (privacy === 'FRIENDS_ONLY' && viewerId) {
+=======
+    console.log('Profile check:', { userId, viewerId, isOwner, privacy });
+
+    if (isOwner) {
+      console.log('Owner viewing own profile');
+      canViewFullProfile = true;
+    } else if (privacy === 'PUBLIC') {
+      console.log('Public profile - allowing full view');
+      canViewFullProfile = true;
+    } else if (privacy === 'FRIENDS_ONLY' && viewerId) {
+      console.log('Checking friendship status');
+>>>>>>> origin/main
       const friendship = await prisma.friendship.findFirst({
         where: {
           OR: [
@@ -633,6 +741,10 @@ app.get('/api/profile/:userId', async (req, res) => {
     }
 
     // Otherwise, return limited data
+<<<<<<< HEAD
+=======
+    console.log('Returning limited profile data');
+>>>>>>> origin/main
     const limitedProfile = {
       id: profile.id,
       userId: profile.userId,
@@ -742,6 +854,12 @@ app.put('/api/profile/update', async (req, res) => {
 
 // ==================== POST ENDPOINTS ====================
 
+<<<<<<< HEAD
+=======
+// Max post image size (5MB) – validate before saving
+const MAX_POST_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+
+>>>>>>> origin/main
 // Create a post
 app.post('/api/posts/create', async (req, res) => {
   try {
@@ -751,6 +869,22 @@ app.post('/api/posts/create', async (req, res) => {
       return res.status(400).json({ message: 'Title, content, and author are required' });
     }
 
+<<<<<<< HEAD
+=======
+    if (imageUrl && typeof imageUrl === 'string') {
+      // Base64 data URL: "data:image/...;base64,<data>". Byte size ≈ (base64 length * 3) / 4
+      const base64Prefix = ';base64,';
+      const base64Start = imageUrl.indexOf(base64Prefix);
+      const base64Length = base64Start >= 0 ? imageUrl.length - base64Start - base64Prefix.length : imageUrl.length;
+      const estimatedBytes = Math.ceil((base64Length * 3) / 4);
+      if (estimatedBytes > MAX_POST_IMAGE_SIZE_BYTES) {
+        return res.status(413).json({
+          message: `Image size exceeds the maximum allowed (5MB). Please choose a smaller image.`
+        });
+      }
+    }
+
+>>>>>>> origin/main
     const post = await prisma.post.create({
       data: {
         title,
@@ -1763,10 +1897,13 @@ app.put('/api/settings/password', async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 8 characters' });
     }
 
+<<<<<<< HEAD
     if (/\s/.test(newPassword)) {
       return res.status(400).json({ message: 'Password cannot contain spaces' });
     }
 
+=======
+>>>>>>> origin/main
     // Get user
     const user = await prisma.user.findUnique({
       where: { id: userId }
@@ -2078,6 +2215,30 @@ app.delete('/api/jobs/:jobId', async (req, res) => {
 
 // ==================== MARKETPLACE ENDPOINTS ====================
 
+<<<<<<< HEAD
+=======
+const MAX_LISTING_IMAGES = 5;
+
+// Normalize stored imageUrl (string or JSON array) to imageUrls array for API responses
+function getImageUrlsFromItem(item) {
+  if (!item || item.imageUrl == null || item.imageUrl === '') return [];
+  const v = item.imageUrl;
+  if (typeof v !== 'string') return [];
+  const trimmed = v.trim();
+  if (trimmed.length === 0) return [];
+  if (trimmed.startsWith('[')) {
+    try {
+      const arr = JSON.parse(trimmed);
+      if (!Array.isArray(arr)) return [v];
+      return arr.filter(Boolean);
+    } catch (_) {
+      return [v];
+    }
+  }
+  return [v];
+}
+
+>>>>>>> origin/main
 // Create a marketplace listing
 app.post('/api/marketplace/create', async (req, res) => {
   try {
@@ -2088,6 +2249,10 @@ app.post('/api/marketplace/create', async (req, res) => {
       category,
       condition,
       imageUrl,
+<<<<<<< HEAD
+=======
+      imageUrls,
+>>>>>>> origin/main
       sellerId
     } = req.body;
 
@@ -2095,12 +2260,20 @@ app.post('/api/marketplace/create', async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be filled' });
     }
 
+<<<<<<< HEAD
     if (imageUrl) {
       const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
       const dataUrlMatch = imageUrl.match(/^data:(image\/[a-zA-Z]+);base64,/);
       if (!dataUrlMatch || !allowedImageTypes.includes(dataUrlMatch[1])) {
         return res.status(400).json({ message: 'Only image files are accepted (JPEG, PNG, GIF, WebP)' });
       }
+=======
+    let urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
+    urls = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
+    if (urls.length > 0) {
+      console.log('Marketplace create: saving', urls.length, 'image(s)');
+>>>>>>> origin/main
     }
 
     const item = await prisma.marketplaceItem.create({
@@ -2110,7 +2283,11 @@ app.post('/api/marketplace/create', async (req, res) => {
         price: parseFloat(price),
         category,
         condition,
+<<<<<<< HEAD
         imageUrl: imageUrl || null,
+=======
+        imageUrl: imageUrlStorage,
+>>>>>>> origin/main
         sellerId
       },
       include: {
@@ -2124,9 +2301,16 @@ app.post('/api/marketplace/create', async (req, res) => {
       }
     });
 
+<<<<<<< HEAD
     res.status(201).json({
       message: 'Item listed successfully',
       item
+=======
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(201).json({
+      message: 'Item listed successfully',
+      item: itemWithUrls
+>>>>>>> origin/main
     });
 
   } catch (error) {
@@ -2158,10 +2342,18 @@ app.get('/api/marketplace', async (req, res) => {
       }
     });
 
+<<<<<<< HEAD
     // Format items with seller name
     const formattedItems = items.map(item => ({
       ...item,
       sellerName: `${item.seller.firstName} ${item.seller.lastName}`
+=======
+    // Format items with seller name and imageUrls array
+    const formattedItems = items.map(item => ({
+      ...item,
+      sellerName: `${item.seller.firstName} ${item.seller.lastName}`,
+      imageUrls: getImageUrlsFromItem(item)
+>>>>>>> origin/main
     }));
 
     res.status(200).json({ items: formattedItems });
@@ -2195,7 +2387,12 @@ app.get('/api/marketplace/:itemId', async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
+<<<<<<< HEAD
     res.status(200).json({ item });
+=======
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(200).json({ item: itemWithUrls });
+>>>>>>> origin/main
 
   } catch (error) {
     console.error('Get marketplace item error:', error);
@@ -2246,6 +2443,10 @@ app.post('/api/lostfound/create', async (req, res) => {
       date,
       contactInfo,
       imageUrl,
+<<<<<<< HEAD
+=======
+      imageUrls,
+>>>>>>> origin/main
       userId
     } = req.body;
 
@@ -2253,6 +2454,16 @@ app.post('/api/lostfound/create', async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be filled' });
     }
 
+<<<<<<< HEAD
+=======
+    let urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
+    urls = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
+    if (urls.length > 0) {
+      console.log('Lost/Found create: saving', urls.length, 'image(s)');
+    }
+
+>>>>>>> origin/main
     const item = await prisma.lostFoundItem.create({
       data: {
         title,
@@ -2261,7 +2472,11 @@ app.post('/api/lostfound/create', async (req, res) => {
         location,
         date: new Date(date),
         contactInfo,
+<<<<<<< HEAD
         imageUrl: imageUrl || null,
+=======
+        imageUrl: imageUrlStorage,
+>>>>>>> origin/main
         userId
       },
       include: {
@@ -2275,9 +2490,16 @@ app.post('/api/lostfound/create', async (req, res) => {
       }
     });
 
+<<<<<<< HEAD
     res.status(201).json({
       message: 'Item posted successfully',
       item
+=======
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(201).json({
+      message: 'Item posted successfully',
+      item: itemWithUrls
+>>>>>>> origin/main
     });
 
   } catch (error) {
@@ -2309,10 +2531,18 @@ app.get('/api/lostfound', async (req, res) => {
       }
     });
 
+<<<<<<< HEAD
     // Format items with user name
     const formattedItems = items.map(item => ({
       ...item,
       userName: `${item.user.firstName} ${item.user.lastName}`
+=======
+    // Format items with user name and imageUrls array
+    const formattedItems = items.map(item => ({
+      ...item,
+      userName: `${item.user.firstName} ${item.user.lastName}`,
+      imageUrls: getImageUrlsFromItem(item)
+>>>>>>> origin/main
     }));
 
     res.status(200).json({ items: formattedItems });
@@ -2346,7 +2576,12 @@ app.get('/api/lostfound/:itemId', async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
+<<<<<<< HEAD
     res.status(200).json({ item });
+=======
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(200).json({ item: itemWithUrls });
+>>>>>>> origin/main
 
   } catch (error) {
     console.error('Get lost/found item error:', error);
@@ -2402,6 +2637,7 @@ app.post('/api/groups/create', async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be filled' });
     }
 
+<<<<<<< HEAD
     if (imageUrl) {
       const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
       const dataUrlMatch = imageUrl.match(/^data:(image\/[a-zA-Z]+);base64,/);
@@ -2410,6 +2646,8 @@ app.post('/api/groups/create', async (req, res) => {
       }
     }
 
+=======
+>>>>>>> origin/main
     const group = await prisma.group.create({
       data: {
         name,
@@ -3411,4 +3649,8 @@ app.listen(PORT, () => {
 process.on('SIGINT', async () => {
   await prisma.$disconnect();
   process.exit();
+<<<<<<< HEAD
 });
+=======
+});
+>>>>>>> origin/main
