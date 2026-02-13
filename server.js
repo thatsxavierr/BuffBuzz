@@ -312,7 +312,7 @@ app.post('/api/resend-code', async (req, res) => {
   }
 });
 
-// Verification endpoint
+// Enhanced Verification endpoint
 app.post('/api/verify', async (req, res) => {
   try {
     const { email, verificationCode } = req.body;
@@ -327,17 +327,32 @@ app.post('/api/verify', async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ 
+        message: 'Account not found. Please sign up again.' 
+      });
     }
 
+    // If already verified, let them know they can log in
     if (user.verificationStatus === 'VERIFIED') {
-      return res.status(400).json({ message: 'User already verified' });
+      return res.status(200).json({ 
+        message: 'Email already verified! You can log in now.',
+        alreadyVerified: true
+      });
+    }
+
+    // Check if verification code exists
+    if (!user.verificationCode) {
+      return res.status(400).json({ 
+        message: 'No verification code found. Please request a new code.',
+        needsNewCode: true
+      });
     }
 
     // Check if too many attempts
     if (user.verificationAttempts >= 3) {
       return res.status(400).json({ 
-        message: 'Too many failed attempts. Please sign up again.' 
+        message: 'Too many failed attempts. Please request a new verification code.',
+        needsNewCode: true
       });
     }
 
@@ -353,16 +368,18 @@ app.post('/api/verify', async (req, res) => {
       
       if (remainingAttempts <= 0) {
         return res.status(400).json({ 
-          message: 'Too many failed attempts. Please sign up again.' 
+          message: 'Too many failed attempts. Please request a new verification code.',
+          needsNewCode: true
         });
       }
 
       return res.status(400).json({ 
-        message: `Invalid verification code. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.` 
+        message: `Invalid verification code. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.`,
+        attemptsRemaining: remainingAttempts
       });
     }
 
-    // Update user to verified and normalize email to lowercase in DB
+    // Successful verification - update user to verified
     const verifiedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -373,11 +390,14 @@ app.post('/api/verify', async (req, res) => {
       }
     });
 
+    console.log(`Email verified successfully for user: ${verifiedUser.email}`);
+
     const { password: _, ...userWithoutPassword } = verifiedUser;
 
     res.status(200).json({
       message: 'Email verified successfully! Welcome to BuffBuzz!',
-      user: userWithoutPassword
+      user: userWithoutPassword,
+      verified: true
     });
 
   } catch (error) {
@@ -432,7 +452,7 @@ app.get('/api/search-users', async (req, res) => {
 });
 
 
-// Login endpoint
+// Login endpoint with attempt tracking
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -463,13 +483,111 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ message: 'Please verify your email first' });
     }
 
+    console.log('=== LOGIN ATTEMPT DEBUG ===');
+    console.log('User email:', user.email);
+    console.log('Current loginAttempts:', user.loginAttempts);
+    console.log('Current lockUntil:', user.lockUntil);
+    console.log('==========================');
+
+    // Check if account is locked
+    if (user.lockUntil && user.lockUntil > new Date()) {
+      const lockTimeRemaining = Math.ceil((user.lockUntil - new Date()) / 60000);
+      console.log('ACCOUNT IS LOCKED! Time remaining:', lockTimeRemaining, 'minutes');
+      return res.status(423).json({ 
+        message: `Account locked due to too many failed login attempts. Try again in ${lockTimeRemaining} minute${lockTimeRemaining === 1 ? '' : 's'}.`,
+        locked: true,
+        lockTimeRemaining
+      });
+    }
+
+    // If lock time has expired, reset login attempts
+    if (user.lockUntil && user.lockUntil <= new Date()) {
+      console.log('Lock expired, resetting attempts');
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          loginAttempts: 0,
+          lockUntil: null
+        }
+      });
+    }
+
+    // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      console.log('INVALID PASSWORD - Incrementing attempts');
+      
+      // Increment login attempts
+      const MAX_LOGIN_ATTEMPTS = 5;
+      const LOCK_TIME_MINUTES = 15;
+      const newAttempts = user.loginAttempts + 1;
+      
+      console.log('New attempt count will be:', newAttempts);
+      
+      const updateData = {
+        loginAttempts: newAttempts
+      };
+
+      // Lock account if max attempts reached
+      if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+        const lockUntil = new Date(Date.now() + LOCK_TIME_MINUTES * 60 * 1000);
+        updateData.lockUntil = lockUntil;
+        
+        console.log('MAX ATTEMPTS REACHED! Locking account until:', lockUntil);
+        
+        // Update user
+        await prisma.user.update({
+          where: { id: user.id },
+          data: updateData
+        });
+
+        // Send email notification about account lock
+        try {
+          await sendAccountLockedEmail(user.email, user.firstName, LOCK_TIME_MINUTES);
+          console.log('Lock email sent successfully');
+        } catch (emailError) {
+          console.error('Failed to send lock notification email:', emailError);
+        }
+
+        return res.status(423).json({ 
+          message: `Account locked due to too many failed login attempts. Try again in ${LOCK_TIME_MINUTES} minutes. Check your email for more information.`,
+          locked: true,
+          lockTimeRemaining: LOCK_TIME_MINUTES
+        });
+      }
+
+      // Update attempts without locking
+      console.log('Updating login attempts to:', newAttempts);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: updateData
+      });
+
+      const attemptsLeft = MAX_LOGIN_ATTEMPTS - newAttempts;
+      console.log('Attempts left:', attemptsLeft);
+      
+      return res.status(401).json({ 
+        message: `Invalid email or password. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} remaining before account lock.`,
+        attemptsRemaining: attemptsLeft
+      });
+    }
+
+    // Successful login - reset attempts if any existed
+    if (user.loginAttempts > 0 || user.lockUntil) {
+      console.log('SUCCESSFUL LOGIN - Resetting attempts');
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          loginAttempts: 0,
+          lockUntil: null
+        }
+      });
     }
 
     const { password: _, ...userWithoutPassword } = user;
+
+    console.log(`Successful login for user: ${user.email}`);
 
     res.status(200).json({
       message: 'Login successful',

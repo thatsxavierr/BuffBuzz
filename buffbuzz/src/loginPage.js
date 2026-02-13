@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./loginPage.css";
 import { isSessionValid, setSession, clearSession } from "./sessionUtils";
@@ -12,6 +11,9 @@ export default function LoginPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [attemptsRemaining, setAttemptsRemaining] = useState(null);
+  const [isUnverified, setIsUnverified] = useState(false);
 
   useEffect(() => {
     // Check if user has a valid session (not expired)
@@ -30,6 +32,9 @@ export default function LoginPage() {
       [name]: value
     }));
     setError("");
+    setIsLocked(false);
+    setAttemptsRemaining(null);
+    setIsUnverified(false);
   };
 
   // Check if user has a profile
@@ -57,6 +62,9 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setIsLocked(false);
+    setAttemptsRemaining(null);
+    setIsUnverified(false);
 
     try {
       const response = await fetch('http://localhost:5000/api/login', {
@@ -87,7 +95,23 @@ export default function LoginPage() {
           navigate('/profile-edit', { state: { isFirstTime: true } });
         }
       } else {
-        setError(data.message || 'Login failed. Please try again.');
+        // Handle different error cases
+        if (data.message && data.message.includes('verify your email')) {
+          // Unverified email
+          setIsUnverified(true);
+          setError(data.message);
+        } else if (response.status === 423 || data.locked) {
+          // Account is locked
+          setIsLocked(true);
+          setError(data.message);
+        } else if (data.attemptsRemaining !== undefined) {
+          // Show attempts remaining
+          setAttemptsRemaining(data.attemptsRemaining);
+          setError(data.message);
+        } else {
+          // General error
+          setError(data.message || 'Login failed. Please try again.');
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -95,6 +119,13 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handler for verification recovery
+  const handleVerifyEmail = () => {
+    navigate('/verify-recovery', { 
+      state: { email: formData.email.trim().toLowerCase() } 
+    });
   };
 
   return (
@@ -110,7 +141,7 @@ export default function LoginPage() {
             placeholder="Enter your buffs email"
             value={formData.email}
             onChange={handleChange}
-            disabled={loading}
+            disabled={loading || isLocked}
             required 
           />
 
@@ -121,14 +152,40 @@ export default function LoginPage() {
             placeholder="Enter your password"
             value={formData.password}
             onChange={handleChange}
-            disabled={loading}
+            disabled={loading || isLocked}
             required 
           />
 
-          {error && <p className="error-text">{error}</p>}
+          {error && (
+            <div className={`error-box ${isLocked ? 'locked' : attemptsRemaining !== null ? 'warning' : isUnverified ? 'unverified' : ''}`}>
+              {isLocked && (
+                <svg 
+                  width="20" 
+                  height="20" 
+                  viewBox="0 0 20 20" 
+                  fill="currentColor"
+                  style={{ marginRight: '8px', display: 'inline-block', verticalAlign: 'middle' }}
+                >
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+              )}
+              {error}
+            </div>
+          )}
 
-          <button type="submit" disabled={loading}>
-            {loading ? 'Logging in...' : 'Log In'}
+          {/* Show verify button for unverified users */}
+          {isUnverified && (
+            <button 
+              type="button" 
+              className="verify-email-btn"
+              onClick={handleVerifyEmail}
+            >
+              Verify Email Now
+            </button>
+          )}
+
+          <button type="submit" disabled={loading || isLocked}>
+            {loading ? 'Logging in...' : isLocked ? 'Account Locked' : 'Log In'}
           </button>
         </form>
 

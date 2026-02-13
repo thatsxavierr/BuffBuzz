@@ -20,6 +20,7 @@ import Jobs from './Jobs';
 import SettingsPage from './SettingsPage';
 import BlockedUsers from './BlockedUsers';
 import { getValidUser } from './sessionUtils';
+import VerificationRecoveryPage from './VerificationRecoveryPage';
 
 function ProtectedRoute({ element }) {
   const [user, setUser] = useState(null);
@@ -85,6 +86,7 @@ function App() {
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/jobs" element={<Jobs />} />
         <Route path="/blocked-users" element={<BlockedUsers />} />
+        <Route path="/verify-recovery" element={<VerificationRecoveryPage />} />
       </Routes>
     </Router>
   );
