@@ -31,11 +31,17 @@ model User {
   firstName                   String
   lastName                    String
   userType                    UserType
+  department                  String?                      // ADD THIS
   verificationStatus          VerificationStatus           @default(PENDING)
   verificationCode            String?
   verificationAttempts        Int                          @default(0)
   resetToken                  String?
   resetTokenExpiry            DateTime?
+  
+  // Login attempt tracking - ADD THESE TWO LINES
+  loginAttempts               Int                          @default(0)
+  lockUntil                   DateTime?
+  
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
   
