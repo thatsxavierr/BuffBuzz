@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './ProfileEdit.css';
 import Header from './Header';
+import ImageCropModal from './ImageCropModal';
 import { getValidUser } from './sessionUtils';
 
 
@@ -28,6 +29,8 @@ export default function ProfileEdit() {
   });
   const [previewImage, setPreviewImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState(null);
 
   useEffect(() => {
     const userData = getValidUser();
@@ -52,7 +55,7 @@ export default function ProfileEdit() {
 
     const fetchProfile = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/profile/${userData.id}`);
+        const response = await fetch(`http://localhost:3000/api/profile/${userData.id}`);
         
         if (response.ok) {
           const data = await response.json();
@@ -125,13 +128,26 @@ export default function ProfileEdit() {
         ...prev,
         profilePicture: file
       }));
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreviewImage(reader.result);
+        setImageToCrop(reader.result);
+        setShowCropModal(true);
       };
       reader.readAsDataURL(file);
     }
+    e.target.value = '';
+  };
+
+  const handleCropComplete = (croppedImageUrl) => {
+    setPreviewImage(croppedImageUrl);
+    setShowCropModal(false);
+    setImageToCrop(null);
+  };
+
+  const handleCropClose = () => {
+    setShowCropModal(false);
+    setImageToCrop(null);
   };
 
   const handleSubmit = async (e) => {
@@ -170,7 +186,7 @@ export default function ProfileEdit() {
         privacy: formData.privacy
       };
       
-      const response = await fetch('http://localhost:5000/api/profile/update', {
+      const response = await fetch('http://localhost:3000/api/profile/update', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -471,6 +487,14 @@ export default function ProfileEdit() {
           </form>
         </div>
       </div>
+
+      {showCropModal && imageToCrop && (
+        <ImageCropModal
+          image={imageToCrop}
+          onClose={handleCropClose}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 }

@@ -153,13 +153,20 @@
   color: #166534;
 }
 
-.delete-item-button {
+.item-owner-actions {
   position: absolute;
   top: 12px;
   left: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.edit-item-button,
+.delete-item-button {
   background-color: rgba(255, 255, 255, 0.95);
   border: none;
-  font-size: 20px;
+  font-size: 18px;
   cursor: pointer;
   padding: 8px;
   border-radius: 50%;
@@ -170,7 +177,15 @@
   justify-content: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   transition: all 0.2s;
-  z-index: 10;
+}
+
+.edit-item-button:hover {
+  background-color: #dbeafe;
+  transform: scale(1.1);
+}
+
+.edit-item-button:active {
+  transform: scale(0.95);
 }
 
 .delete-item-button:hover {
@@ -379,15 +394,49 @@
   font-size: 14px;
 }
 
-.image-preview-small {
-  margin-top: 12px;
+.image-previews-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
 }
 
-.image-preview-small img {
-  width: 150px;
-  height: 150px;
-  object-fit: cover;
+.image-preview-item {
+  position: relative;
   border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.image-preview-item .image-preview {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  display: block;
+}
+
+.image-preview-item .remove-image-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  margin: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 50%;
+  background-color: rgba(220, 38, 38, 0.9);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+}
+
+.image-preview-item .remove-image-button:hover {
+  background-color: #b91c1c;
 }
 
 .modal-actions {

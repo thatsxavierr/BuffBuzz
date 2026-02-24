@@ -23,7 +23,7 @@
   margin-bottom: 20px;
 }
 
-label {
+.login-container label {
   display: block;
   text-align: left;
   margin-top: 15px;
@@ -31,7 +31,7 @@ label {
   font-weight: bold;
 }
 
-input {
+.login-container input {
   width: 100%;
   padding: 12px;
   margin-top: 8px;
@@ -41,7 +41,7 @@ input {
   box-sizing: border-box;
 }
 
-button {
+.login-container button {
   margin-top: 25px;
   background-color: #800000;
   color: white;
@@ -54,7 +54,7 @@ button {
   width: 100%;
 }
 
-button:hover {
+.login-container button:hover {
   background-color: #600000;
 }
 
@@ -80,12 +80,12 @@ button:hover {
   text-align: center;
 }
 
-button:disabled {
+.login-container button:disabled {
   background-color: #999;
   cursor: not-allowed;
 }
 
-button:disabled:hover {
+.login-container button:disabled:hover {
   background-color: #999;
 }
 
@@ -125,7 +125,7 @@ button:disabled:hover {
 }
 
 /* Verify email button */
-.verify-email-btn {
+.login-container .verify-email-btn {
   margin-top: 15px;
   background-color: #28a745;
   color: white;
@@ -138,6 +138,6 @@ button:disabled:hover {
   width: 100%;
 }
 
-.verify-email-btn:hover {
+.login-container .verify-email-btn:hover {
   background-color: #218838;
 }

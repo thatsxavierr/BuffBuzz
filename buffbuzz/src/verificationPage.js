@@ -70,7 +70,7 @@ function VerificationPage() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/verify', {
+      const response = await fetch('http://localhost:3000/api/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +110,7 @@ function VerificationPage() {
     setSuccess('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/resend-code', {
+      const response = await fetch('http://localhost:3000/api/resend-code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

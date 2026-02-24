@@ -26,9 +26,9 @@ export default function MainPage() {
       setUser(userData);
       // Run fetches in parallel instead of sequentially
       Promise.all([
-        fetch(`http://localhost:5000/api/profile/${userData.id}`).then(r => r.ok ? r.json() : null),
-        fetch(`http://localhost:5000/api/posts?userId=${userData.id}`).then(r => r.ok ? r.json() : null),
-        fetch(`http://localhost:5000/api/friends/${userData.id}`).then(r => r.ok ? r.json() : null)
+        fetch(`http://localhost:3000/api/profile/${userData.id}`).then(r => r.ok ? r.json() : null),
+        fetch(`http://localhost:3000/api/posts?userId=${userData.id}`).then(r => r.ok ? r.json() : null),
+        fetch(`http://localhost:3000/api/friends/${userData.id}`).then(r => r.ok ? r.json() : null)
       ]).then(([profileRes, postsRes, friendsRes]) => {
         if (profileRes?.profile?.profilePictureUrl) setProfilePicture(profileRes.profile.profilePictureUrl);
         if (postsRes?.posts) setPosts(postsRes.posts);
@@ -38,8 +38,11 @@ export default function MainPage() {
   }, [navigate, location]);
 
   const handlePostDelete = (postId) => {
-    // Remove the deleted post from the posts array
     setPosts(posts.filter(post => post.id !== postId));
+  };
+
+  const handlePostUpdate = (updatedPost) => {
+    setPosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p));
   };
 
   const handleBackClick = () => {
@@ -81,6 +84,7 @@ export default function MainPage() {
                   post={post} 
                   currentUserId={user.id}
                   onDelete={handlePostDelete}
+                  onUpdate={handlePostUpdate}
                   friendIds={friendIds}
                 />
               ))
@@ -88,7 +92,7 @@ export default function MainPage() {
           </div>
         </div>
         
-        <RightSidebar />
+        <RightSidebar initialOpenChat={location.state?.openChatWithUser} />
       </div>
       <Footer />
     </div>

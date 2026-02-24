@@ -10,7 +10,7 @@ export default function CreatePost() {
   const [profilePicture, setProfilePicture] = useState(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [imagePreview, setImagePreview] = useState(null);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export default function CreatePost() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      const response = await fetch(`http://localhost:3000/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -41,23 +41,62 @@ export default function CreatePost() {
     }
   };
 
+  const hasUnsavedChanges = () => {
+    return !!(title?.trim() || content?.trim() || imagePreviews.length > 0);
+  };
+
   const handleBackClick = () => {
+    if (hasUnsavedChanges() && !window.confirm('Discard unsaved changes? Your post will not be saved.')) {
+      return;
+    }
+    navigate('/main');
+  };
+
+  const handleCancel = () => {
+    if (hasUnsavedChanges() && !window.confirm('Discard unsaved changes? Your post will not be saved.')) {
+      return;
+    }
     navigate('/main');
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const validFiles = files.filter(f => allowedTypes.includes(f.type));
+    if (validFiles.length !== files.length) {
+      alert('Only image files are accepted (JPEG, PNG, GIF, WebP).');
+      e.target.value = '';
+      return;
     }
+
+    const maxImages = 5;
+    const remaining = maxImages - imagePreviews.length;
+    const toAdd = validFiles.slice(0, remaining);
+    if (toAdd.length < validFiles.length) {
+      alert(`Maximum ${maxImages} images per post. ${validFiles.length - toAdd.length} image(s) not added.`);
+    }
+
+    const readers = toAdd.map(file => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readers).then(results => {
+      setImagePreviews(prev => {
+        const combined = [...prev, ...results];
+        return combined.slice(0, maxImages);
+      });
+    });
+    e.target.value = '';
   };
 
-  const handleRemoveImage = () => {
-    setImagePreview(null);
+  const handleRemoveImage = (index) => {
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
@@ -72,7 +111,7 @@ export default function CreatePost() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/posts/create', {
+      const response = await fetch('http://localhost:3000/api/posts/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -80,7 +119,7 @@ export default function CreatePost() {
         body: JSON.stringify({
           title,
           content,
-          imageUrl: imagePreview,
+          imageUrls: imagePreviews.length > 0 ? imagePreviews : undefined,
           authorId: user.id
         })
       });
@@ -99,10 +138,6 @@ export default function CreatePost() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCancel = () => {
-    navigate('/main');
   };
 
   if (!user) {
@@ -143,31 +178,36 @@ export default function CreatePost() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="image">Add Image (Optional)</label>
-              {!imagePreview ? (
-                <div className="image-upload-area">
-                  <input
-                    type="file"
-                    id="image"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="image-input"
-                  />
-                  <label htmlFor="image" className="image-upload-label">
-                    <span className="upload-icon">📷</span>
-                    <span>Click to upload image</span>
-                  </label>
-                </div>
-              ) : (
-                <div className="image-preview-container">
-                  <img src={imagePreview} alt="Preview" className="image-preview" />
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    className="remove-image-button"
-                  >
-                    Remove Image
-                  </button>
+              <label htmlFor="image">Add Images (Optional)</label>
+              <div className="image-upload-area">
+                <input
+                  type="file"
+                  id="image"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageChange}
+                  className="image-input"
+                />
+                <label htmlFor="image" className="image-upload-label">
+                  <span className="upload-icon">📷</span>
+                  <span>Click to upload images (multiple allowed)</span>
+                </label>
+              </div>
+              {imagePreviews.length > 0 && (
+                <div className="image-previews-grid">
+                  {imagePreviews.map((src, index) => (
+                    <div key={index} className="image-preview-item">
+                      <img src={src} alt={`Preview ${index + 1}`} className="image-preview" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(index)}
+                        className="remove-image-button"
+                        aria-label="Remove image"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -107,32 +107,46 @@
   font-size: 14px;
 }
 
-.image-preview-container {
+.image-previews-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.image-preview-item {
   position: relative;
-  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
 }
 
 .image-preview {
   width: 100%;
-  max-height: 400px;
-  object-fit: contain;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  height: 120px;
+  object-fit: cover;
+  display: block;
 }
 
-.remove-image-button {
-  margin-top: 12px;
-  padding: 8px 16px;
-  background-color: #dc2626;
+.image-preview-item .remove-image-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  margin: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 50%;
+  background-color: rgba(220, 38, 38, 0.9);
   color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.remove-image-button:hover {
+.image-preview-item .remove-image-button:hover {
   background-color: #b91c1c;
 }
 

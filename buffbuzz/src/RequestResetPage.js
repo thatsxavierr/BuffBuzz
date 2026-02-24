@@ -16,7 +16,7 @@ export default function RequestResetPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/request-reset', {
+      const response = await fetch('http://localhost:3000/api/request-reset', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

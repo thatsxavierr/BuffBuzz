@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './Marketplace.css';
 import Header from './Header.js';
 import Footer from './Footer.js';
+import ImageCarousel from './ImageCarousel';
 import { getValidUser } from './sessionUtils';
 
 export default function Marketplace() {
@@ -13,13 +14,14 @@ export default function Marketplace() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingItemId, setEditingItemId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     price: '',
     category: 'TEXTBOOKS',
     condition: 'NEW',
-    imageUrl: ''
+    imageUrls: []
   });
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function Marketplace() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      const response = await fetch(`http://localhost:3000/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -52,8 +54,8 @@ export default function Marketplace() {
   const fetchItems = async (category = null) => {
     try {
       const url = category && category !== 'all' 
-        ? `http://localhost:5000/api/marketplace?category=${category.toUpperCase()}`
-        : 'http://localhost:5000/api/marketplace';
+        ? `http://localhost:3000/api/marketplace?category=${category.toUpperCase()}`
+        : 'http://localhost:3000/api/marketplace';
       
       const response = await fetch(url);
       
@@ -72,58 +74,161 @@ export default function Marketplace() {
     navigate('/main');
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-      if (!allowedTypes.includes(file.type)) {
-        alert('Only image files are accepted (JPEG, PNG, GIF, WebP). Please select an image file.');
-        e.target.value = '';
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, imageUrl: reader.result }));
-      };
-      reader.readAsDataURL(file);
+  const hasUnsavedChanges = () => {
+    return !!(
+      formData.title?.trim() ||
+      formData.description?.trim() ||
+      formData.price?.trim() ||
+      (formData.imageUrls?.length > 0) ||
+      formData.category !== 'TEXTBOOKS' ||
+      formData.condition !== 'NEW'
+    );
+  };
+
+  const handleCloseCreateModal = () => {
+    if (hasUnsavedChanges() && !window.confirm('Discard unsaved changes? Your listing will not be saved.')) {
+      return;
     }
+    setShowCreateModal(false);
+    setEditingItemId(null);
+    setFormData({
+      title: '',
+      description: '',
+      price: '',
+      category: 'TEXTBOOKS',
+      condition: 'NEW',
+      imageUrls: []
+    });
+  };
+
+  const handleEditItem = (item) => {
+    const urls = item.imageUrls?.length > 0 ? item.imageUrls : (item.imageUrl ? [item.imageUrl] : []);
+    setFormData({
+      title: item.title || '',
+      description: item.description || '',
+      price: item.price?.toString() || '',
+      category: item.category || 'TEXTBOOKS',
+      condition: item.condition || 'NEW',
+      imageUrls: urls
+    });
+    setEditingItemId(item.id);
+    setShowCreateModal(true);
+  };
+
+  const MAX_IMAGES = 5;
+
+  const handleImageChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const validFiles = files.filter(f => allowedTypes.includes(f.type));
+    if (validFiles.length !== files.length) {
+      alert('Only image files are accepted (JPEG, PNG, GIF, WebP).');
+      e.target.value = '';
+      return;
+    }
+
+    const current = formData.imageUrls || [];
+    const remaining = MAX_IMAGES - current.length;
+    const toAdd = validFiles.slice(0, remaining);
+    if (toAdd.length < validFiles.length) {
+      alert(`Maximum ${MAX_IMAGES} images per listing. ${validFiles.length - toAdd.length} image(s) not added.`);
+    }
+
+    const readers = toAdd.map(file => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readers).then(results => {
+      setFormData(prev => ({
+        ...prev,
+        imageUrls: [...(prev.imageUrls || []), ...results].slice(0, MAX_IMAGES)
+      }));
+    });
+    e.target.value = '';
+  };
+
+  const handleRemoveImage = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      imageUrls: (prev.imageUrls || []).filter((_, i) => i !== index)
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
-      const response = await fetch('http://localhost:5000/api/marketplace/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          sellerId: user.id
-        })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        alert('Item listed successfully!');
-        setShowCreateModal(false);
-        setFormData({
-          title: '',
-          description: '',
-          price: '',
-          category: 'TEXTBOOKS',
-          condition: 'NEW',
-          imageUrl: ''
+      if (editingItemId) {
+        const response = await fetch(`http://localhost:3000/api/marketplace/${editingItemId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...formData,
+            imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined,
+            userId: user.id
+          })
         });
-        fetchItems();
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Item updated successfully!');
+          setShowCreateModal(false);
+          setEditingItemId(null);
+          setFormData({
+            title: '',
+            description: '',
+            price: '',
+            category: 'TEXTBOOKS',
+            condition: 'NEW',
+            imageUrls: []
+          });
+          fetchItems(filter === 'all' ? null : filter);
+        } else {
+          alert(data.message || 'Failed to update item');
+        }
       } else {
-        alert(data.message || 'Failed to list item');
+        const response = await fetch('http://localhost:3000/api/marketplace/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...formData,
+            imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined,
+            sellerId: user.id
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Item listed successfully!');
+          setShowCreateModal(false);
+          setFormData({
+            title: '',
+            description: '',
+            price: '',
+            category: 'TEXTBOOKS',
+            condition: 'NEW',
+            imageUrls: []
+          });
+          fetchItems();
+        } else {
+          alert(data.message || 'Failed to list item');
+        }
       }
     } catch (error) {
-      console.error('Error listing item:', error);
-      alert('An error occurred while listing the item');
+      console.error('Error saving item:', error);
+      alert('An error occurred while saving the item');
     }
   };
 
@@ -133,7 +238,7 @@ export default function Marketplace() {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/marketplace/${itemId}`, {
+      const response = await fetch(`http://localhost:3000/api/marketplace/${itemId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -155,6 +260,21 @@ export default function Marketplace() {
       console.error('Error deleting item:', error);
       alert('An error occurred while deleting the item');
     }
+  };
+
+  const handleMessageSeller = (item) => {
+    if (item.sellerId === user.id) return;
+    const seller = item.seller || {};
+    navigate('/main', {
+      state: {
+        openChatWithUser: {
+          id: item.sellerId,
+          firstName: seller.firstName || 'User',
+          lastName: seller.lastName || '',
+          profile: seller.profile
+        }
+      }
+    });
   };
 
   const handleFilterChange = (newFilter) => {
@@ -246,8 +366,12 @@ export default function Marketplace() {
           ) : (
             items.map(item => (
               <div key={item.id} className="marketplace-card">
-                {item.imageUrl ? (
-                  <img src={item.imageUrl} alt={item.title} className="marketplace-image" />
+                {(item.imageUrls?.length > 0 || item.imageUrl) ? (
+                  <ImageCarousel
+                    images={item.imageUrls?.length > 0 ? item.imageUrls : [item.imageUrl]}
+                    alt={item.title}
+                    className="marketplace-image"
+                  />
                 ) : (
                   <div className="marketplace-image-placeholder">
                     <span className="placeholder-icon">📦</span>
@@ -255,13 +379,22 @@ export default function Marketplace() {
                 )}
                 
                 {user.id === item.sellerId && (
-                  <button 
-                    className="delete-item-button"
-                    onClick={() => handleDeleteItem(item.id)}
-                    title="Delete this listing"
-                  >
-                    🗑️
-                  </button>
+                  <div className="item-owner-actions">
+                    <button 
+                      className="edit-item-button"
+                      onClick={() => handleEditItem(item)}
+                      title="Edit this listing"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      className="delete-item-button"
+                      onClick={() => handleDeleteItem(item.id)}
+                      title="Delete this listing"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 )}
                 
                 <div className="marketplace-content">
@@ -281,7 +414,14 @@ export default function Marketplace() {
 
                   <div className="item-footer">
                     <span className="seller-info">Sold by {item.sellerName || 'Anonymous'}</span>
-                    <button className="message-button">Message</button>
+                    {item.sellerId !== user.id && (
+                      <button 
+                        className="message-button"
+                        onClick={() => handleMessageSeller(item)}
+                      >
+                        Message
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -291,13 +431,13 @@ export default function Marketplace() {
       </div>
 
       {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="modal-overlay" onClick={handleCloseCreateModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>List an Item for Sale</h2>
+              <h2>{editingItemId ? 'Edit Listing' : 'List an Item for Sale'}</h2>
               <button 
                 className="close-modal"
-                onClick={() => setShowCreateModal(false)}
+                onClick={handleCloseCreateModal}
               >
                 ×
               </button>
@@ -396,17 +536,30 @@ export default function Marketplace() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="image">Add Image (Optional)</label>
+                <label htmlFor="image">Add Images (Optional, up to 5)</label>
                 <input
                   type="file"
                   id="image"
                   accept="image/*"
+                  multiple
                   onChange={handleImageChange}
                   className="file-input"
                 />
-                {formData.imageUrl && (
-                  <div className="image-preview-small">
-                    <img src={formData.imageUrl} alt="Preview" />
+                {formData.imageUrls?.length > 0 && (
+                  <div className="image-previews-grid">
+                    {formData.imageUrls.map((src, index) => (
+                      <div key={index} className="image-preview-item">
+                        <img src={src} alt={`Preview ${index + 1}`} className="image-preview" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(index)}
+                          className="remove-image-button"
+                          aria-label="Remove image"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -414,13 +567,13 @@ export default function Marketplace() {
               <div className="modal-actions">
                 <button 
                   type="button" 
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={handleCloseCreateModal}
                   className="cancel-btn"
                 >
                   Cancel
                 </button>
                 <button type="submit" className="submit-btn">
-                  List Item
+                  {editingItemId ? 'Save Changes' : 'List Item'}
                 </button>
               </div>
             </form>

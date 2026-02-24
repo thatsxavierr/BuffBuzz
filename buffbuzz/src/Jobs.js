@@ -13,6 +13,7 @@ export default function Jobs() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingJobId, setEditingJobId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     company: '',
@@ -39,7 +40,7 @@ export default function Jobs() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      const response = await fetch(`http://localhost:3000/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -55,8 +56,8 @@ export default function Jobs() {
   const fetchJobs = async (category = null) => {
     try {
       const url = category && category !== 'all' 
-        ? `http://localhost:5000/api/jobs?category=${category.toUpperCase()}`
-        : 'http://localhost:5000/api/jobs';
+        ? `http://localhost:3000/api/jobs?category=${category.toUpperCase()}`
+        : 'http://localhost:3000/api/jobs';
       
       const response = await fetch(url);
       
@@ -75,44 +76,128 @@ export default function Jobs() {
     navigate('/main');
   };
 
+  const hasUnsavedChanges = () => {
+    return !!(
+      formData.title?.trim() ||
+      formData.company?.trim() ||
+      formData.location?.trim() ||
+      formData.description?.trim() ||
+      formData.requirements?.trim() ||
+      formData.salary?.trim() ||
+      formData.applicationLink?.trim() ||
+      formData.jobType !== 'FULL_TIME' ||
+      formData.category !== 'INTERNSHIP'
+    );
+  };
+
+  const handleCloseCreateModal = () => {
+    if (hasUnsavedChanges() && !window.confirm('Discard unsaved changes? Your job posting will not be saved.')) {
+      return;
+    }
+    setShowCreateModal(false);
+    setEditingJobId(null);
+    setFormData({
+      title: '',
+      company: '',
+      location: '',
+      jobType: 'FULL_TIME',
+      category: 'INTERNSHIP',
+      description: '',
+      requirements: '',
+      salary: '',
+      applicationLink: ''
+    });
+  };
+
+  const handleEditJob = (job) => {
+    setFormData({
+      title: job.title || '',
+      company: job.company || '',
+      location: job.location || '',
+      jobType: job.jobType || 'FULL_TIME',
+      category: job.category || 'INTERNSHIP',
+      description: job.description || '',
+      requirements: job.requirements || '',
+      salary: job.salary || '',
+      applicationLink: job.applicationLink || ''
+    });
+    setEditingJobId(job.id);
+    setShowCreateModal(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
-      const response = await fetch('http://localhost:5000/api/jobs/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          posterId: user.id
-        })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        alert('Job posted successfully!');
-        setShowCreateModal(false);
-        setFormData({
-          title: '',
-          company: '',
-          location: '',
-          jobType: 'FULL_TIME',
-          category: 'INTERNSHIP',
-          description: '',
-          requirements: '',
-          salary: '',
-          applicationLink: ''
+      if (editingJobId) {
+        const response = await fetch(`http://localhost:3000/api/jobs/${editingJobId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...formData,
+            userId: user.id
+          })
         });
-        fetchJobs();
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Job updated successfully!');
+          setShowCreateModal(false);
+          setEditingJobId(null);
+          setFormData({
+            title: '',
+            company: '',
+            location: '',
+            jobType: 'FULL_TIME',
+            category: 'INTERNSHIP',
+            description: '',
+            requirements: '',
+            salary: '',
+            applicationLink: ''
+          });
+          fetchJobs(filter === 'all' ? null : filter);
+        } else {
+          alert(data.message || 'Failed to update job');
+        }
       } else {
-        alert(data.message || 'Failed to post job');
+        const response = await fetch('http://localhost:3000/api/jobs/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...formData,
+            posterId: user.id
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Job posted successfully!');
+          setShowCreateModal(false);
+          setFormData({
+            title: '',
+            company: '',
+            location: '',
+            jobType: 'FULL_TIME',
+            category: 'INTERNSHIP',
+            description: '',
+            requirements: '',
+            salary: '',
+            applicationLink: ''
+          });
+          fetchJobs();
+        } else {
+          alert(data.message || 'Failed to post job');
+        }
       }
     } catch (error) {
-      console.error('Error posting job:', error);
-      alert('An error occurred while posting the job');
+      console.error('Error saving job:', error);
+      alert('An error occurred while saving the job');
     }
   };
 
@@ -130,7 +215,7 @@ export default function Jobs() {
   }
 
   try {
-    const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
+    const response = await fetch(`http://localhost:3000/api/jobs/${jobId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -259,13 +344,22 @@ export default function Jobs() {
                       {getTypeIcon(job.jobType)} {formatJobType(job.jobType)}
                     </span>
                     {user.id === job.posterId && (
-                      <button 
-                        className="delete-job-button"
-                        onClick={() => handleDeleteJob(job.id)}
-                        title="Delete this job"
-                      >
-                        🗑️
-                      </button>
+                      <div className="job-owner-actions">
+                        <button 
+                          className="edit-job-button"
+                          onClick={() => handleEditJob(job)}
+                          title="Edit this job"
+                        >
+                          ✏️
+                        </button>
+                        <button 
+                          className="delete-job-button"
+                          onClick={() => handleDeleteJob(job.id)}
+                          title="Delete this job"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -306,13 +400,13 @@ export default function Jobs() {
 
       {/* Create Job Modal */}
       {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="modal-overlay" onClick={handleCloseCreateModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Post a Job Opportunity</h2>
+              <h2>{editingJobId ? 'Edit Job Posting' : 'Post a Job Opportunity'}</h2>
               <button 
                 className="close-modal"
-                onClick={() => setShowCreateModal(false)}
+                onClick={handleCloseCreateModal}
               >
                 ×
               </button>
@@ -441,13 +535,13 @@ export default function Jobs() {
               <div className="modal-actions">
                 <button 
                   type="button" 
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={handleCloseCreateModal}
                   className="cancel-btn"
                 >
                   Cancel
                 </button>
                 <button type="submit" className="submit-btn">
-                  Post Job
+                  {editingJobId ? 'Save Changes' : 'Post Job'}
                 </button>
               </div>
             </form>

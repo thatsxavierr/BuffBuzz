@@ -10,7 +10,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     const fetchComments = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`http://localhost:5000/api/posts/${post.id}/comments`);
+        const response = await fetch(`http://localhost:3000/api/posts/${post.id}/comments`);
         if (response.ok) {
           const data = await response.json();
           setComments(data.comments);
@@ -46,7 +46,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     if (!commentText.trim()) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/posts/${post.id}/comment`, {
+      const response = await fetch(`http://localhost:3000/api/posts/${post.id}/comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -38,7 +38,7 @@ const SettingsPage = () => {
       return;
     }
     
-    fetch(`http://localhost:5000/api/settings/notifications/${user.id}`)
+    fetch(`http://localhost:3000/api/settings/notifications/${user.id}`)
       .then(res => res.json())
       .then(data => {
         if (data.preferences) {
@@ -95,7 +95,7 @@ const SettingsPage = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/settings/password', {
+      const response = await fetch('http://localhost:3000/api/settings/password', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -127,7 +127,7 @@ const SettingsPage = () => {
 
 
     try {
-      const response = await fetch('http://localhost:5000/api/settings/notifications', {
+      const response = await fetch('http://localhost:3000/api/settings/notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -167,7 +167,7 @@ const SettingsPage = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/settings/delete-account', {
+      const response = await fetch('http://localhost:3000/api/settings/delete-account', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './RightSidebar.css';
 import { getValidUser } from './sessionUtils';
 
-export default function RightSidebar() {
+export default function RightSidebar({ initialOpenChat }) {
+  const navigate = useNavigate();
   const [chatExpanded, setChatExpanded] = useState(false);
   const [openChats, setOpenChats] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -23,10 +25,18 @@ export default function RightSidebar() {
     }
   }, [user?.id]);
 
+  useEffect(() => {
+    if (initialOpenChat && user?.id && initialOpenChat.id !== user.id) {
+      setChatExpanded(true);
+      openChat(initialOpenChat);
+      navigate('/main', { replace: true, state: {} });
+    }
+  }, [initialOpenChat?.id, user?.id]);
+
   const fetchFriends = async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/friends/${user.id}`);
+      const response = await fetch(`http://localhost:3000/api/friends/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         setFriends(data.friends || []);
@@ -39,7 +49,7 @@ export default function RightSidebar() {
   const fetchAllConversations = async () => {
   if (!user?.id) return;
   try {
-    const response = await fetch(`http://localhost:5000/api/conversations/${user.id}`);
+    const response = await fetch(`http://localhost:3000/api/conversations/${user.id}`);
     if (response.ok) {
       const data = await response.json();
       setAllConversations(data.conversations || []);
@@ -98,7 +108,7 @@ const openConversation = async (conversation) => {
   }
 
   try {
-    const response = await fetch('http://localhost:5000/api/conversations/get-or-create', {
+    const response = await fetch('http://localhost:3000/api/conversations/get-or-create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -124,7 +134,7 @@ const openConversation = async (conversation) => {
 
   const fetchMessages = async (conversationId, friendId) => {
   try {
-    const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}/messages`);
+    const response = await fetch(`http://localhost:3000/api/conversations/${conversationId}/messages`);
     if (response.ok) {
       const data = await response.json();
       
@@ -152,7 +162,7 @@ const openConversation = async (conversation) => {
 
   const markAsRead = async (conversationId) => {
     try {
-      await fetch(`http://localhost:5000/api/conversations/${conversationId}/read`, {
+      await fetch(`http://localhost:3000/api/conversations/${conversationId}/read`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
@@ -176,7 +186,7 @@ const openConversation = async (conversation) => {
   }
 
   try {
-    const response = await fetch('http://localhost:5000/api/messages/send', {
+    const response = await fetch('http://localhost:3000/api/messages/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -208,7 +218,7 @@ const openConversation = async (conversation) => {
 
   const editMessage = async (friendId, messageId, newContent) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/messages/${messageId}/edit`, {
+      const response = await fetch(`http://localhost:3000/api/messages/${messageId}/edit`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -237,7 +247,7 @@ const openConversation = async (conversation) => {
 
   const deleteMessage = async (friendId, messageId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/messages/${messageId}`, {
+      const response = await fetch(`http://localhost:3000/api/messages/${messageId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
@@ -259,7 +269,7 @@ const openConversation = async (conversation) => {
 
   const createGroupChat = async (groupName, selectedFriendIds, imageUrl) => {
   try {
-    const response = await fetch('http://localhost:5000/api/conversations/group/create', {
+    const response = await fetch('http://localhost:3000/api/conversations/group/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -307,7 +317,7 @@ const openConversation = async (conversation) => {
 
   const reactToMessage = async (friendId, messageId, emoji) => {
   try {
-    const response = await fetch(`http://localhost:5000/api/messages/${messageId}/react`, {
+    const response = await fetch(`http://localhost:3000/api/messages/${messageId}/react`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -730,7 +740,7 @@ function ChatBox({ friend, conversation, messages, onClose, onSend, onEdit, onDe
   }
 
   try {
-    const response = await fetch(`http://localhost:5000/api/conversations/${conversation.id}/leave`, {
+    const response = await fetch(`http://localhost:3000/api/conversations/${conversation.id}/leave`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUserId })
@@ -756,7 +766,7 @@ const handleDeleteGroup = async () => {
   }
 
   try {
-    const response = await fetch(`http://localhost:5000/api/conversations/${conversation.id}`, {
+    const response = await fetch(`http://localhost:3000/api/conversations/${conversation.id}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUserId })

@@ -8,20 +8,21 @@
 }
 
 .logo {
-  width: 100vw;
-  height: 100vh;
+  max-width: 280px;
+  max-height: 200px;
+  width: auto;
+  height: auto;
   object-fit: contain;
   margin-bottom: 30px;
 }
 
-
-h1 {
+.welcome-container h1 {
   color: #800000;
   font-size: 48px;
   margin-bottom: 30px;
 }
 
-button {
+.welcome-container button {
   background-color: #800000;
   color: white;
   padding: 15px 60px;
@@ -31,6 +32,6 @@ button {
   cursor: pointer;
 }
 
-button:hover {
+.welcome-container button:hover {
   background-color: #600000;
 }
