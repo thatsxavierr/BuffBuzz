@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './ProfileEdit.css';
 import Header from './Header';
 import { getValidUser } from './sessionUtils';
+import ImageCropModal from './ImageCropModal';
 
 export default function ProfileEdit() {
   const navigate = useNavigate();
@@ -19,14 +20,15 @@ export default function ProfileEdit() {
     instagramHandle: '',
     linkedinUrl: '',
     facebookHandle: '',
-    profilePicture: null
+    profilePicture: null,
+    privacy: 'PUBLIC'
   });
   const [previewImage, setPreviewImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState(null);
 
-  // Fetch existing profile data on component mount
   useEffect(() => {
-    // Get user with session validation (checks expiration)
     const userData = getValidUser();
     
     if (!userData) {
@@ -54,13 +56,13 @@ export default function ProfileEdit() {
             instagramHandle: data.profile.instagramHandle || '',
             linkedinUrl: data.profile.linkedinUrl || '',
             facebookHandle: data.profile.facebookHandle || '',
-            profilePicture: null
+            profilePicture: null,
+            privacy: data.profile.privacy || 'PUBLIC'
           });
           if (data.profile.profilePictureUrl) {
             setPreviewImage(data.profile.profilePictureUrl);
           }
         } else if (response.status === 404) {
-          // Profile doesn't exist yet, that's okay
           console.log('No profile found, will create new one on save');
         }
       } catch (error) {
@@ -82,34 +84,55 @@ export default function ProfileEdit() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file size (e.g., max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert('File size must be less than 5MB');
         return;
       }
 
-      // Validate file type
       if (!file.type.startsWith('image/')) {
         alert('Please select an image file');
         return;
       }
 
+      // Store the file and show crop modal
       setFormData(prev => ({
         ...prev,
         profilePicture: file
       }));
       
-      // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreviewImage(reader.result);
+        setImageToCrop(reader.result);
+        setShowCropModal(true);
       };
       reader.readAsDataURL(file);
     }
+    // Reset the input so the same file can be selected again
+    e.target.value = '';
+  };
+
+  const handleCropComplete = (croppedImageUrl) => {
+    setPreviewImage(croppedImageUrl);
+    setShowCropModal(false);
+    setImageToCrop(null);
+  };
+
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    setImageToCrop(null);
+    // Reset the file input
+    setFormData(prev => ({
+      ...prev,
+      profilePicture: null
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    console.log('=== FORM SUBMITTED ===');
+    console.log('User:', user);
+    console.log('Form Data:', formData);
     
     if (!user) {
       alert('You must be logged in to update profile');
@@ -120,35 +143,50 @@ export default function ProfileEdit() {
     setIsLoading(true);
 
     try {
-      // For now, we'll send JSON data with base64 image
-      // Later you can implement proper image upload to a storage service
+      const payload = {
+        userId: user.id,
+        name: formData.name,
+        bio: formData.bio,
+        major: formData.major,
+        department: formData.department,
+        graduationYear: formData.graduationYear,
+        classification: formData.classification,
+        clubs: formData.clubs,
+        pronouns: formData.pronouns,
+        instagramHandle: formData.instagramHandle,
+        linkedinUrl: formData.linkedinUrl,
+        facebookHandle: formData.facebookHandle,
+        profilePictureUrl: previewImage,
+        privacy: formData.privacy
+      };
+      
+      console.log('=== SENDING UPDATE ===');
+      console.log('Payload:', payload);
+      
       const response = await fetch('http://localhost:5000/api/profile/update', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          userId: user.id,
-          name: formData.name,
-          bio: formData.bio,
-          major: formData.major,
-          department: formData.department,
-          graduationYear: formData.graduationYear,
-          classification: formData.classification,
-          clubs: formData.clubs,
-          pronouns: formData.pronouns,
-          instagramHandle: formData.instagramHandle,
-          linkedinUrl: formData.linkedinUrl,
-          facebookHandle: formData.facebookHandle,
-          profilePictureUrl: previewImage // Base64 or existing URL
-        })
+        body: JSON.stringify(payload)
       });
 
+      console.log('Response status:', response.status);
+      
       if (response.ok) {
+        const data = await response.json();
+        console.log('Response data:', data);
         alert('Profile updated successfully!');
-        navigate('/main');
+        navigate('/profile', { 
+          state: { 
+            userId: user.id, 
+            refresh: Date.now() 
+          },
+          replace: true 
+        });
       } else {
         const error = await response.json();
+        console.error('Error response:', error);
         alert(error.message || 'Failed to update profile');
       }
     } catch (error) {
@@ -160,20 +198,26 @@ export default function ProfileEdit() {
   };
 
   const handleCancel = () => {
-    navigate('/main');
+    navigate('/profile');
   };
 
-  // Generate graduation year options (current year to 10 years in future)
   const currentYear = new Date().getFullYear();
   const graduationYears = Array.from({ length: 11 }, (_, i) => currentYear + i);
 
   if (!user) {
-    return null; // or loading spinner
+    return null;
   }
 
   return (
     <div>
       <Header onBackClick={() => navigate('/main')} profilePictureUrl={previewImage} />
+      {showCropModal && imageToCrop && (
+        <ImageCropModal
+          image={imageToCrop}
+          onClose={handleCropCancel}
+          onCropComplete={handleCropComplete}
+        />
+      )}
       <div className="profile-edit-container">
         <div className="profile-edit-card">
           <h1>Edit Profile</h1>
@@ -203,7 +247,6 @@ export default function ProfileEdit() {
             {/* Basic Information Section */}
             <div className="section-header">Basic Information</div>
 
-            {/* Name Field */}
             <div className="form-group">
               <label htmlFor="name">Name *</label>
               <input
@@ -217,7 +260,6 @@ export default function ProfileEdit() {
               />
             </div>
 
-            {/* Pronouns Field */}
             <div className="form-group">
               <label htmlFor="pronouns">Pronouns</label>
               <select
@@ -235,9 +277,7 @@ export default function ProfileEdit() {
                 <option value="other">Other/Prefer not to say</option>
               </select>
             </div>
-        
 
-            {/* Bio Field */}
             <div className="form-group">
               <label htmlFor="bio">Bio</label>
               <textarea
@@ -255,7 +295,6 @@ export default function ProfileEdit() {
             {/* Academic Information Section */}
             <div className="section-header">Academic Information</div>
 
-            {/* Major Field */}
             <div className="form-group">
               <label htmlFor="major">Major</label>
               <input
@@ -268,7 +307,6 @@ export default function ProfileEdit() {
               />
             </div>
 
-            {/* Department Field */}
             <div className="form-group">
               <label htmlFor="department">Department</label>
               <input
@@ -281,7 +319,6 @@ export default function ProfileEdit() {
               />
             </div>
 
-            {/* Classification Field */}
             <div className="form-group">
               <label htmlFor="classification">Year in School</label>
               <select
@@ -300,7 +337,6 @@ export default function ProfileEdit() {
               </select>
             </div>
 
-            {/* Graduation Year Field */}
             <div className="form-group">
               <label htmlFor="graduationYear">Graduation Year</label>
               <select
@@ -319,7 +355,6 @@ export default function ProfileEdit() {
             {/* Campus Life Section */}
             <div className="section-header">Campus Life</div>
 
-            {/* Clubs/Organizations Field */}
             <div className="form-group">
               <label htmlFor="clubs">Clubs & Organizations</label>
               <textarea
@@ -334,10 +369,32 @@ export default function ProfileEdit() {
               <span className="character-count">{formData.clubs.length}/300</span>
             </div>
 
+            {/* Privacy Settings Section */}
+            <div className="section-header">Privacy Settings</div>
+
+            <div className="form-group">
+              <label htmlFor="privacy">Profile Privacy *</label>
+              <select
+                id="privacy"
+                name="privacy"
+                value={formData.privacy}
+                onChange={handleChange}
+                required
+              >
+                <option value="PUBLIC">🌐 Public - Anyone can see your profile</option>
+                <option value="FRIENDS_ONLY">👥 Friends Only - Only your friends can see your profile</option>
+                <option value="PRIVATE">🔒 Private - Only you can see your profile</option>
+              </select>
+              <p className="form-hint" style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
+                {formData.privacy === 'PUBLIC' && 'Your profile is visible to everyone on BuffBuzz.'}
+                {formData.privacy === 'FRIENDS_ONLY' && 'Your profile is only visible to users who have accepted your friend request.'}
+                {formData.privacy === 'PRIVATE' && 'Your profile is only visible to you. Others can only see your name and profile picture.'}
+              </p>
+            </div>
+
             {/* Social Media Section */}
             <div className="section-header">Social Media</div>
 
-            {/* Instagram Handle */}
             <div className="form-group">
               <label htmlFor="instagramHandle">Instagram</label>
               <div className="input-with-prefix">
@@ -353,7 +410,6 @@ export default function ProfileEdit() {
               </div>
             </div>
 
-            {/* LinkedIn URL */}
             <div className="form-group">
               <label htmlFor="linkedinUrl">LinkedIn</label>
               <input
@@ -366,7 +422,6 @@ export default function ProfileEdit() {
               />
             </div>
 
-            {/* Facebook Handle */}
             <div className="form-group">
               <label htmlFor="facebookHandle">Facebook</label>
               <div className="input-with-prefix">

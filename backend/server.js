@@ -45,6 +45,11 @@ function generateVerificationCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Normalize email to lowercase for case-insensitive auth and consistent DB storage
+function normalizeEmail(email) {
+  return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
 // Send verification email
 async function sendVerificationEmail(email, verificationCode, firstName) {
   const mailOptions = {
@@ -191,7 +196,9 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ message: 'Invalid user type' });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+
+    const existingUser = await prisma.user.findUnique({ where: { email: emailNormalized } });
 
     if (existingUser) {
       return res.status(409).json({ message: 'User with this email already exists' });
@@ -200,10 +207,10 @@ app.post('/api/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationCode = generateVerificationCode();
 
-    // Create user with PENDING verification status
+    // Create user with PENDING verification status (store email in lowercase)
     const user = await prisma.user.create({
       data: {
-        email,
+        email: emailNormalized,
         password: hashedPassword,
         firstName,
         lastName,
@@ -217,7 +224,7 @@ app.post('/api/register', async (req, res) => {
 
     // Send verification email
     try {
-      await sendVerificationEmail(email, verificationCode, firstName);
+      await sendVerificationEmail(emailNormalized, verificationCode, firstName);
       
       res.status(201).json({
         message: 'Account created successfully! Please check your email for the verification code.',
@@ -249,7 +256,10 @@ app.post('/api/resend-code', async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -262,20 +272,28 @@ app.post('/api/resend-code', async (req, res) => {
     // Generate new verification code
     const verificationCode = generateVerificationCode();
 
-    // Update user with new code and reset attempts
+    // Update user with new code and reset attempts (use id so casing doesn't matter)
     await prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: {
         verificationCode,
         verificationAttempts: 0
       }
     });
 
-    console.log(`New verification code generated for ${email}: ${verificationCode}`);
+    console.log(`New verification code generated for ${emailNormalized}: ${verificationCode}`);
+
+    // Optionally normalize stored email to lowercase
+    if (user.email !== emailNormalized) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { email: emailNormalized }
+      });
+    }
 
     // Send verification email
     try {
-      await sendVerificationEmail(email, verificationCode, user.firstName);
+      await sendVerificationEmail(emailNormalized, verificationCode, user.firstName);
       
       res.status(200).json({
         message: 'Verification code resent successfully! Please check your email.'
@@ -303,7 +321,10 @@ app.post('/api/verify', async (req, res) => {
       return res.status(400).json({ message: 'Email and verification code are required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -324,7 +345,7 @@ app.post('/api/verify', async (req, res) => {
     if (user.verificationCode !== verificationCode) {
       // Increment failed attempts
       const updatedUser = await prisma.user.update({
-        where: { email },
+        where: { id: user.id },
         data: { verificationAttempts: user.verificationAttempts + 1 }
       });
 
@@ -341,10 +362,11 @@ app.post('/api/verify', async (req, res) => {
       });
     }
 
-    // Update user to verified
+    // Update user to verified and normalize email to lowercase in DB
     const verifiedUser = await prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: {
+        email: emailNormalized,
         verificationStatus: 'VERIFIED',
         verificationCode: null,
         verificationAttempts: 0
@@ -364,6 +386,52 @@ app.post('/api/verify', async (req, res) => {
   }
 });
 
+// ----------- SEARCH USERS -------------
+app.get('/api/search-users', async (req, res) => {
+  try {
+    const query = (req.query.query || req.query.q || '').trim();
+
+    if (!query) {
+      return res.json({ users: [] });
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        verificationStatus: 'VERIFIED', // Only show verified accounts
+        OR: [
+          { firstName: { contains: query, mode: 'insensitive' } },
+          { lastName: { contains: query, mode: 'insensitive' } },
+          { email: { contains: query, mode: 'insensitive' } }
+        ]
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        profile: {
+          select: { profilePictureUrl: true }
+        }
+      },
+      take: 10
+    });
+
+    const formattedUsers = users.map((user) => ({
+      id: user.id,
+      fullName: `${user.firstName} ${user.lastName}`.trim(),
+      email: user.email,
+      profilePictureUrl: user.profile?.profilePictureUrl || null
+    }));
+
+    res.json({ users: formattedUsers });
+
+  } catch (err) {
+    console.error('Search error:', err);
+    res.status(500).json({ message: 'Server error searching users' });
+  }
+});
+
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   try {
@@ -373,7 +441,19 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
+
+    // Normalize stored email to lowercase when user logs in (one-time migration)
+    if (user && user.email !== emailNormalized) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { email: emailNormalized }
+      });
+      user.email = emailNormalized;
+    }
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
@@ -411,7 +491,10 @@ app.post('/api/request-reset', async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
 
     // Don't reveal if user exists or not for security
     if (!user) {
@@ -424,20 +507,28 @@ app.post('/api/request-reset', async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
 
-    // Store reset token in database
+    // Store reset token in database (use id)
     await prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: {
         resetToken,
         resetTokenExpiry
       }
     });
 
-    console.log(`Reset token generated for ${email}`);
+    console.log(`Reset token generated for ${emailNormalized}`);
+
+    // Normalize stored email to lowercase
+    if (user.email !== emailNormalized) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { email: emailNormalized }
+      });
+    }
 
     // Send reset email
     try {
-      await sendPasswordResetEmail(email, resetToken, user.firstName);
+      await sendPasswordResetEmail(emailNormalized, resetToken, user.firstName);
       
       res.status(200).json({ 
         message: 'If an account exists with this email, you will receive a reset link.' 
@@ -505,16 +596,18 @@ app.post('/api/reset-password', async (req, res) => {
 
 // ==================== PROFILE ENDPOINTS ====================
 
-// Get user profile
+// Get user profile with privacy checks
 app.get('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    const viewerId = req.query.viewerId;
 
     const profile = await prisma.profile.findUnique({
       where: { userId },
       include: {
         user: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
             email: true
@@ -527,7 +620,77 @@ app.get('/api/profile/:userId', async (req, res) => {
       return res.status(404).json({ message: 'Profile not found' });
     }
 
-    res.status(200).json({ profile });
+    // Default to PUBLIC if privacy is not set
+    const privacy = profile.privacy || 'PUBLIC';
+    const isOwner = viewerId && viewerId === userId;
+    let canViewFullProfile = false;
+
+    console.log('Profile check:', { userId, viewerId, isOwner, privacy });
+
+    if (isOwner) {
+      console.log('Owner viewing own profile');
+      canViewFullProfile = true;
+    } else if (privacy === 'PUBLIC') {
+      console.log('Public profile - allowing full view');
+      canViewFullProfile = true;
+    } else if (privacy === 'FRIENDS_ONLY' && viewerId) {
+      console.log('Checking friendship status');
+      const friendship = await prisma.friendship.findFirst({
+        where: {
+          OR: [
+            { senderId: viewerId, receiverId: userId, status: 'ACCEPTED' },
+            { senderId: userId, receiverId: viewerId, status: 'ACCEPTED' }
+          ]
+        }
+      });
+      canViewFullProfile = !!friendship;
+      console.log('Friendship found:', !!friendship);
+    } else {
+      console.log('Private profile or no viewer - hiding details');
+    }
+
+    // If can view full profile, return everything
+    if (canViewFullProfile) {
+      console.log('Returning full profile data');
+      return res.status(200).json({ 
+        profile: profile,
+        canViewFullProfile: true,
+        privacy: privacy
+      });
+    }
+
+    // Otherwise, return limited data
+    console.log('Returning limited profile data');
+    const limitedProfile = {
+      id: profile.id,
+      userId: profile.userId,
+      name: profile.name,
+      pronouns: profile.pronouns,
+      profilePictureUrl: profile.profilePictureUrl,
+      privacy: privacy,
+      user: {
+        id: profile.user.id,
+        firstName: profile.user.firstName,
+        lastName: profile.user.lastName,
+        email: null // Hide email
+      },
+      // Hide everything else
+      bio: null,
+      major: null,
+      department: null,
+      graduationYear: null,
+      classification: null,
+      clubs: null,
+      instagramHandle: null,
+      linkedinUrl: null,
+      facebookHandle: null
+    };
+
+    res.status(200).json({ 
+      profile: limitedProfile,
+      canViewFullProfile: false,
+      privacy: privacy
+    });
 
   } catch (error) {
     console.error('Get profile error:', error);
@@ -551,43 +714,46 @@ app.put('/api/profile/update', async (req, res) => {
       instagramHandle,
       linkedinUrl,
       facebookHandle,
-      profilePictureUrl
+      profilePictureUrl,
+      privacy
     } = req.body;
 
     if (!userId) {
       return res.status(400).json({ message: 'User ID is required' });
     }
 
+    // Validate privacy level if provided
+    if (privacy && !['PUBLIC', 'FRIENDS_ONLY', 'PRIVATE'].includes(privacy)) {
+      return res.status(400).json({ message: 'Invalid privacy level. Must be PUBLIC, FRIENDS_ONLY, or PRIVATE' });
+    }
+
+    const updateData = {
+      name,
+      pronouns,
+      bio,
+      major,
+      department,
+      graduationYear,
+      classification,
+      clubs,
+      instagramHandle,
+      linkedinUrl,
+      facebookHandle,
+      profilePictureUrl
+    };
+
+    // Only update privacy if provided
+    if (privacy) {
+      updateData.privacy = privacy;
+    }
+
     const profile = await prisma.profile.upsert({
       where: { userId },
-      update: {
-        name,
-        pronouns,
-        bio,
-        major,
-        department,
-        graduationYear,
-        classification,
-        clubs,
-        instagramHandle,
-        linkedinUrl,
-        facebookHandle,
-        profilePictureUrl
-      },
+      update: updateData,
       create: {
         userId,
-        name,
-        pronouns,
-        bio,
-        major,
-        department,
-        graduationYear,
-        classification,
-        clubs,
-        instagramHandle,
-        linkedinUrl,
-        facebookHandle,
-        profilePictureUrl
+        ...updateData,
+        privacy: privacy || 'PUBLIC' // Default to PUBLIC if not specified
       }
     });
 
@@ -604,6 +770,9 @@ app.put('/api/profile/update', async (req, res) => {
 
 // ==================== POST ENDPOINTS ====================
 
+// Max post image size (5MB) – validate before saving
+const MAX_POST_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+
 // Create a post
 app.post('/api/posts/create', async (req, res) => {
   try {
@@ -611,6 +780,19 @@ app.post('/api/posts/create', async (req, res) => {
 
     if (!title || !content || !authorId) {
       return res.status(400).json({ message: 'Title, content, and author are required' });
+    }
+
+    if (imageUrl && typeof imageUrl === 'string') {
+      // Base64 data URL: "data:image/...;base64,<data>". Byte size ≈ (base64 length * 3) / 4
+      const base64Prefix = ';base64,';
+      const base64Start = imageUrl.indexOf(base64Prefix);
+      const base64Length = base64Start >= 0 ? imageUrl.length - base64Start - base64Prefix.length : imageUrl.length;
+      const estimatedBytes = Math.ceil((base64Length * 3) / 4);
+      if (estimatedBytes > MAX_POST_IMAGE_SIZE_BYTES) {
+        return res.status(413).json({
+          message: `Image size exceeds the maximum allowed (5MB). Please choose a smaller image.`
+        });
+      }
     }
 
     const post = await prisma.post.create({
@@ -1100,6 +1282,2183 @@ app.get('/api/posts/:postId/shares', async (req, res) => {
   } catch (error) {
     console.error('Get shares error:', error);
     res.status(500).json({ message: 'An error occurred while fetching share count' });
+  }
+});
+
+// ==================== FRIENDSHIP ENDPOINTS ====================
+
+// Send friend request
+app.post('/api/friends/request', async (req, res) => {
+  try {
+    const { senderId, receiverId } = req.body;
+
+    if (!senderId || !receiverId) {
+      return res.status(400).json({ message: 'Sender and receiver IDs are required' });
+    }
+
+    if (senderId === receiverId) {
+      return res.status(400).json({ message: 'Cannot send friend request to yourself' });
+    }
+
+    // Check if friendship already exists
+    const existingFriendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { senderId, receiverId },
+          { senderId: receiverId, receiverId: senderId }
+        ]
+      }
+    });
+
+    if (existingFriendship) {
+      if (existingFriendship.status === 'PENDING') {
+        return res.status(400).json({ message: 'Friend request already sent' });
+      }
+      if (existingFriendship.status === 'ACCEPTED') {
+        return res.status(400).json({ message: 'Already friends' });
+      }
+    }
+
+    // Create friend request
+    const friendship = await prisma.friendship.create({
+      data: {
+        senderId,
+        receiverId,
+        status: 'PENDING'
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        receiver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      message: 'Friend request sent successfully',
+      friendship
+    });
+
+  } catch (error) {
+    console.error('Send friend request error:', error);
+    res.status(500).json({ message: 'An error occurred while sending friend request' });
+  }
+});
+
+// Accept friend request
+app.put('/api/friends/accept/:friendshipId', async (req, res) => {
+  try {
+    const { friendshipId } = req.params;
+    const { userId } = req.body;
+
+    const friendship = await prisma.friendship.findUnique({
+      where: { id: friendshipId }
+    });
+
+    if (!friendship) {
+      return res.status(404).json({ message: 'Friend request not found' });
+    }
+
+    // Only receiver can accept
+    if (friendship.receiverId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to accept this request' });
+    }
+
+    if (friendship.status !== 'PENDING') {
+      return res.status(400).json({ message: 'Request already processed' });
+    }
+
+    // Update to accepted
+    const updatedFriendship = await prisma.friendship.update({
+      where: { id: friendshipId },
+      data: { status: 'ACCEPTED' },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.status(200).json({
+      message: 'Friend request accepted',
+      friendship: updatedFriendship
+    });
+
+  } catch (error) {
+    console.error('Accept friend request error:', error);
+    res.status(500).json({ message: 'An error occurred while accepting friend request' });
+  }
+});
+
+// Reject/Cancel friend request
+app.delete('/api/friends/reject/:friendshipId', async (req, res) => {
+  try {
+    const { friendshipId } = req.params;
+    const { userId } = req.body;
+
+    const friendship = await prisma.friendship.findUnique({
+      where: { id: friendshipId }
+    });
+
+    if (!friendship) {
+      return res.status(404).json({ message: 'Friend request not found' });
+    }
+
+    // Only sender or receiver can reject/cancel
+    if (friendship.senderId !== userId && friendship.receiverId !== userId) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    await prisma.friendship.delete({
+      where: { id: friendshipId }
+    });
+
+    res.status(200).json({ message: 'Friend request removed' });
+
+  } catch (error) {
+    console.error('Reject friend request error:', error);
+    res.status(500).json({ message: 'An error occurred while rejecting friend request' });
+  }
+});
+
+// Remove friend (unfriend)
+app.delete('/api/friends/remove/:friendshipId', async (req, res) => {
+  try {
+    const { friendshipId } = req.params;
+    const { userId } = req.body;
+
+    const friendship = await prisma.friendship.findUnique({
+      where: { id: friendshipId }
+    });
+
+    if (!friendship) {
+      return res.status(404).json({ message: 'Friendship not found' });
+    }
+
+    // Only sender or receiver can remove
+    if (friendship.senderId !== userId && friendship.receiverId !== userId) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    await prisma.friendship.delete({
+      where: { id: friendshipId }
+    });
+
+    res.status(200).json({ message: 'Friend removed successfully' });
+
+  } catch (error) {
+    console.error('Remove friend error:', error);
+    res.status(500).json({ message: 'An error occurred while removing friend' });
+  }
+});
+
+// Get pending friend requests for a user
+app.get('/api/friends/requests/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const requests = await prisma.friendship.findMany({
+      where: {
+        receiverId: userId,
+        status: 'PENDING'
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            profile: {
+              select: {
+                profilePictureUrl: true,
+                bio: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.status(200).json({ requests });
+
+  } catch (error) {
+    console.error('Get friend requests error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching friend requests' });
+  }
+});
+
+// Get friends list for a user
+app.get('/api/friends/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        OR: [
+          { senderId: userId, status: 'ACCEPTED' },
+          { receiverId: userId, status: 'ACCEPTED' }
+        ]
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true,
+                bio: true
+              }
+            }
+          }
+        },
+        receiver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true,
+                bio: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Map to get the other user (friend)
+    const friends = friendships.map(friendship => {
+      const friend = friendship.senderId === userId ? friendship.receiver : friendship.sender;
+      return {
+        friendshipId: friendship.id,
+        ...friend
+      };
+    });
+
+    res.status(200).json({ friends });
+
+  } catch (error) {
+    console.error('Get friends error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching friends' });
+  }
+});
+
+// Check friendship status between two users
+app.get('/api/friends/status/:userId/:otherUserId', async (req, res) => {
+  try {
+    const { userId, otherUserId } = req.params;
+
+    const friendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: otherUserId },
+          { senderId: otherUserId, receiverId: userId }
+        ]
+      }
+    });
+
+    if (!friendship) {
+      return res.status(200).json({ 
+        status: 'NONE',
+        friendshipId: null,
+        isSender: false
+      });
+    }
+
+    res.status(200).json({ 
+      status: friendship.status,
+      friendshipId: friendship.id,
+      isSender: friendship.senderId === userId
+    });
+
+  } catch (error) {
+    console.error('Check friendship status error:', error);
+    res.status(500).json({ message: 'An error occurred while checking friendship status' });
+  }
+});
+
+// ==================== BLOCK ENDPOINTS ====================
+
+// Block a user
+app.post('/api/block/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params; // User to block
+    const { blockerId } = req.body; // Current user doing the blocking
+
+    if (!blockerId) {
+      return res.status(400).json({ message: 'Blocker ID is required' });
+    }
+
+    if (blockerId === userId) {
+      return res.status(400).json({ message: 'Cannot block yourself' });
+    }
+
+    // Check if already blocked
+    const existingBlock = await prisma.block.findUnique({
+      where: {
+        blockerId_blockedId: {
+          blockerId,
+          blockedId: userId
+        }
+      }
+    });
+
+    if (existingBlock) {
+      return res.status(400).json({ message: 'User already blocked' });
+    }
+
+    // Create block
+    const block = await prisma.block.create({
+      data: {
+        blockerId,
+        blockedId: userId
+      }
+    });
+
+    // Remove any existing friendship
+    await prisma.friendship.deleteMany({
+      where: {
+        OR: [
+          { senderId: blockerId, receiverId: userId },
+          { senderId: userId, receiverId: blockerId }
+        ]
+      }
+    });
+
+    res.status(201).json({
+      message: 'User blocked successfully',
+      block
+    });
+
+  } catch (error) {
+    console.error('Block user error:', error);
+    res.status(500).json({ message: 'An error occurred while blocking user' });
+  }
+});
+
+// Unblock a user
+app.delete('/api/unblock/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params; // User to unblock
+    const { blockerId } = req.body; // Current user doing the unblocking
+
+    if (!blockerId) {
+      return res.status(400).json({ message: 'Blocker ID is required' });
+    }
+
+    // Find and delete block
+    const existingBlock = await prisma.block.findUnique({
+      where: {
+        blockerId_blockedId: {
+          blockerId,
+          blockedId: userId
+        }
+      }
+    });
+
+    if (!existingBlock) {
+      return res.status(404).json({ message: 'Block not found' });
+    }
+
+    await prisma.block.delete({
+      where: {
+        blockerId_blockedId: {
+          blockerId,
+          blockedId: userId
+        }
+      }
+    });
+
+    res.status(200).json({ message: 'User unblocked successfully' });
+
+  } catch (error) {
+    console.error('Unblock user error:', error);
+    res.status(500).json({ message: 'An error occurred while unblocking user' });
+  }
+});
+
+// Get list of blocked users
+app.get('/api/blocked/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const blocks = await prisma.block.findMany({
+      where: {
+        blockerId: userId
+      },
+      include: {
+        blocked: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            profile: {
+              select: {
+                profilePictureUrl: true,
+                bio: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const blockedUsers = blocks.map(block => ({
+      blockId: block.id,
+      ...block.blocked
+    }));
+
+    res.status(200).json({ blockedUsers });
+
+  } catch (error) {
+    console.error('Get blocked users error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching blocked users' });
+  }
+});
+
+// Check if user is blocked
+app.get('/api/block-status/:userId/:otherUserId', async (req, res) => {
+  try {
+    const { userId, otherUserId } = req.params;
+
+    // Check if userId has blocked otherUserId
+    const isBlocked = await prisma.block.findUnique({
+      where: {
+        blockerId_blockedId: {
+          blockerId: userId,
+          blockedId: otherUserId
+        }
+      }
+    });
+
+    // Check if otherUserId has blocked userId (you're blocked by them)
+    const isBlockedBy = await prisma.block.findUnique({
+      where: {
+        blockerId_blockedId: {
+          blockerId: otherUserId,
+          blockedId: userId
+        }
+      }
+    });
+
+    res.status(200).json({ 
+      isBlocked: !!isBlocked,
+      isBlockedBy: !!isBlockedBy
+    });
+
+  } catch (error) {
+    console.error('Check block status error:', error);
+    res.status(500).json({ message: 'An error occurred while checking block status' });
+  }
+});
+
+
+
+// ==================== SETTINGS ENDPOINTS ====================
+
+// Update Password
+app.put('/api/settings/password', async (req, res) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters' });
+    }
+
+    // Get user
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify current password
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isValid) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword }
+    });
+
+    console.log(`Password updated for user: ${user.email}`);
+
+    res.status(200).json({ message: 'Password updated successfully' });
+
+  } catch (error) {
+    console.error('Password update error:', error);
+    res.status(500).json({ message: 'An error occurred while updating password' });
+  }
+});
+
+// Get Notification Preferences
+app.get('/api/settings/notifications/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    let preferences = await prisma.notificationPreferences.findUnique({
+      where: { userId }
+    });
+
+    // If no preferences exist, return defaults
+    if (!preferences) {
+      return res.status(200).json({
+        preferences: {
+          emailNotifications: true,
+          pushNotifications: true,
+          postLikes: true,
+          comments: true,
+          newFollowers: true
+        }
+      });
+    }
+
+    res.status(200).json({ preferences });
+
+  } catch (error) {
+    console.error('Get preferences error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching preferences' });
+  }
+});
+
+// Update Notification Preferences
+app.put('/api/settings/notifications', async (req, res) => {
+  try {
+    const {
+      userId,
+      emailNotifications,
+      pushNotifications,
+      postLikes,
+      comments,
+      newFollowers
+    } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    // Upsert preferences
+    const preferences = await prisma.notificationPreferences.upsert({
+      where: { userId },
+      update: {
+        emailNotifications,
+        pushNotifications,
+        postLikes,
+        comments,
+        newFollowers
+      },
+      create: {
+        userId,
+        emailNotifications,
+        pushNotifications,
+        postLikes,
+        comments,
+        newFollowers
+      }
+    });
+
+    res.status(200).json({
+      message: 'Notification preferences updated successfully',
+      preferences
+    });
+
+  } catch (error) {
+    console.error('Update preferences error:', error);
+    res.status(500).json({ message: 'An error occurred while updating preferences' });
+  }
+});
+
+// Delete Account
+app.delete('/api/settings/delete-account', async (req, res) => {
+  try {
+    const { userId, password } = req.body;
+
+    if (!userId || !password) {
+      return res.status(400).json({ message: 'User ID and password are required' });
+    }
+
+    // Get user
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify password before deletion
+    const isValid = await bcrypt.compare(password, user.password);
+
+    if (!isValid) {
+      return res.status(401).json({ message: 'Incorrect password' });
+    }
+
+    // Delete user (will cascade delete all related data)
+    await prisma.user.delete({
+      where: { id: userId }
+    });
+
+    console.log(`Account deleted for user: ${user.email}`);
+
+    res.status(200).json({ 
+      message: 'Account deleted successfully. All your data has been removed.' 
+    });
+
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting account' });
+  }
+});
+
+// ==================== JOB ENDPOINTS ====================
+
+// Create a job posting
+app.post('/api/jobs/create', async (req, res) => {
+  try {
+    const {
+      title,
+      company,
+      location,
+      jobType,
+      category,
+      description,
+      requirements,
+      salary,
+      applicationLink,
+      posterId
+    } = req.body;
+
+    if (!title || !company || !location || !jobType || !category || !description || !requirements || !applicationLink || !posterId) {
+      return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    const job = await prisma.job.create({
+      data: {
+        title,
+        company,
+        location,
+        jobType,
+        category,
+        description,
+        requirements,
+        salary: salary || null,
+        applicationLink,
+        posterId
+      },
+      include: {
+        poster: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      message: 'Job posted successfully',
+      job
+    });
+
+  } catch (error) {
+    console.error('Create job error:', error);
+    res.status(500).json({ message: 'An error occurred while posting the job' });
+  }
+});
+
+// Get all jobs with optional filtering
+app.get('/api/jobs', async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const whereClause = category && category !== 'ALL_JOBS' ? { category } : {};
+
+    const jobs = await prisma.job.findMany({
+      where: whereClause,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        poster: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ jobs });
+
+  } catch (error) {
+    console.error('Get jobs error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching jobs' });
+  }
+});
+
+// Get single job
+app.get('/api/jobs/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      include: {
+        poster: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
+    res.status(200).json({ job });
+
+  } catch (error) {
+    console.error('Get job error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the job' });
+  }
+});
+
+// Delete a job
+app.delete('/api/jobs/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { userId } = req.body;
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId }
+    });
+
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
+    if (job.posterId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to delete this job' });
+    }
+
+    await prisma.job.delete({
+      where: { id: jobId }
+    });
+
+    res.status(200).json({ message: 'Job deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete job error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the job' });
+  }
+});
+
+// ==================== MARKETPLACE ENDPOINTS ====================
+
+const MAX_LISTING_IMAGES = 5;
+
+// Normalize stored imageUrl (string or JSON array) to imageUrls array for API responses
+function getImageUrlsFromItem(item) {
+  if (!item || item.imageUrl == null || item.imageUrl === '') return [];
+  const v = item.imageUrl;
+  if (typeof v !== 'string') return [];
+  const trimmed = v.trim();
+  if (trimmed.length === 0) return [];
+  if (trimmed.startsWith('[')) {
+    try {
+      const arr = JSON.parse(trimmed);
+      if (!Array.isArray(arr)) return [v];
+      return arr.filter(Boolean);
+    } catch (_) {
+      return [v];
+    }
+  }
+  return [v];
+}
+
+// Create a marketplace listing
+app.post('/api/marketplace/create', async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      price,
+      category,
+      condition,
+      imageUrl,
+      imageUrls,
+      sellerId
+    } = req.body;
+
+    if (!title || !description || !price || !category || !condition || !sellerId) {
+      return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    let urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
+    urls = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
+    if (urls.length > 0) {
+      console.log('Marketplace create: saving', urls.length, 'image(s)');
+    }
+
+    const item = await prisma.marketplaceItem.create({
+      data: {
+        title,
+        description,
+        price: parseFloat(price),
+        category,
+        condition,
+        imageUrl: imageUrlStorage,
+        sellerId
+      },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(201).json({
+      message: 'Item listed successfully',
+      item: itemWithUrls
+    });
+
+  } catch (error) {
+    console.error('Create marketplace item error:', error);
+    res.status(500).json({ message: 'An error occurred while listing the item' });
+  }
+});
+
+// Get all marketplace items with optional filtering
+app.get('/api/marketplace', async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const whereClause = category && category !== 'all' ? { category } : {};
+
+    const items = await prisma.marketplaceItem.findMany({
+      where: whereClause,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    // Format items with seller name and imageUrls array
+    const formattedItems = items.map(item => ({
+      ...item,
+      sellerName: `${item.seller.firstName} ${item.seller.lastName}`,
+      imageUrls: getImageUrlsFromItem(item)
+    }));
+
+    res.status(200).json({ items: formattedItems });
+
+  } catch (error) {
+    console.error('Get marketplace items error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching items' });
+  }
+});
+
+// Get single marketplace item
+app.get('/api/marketplace/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+
+    const item = await prisma.marketplaceItem.findUnique({
+      where: { id: itemId },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(200).json({ item: itemWithUrls });
+
+  } catch (error) {
+    console.error('Get marketplace item error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the item' });
+  }
+});
+
+// Delete a marketplace item
+app.delete('/api/marketplace/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { userId } = req.body;
+
+    const item = await prisma.marketplaceItem.findUnique({
+      where: { id: itemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sellerId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to delete this item' });
+    }
+
+    await prisma.marketplaceItem.delete({
+      where: { id: itemId }
+    });
+
+    res.status(200).json({ message: 'Item deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete marketplace item error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the item' });
+  }
+});
+
+// ==================== LOST & FOUND ENDPOINTS ====================
+
+// Create a lost/found item
+app.post('/api/lostfound/create', async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      category,
+      location,
+      date,
+      contactInfo,
+      imageUrl,
+      imageUrls,
+      userId
+    } = req.body;
+
+    if (!title || !description || !category || !location || !date || !contactInfo || !userId) {
+      return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    let urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
+    urls = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
+    if (urls.length > 0) {
+      console.log('Lost/Found create: saving', urls.length, 'image(s)');
+    }
+
+    const item = await prisma.lostFoundItem.create({
+      data: {
+        title,
+        description,
+        category,
+        location,
+        date: new Date(date),
+        contactInfo,
+        imageUrl: imageUrlStorage,
+        userId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(201).json({
+      message: 'Item posted successfully',
+      item: itemWithUrls
+    });
+
+  } catch (error) {
+    console.error('Create lost/found item error:', error);
+    res.status(500).json({ message: 'An error occurred while posting the item' });
+  }
+});
+
+// Get all lost/found items with optional filtering
+app.get('/api/lostfound', async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const whereClause = category && category !== 'all' ? { category } : {};
+
+    const items = await prisma.lostFoundItem.findMany({
+      where: whereClause,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    // Format items with user name and imageUrls array
+    const formattedItems = items.map(item => ({
+      ...item,
+      userName: `${item.user.firstName} ${item.user.lastName}`,
+      imageUrls: getImageUrlsFromItem(item)
+    }));
+
+    res.status(200).json({ items: formattedItems });
+
+  } catch (error) {
+    console.error('Get lost/found items error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching items' });
+  }
+});
+
+// Get single lost/found item
+app.get('/api/lostfound/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+
+    const item = await prisma.lostFoundItem.findUnique({
+      where: { id: itemId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
+    res.status(200).json({ item: itemWithUrls });
+
+  } catch (error) {
+    console.error('Get lost/found item error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the item' });
+  }
+});
+
+// Delete a lost/found item
+app.delete('/api/lostfound/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { userId } = req.body;
+
+    const item = await prisma.lostFoundItem.findUnique({
+      where: { id: itemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.userId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to delete this item' });
+    }
+
+    await prisma.lostFoundItem.delete({
+      where: { id: itemId }
+    });
+
+    res.status(200).json({ message: 'Item deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete lost/found item error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the item' });
+  }
+});
+
+// ==================== GROUP ENDPOINTS ====================
+
+// Create a group
+app.post('/api/groups/create', async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      category,
+      privacy,
+      imageUrl,
+      creatorId
+    } = req.body;
+
+    if (!name || !description || !category || !privacy || !creatorId) {
+      return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    const group = await prisma.group.create({
+      data: {
+        name,
+        description,
+        category,
+        privacy,
+        imageUrl: imageUrl || null,
+        creatorId
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    // Automatically add creator as admin member
+    await prisma.groupMember.create({
+      data: {
+        groupId: group.id,
+        userId: creatorId,
+        role: 'ADMIN'
+      }
+    });
+
+    res.status(201).json({
+      message: 'Group created successfully',
+      group
+    });
+
+  } catch (error) {
+    console.error('Create group error:', error);
+    res.status(500).json({ message: 'An error occurred while creating the group' });
+  }
+});
+
+// Get all groups
+app.get('/api/groups', async (req, res) => {
+  try {
+    const groups = await prisma.group.findMany({
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        members: {
+          select: {
+            userId: true
+          }
+        },
+        _count: {
+          select: {
+            members: true
+          }
+        }
+      }
+    });
+
+    // Format groups with member info
+    const formattedGroups = groups.map(group => ({
+      ...group,
+      memberCount: group._count.members,
+      members: group.members.map(m => m.userId)
+    }));
+
+    res.status(200).json({ groups: formattedGroups });
+
+  } catch (error) {
+    console.error('Get groups error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching groups' });
+  }
+});
+
+// Get single group
+app.get('/api/groups/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    res.status(200).json({ group });
+
+  } catch (error) {
+    console.error('Get group error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching the group' });
+  }
+});
+
+// Join a group
+app.post('/api/groups/:groupId/join', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    // Check if group exists
+    const group = await prisma.group.findUnique({
+      where: { id: groupId }
+    });
+
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    // Only allow joining public groups instantly
+    if (group.privacy === 'PRIVATE') {
+      return res.status(400).json({ message: 'Cannot join private groups yet. Approval system coming soon!' });
+    }
+
+    // Check if already a member
+    const existingMember = await prisma.groupMember.findUnique({
+      where: {
+        groupId_userId: {
+          groupId,
+          userId
+        }
+      }
+    });
+
+    if (existingMember) {
+      return res.status(400).json({ message: 'Already a member of this group' });
+    }
+
+    // Add user to group
+    const member = await prisma.groupMember.create({
+      data: {
+        groupId,
+        userId,
+        role: 'MEMBER'
+      }
+    });
+
+    res.status(201).json({
+      message: 'Successfully joined the group',
+      member
+    });
+
+  } catch (error) {
+    console.error('Join group error:', error);
+    res.status(500).json({ message: 'An error occurred while joining the group' });
+  }
+});
+
+// Leave a group
+app.delete('/api/groups/:groupId/leave', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    const membership = await prisma.groupMember.findUnique({
+      where: {
+        groupId_userId: {
+          groupId,
+          userId
+        }
+      }
+    });
+
+    if (!membership) {
+      return res.status(404).json({ message: 'Not a member of this group' });
+    }
+
+    await prisma.groupMember.delete({
+      where: {
+        groupId_userId: {
+          groupId,
+          userId
+        }
+      }
+    });
+
+    res.status(200).json({ message: 'Successfully left the group' });
+
+  } catch (error) {
+    console.error('Leave group error:', error);
+    res.status(500).json({ message: 'An error occurred while leaving the group' });
+  }
+});
+
+// Delete a group
+app.delete('/api/groups/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { userId } = req.body;
+
+    const group = await prisma.group.findUnique({
+      where: { id: groupId }
+    });
+
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    if (group.creatorId !== userId) {
+      return res.status(403).json({ message: 'Only the group creator can delete this group' });
+    }
+
+    await prisma.group.delete({
+      where: { id: groupId }
+    });
+
+    res.status(200).json({ message: 'Group deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete group error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the group' });
+  }
+});
+
+// ==================== MESSAGING ENDPOINTS ====================
+
+// Get or create a conversation between users
+app.post('/api/conversations/get-or-create', async (req, res) => {
+  try {
+    const { userId, otherUserId } = req.body;
+
+    if (!userId || !otherUserId) {
+      return res.status(400).json({ message: 'Both user IDs are required' });
+    }
+
+    // Check if conversation already exists between these two users
+    const existingConversation = await prisma.conversation.findFirst({
+      where: {
+        isGroupChat: false,
+        participants: {
+          every: {
+            userId: {
+              in: [userId, otherUserId]
+            }
+          }
+        }
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: {
+                  select: {
+                    profilePictureUrl: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        messages: {
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1
+        }
+      }
+    });
+
+    if (existingConversation) {
+      return res.status(200).json({ conversation: existingConversation });
+    }
+
+    // Create new conversation
+    const conversation = await prisma.conversation.create({
+      data: {
+        isGroupChat: false,
+        participants: {
+          create: [
+            { userId: userId },
+            { userId: otherUserId }
+          ]
+        }
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: {
+                  select: {
+                    profilePictureUrl: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        messages: true
+      }
+    });
+
+    res.status(201).json({ conversation });
+
+  } catch (error) {
+    console.error('Get or create conversation error:', error);
+    res.status(500).json({ message: 'An error occurred while getting conversation' });
+  }
+});
+
+// Get all conversations for a user
+app.get('/api/conversations/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        participants: {
+          some: {
+            userId: userId
+          }
+        }
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: {
+                  select: {
+                    profilePictureUrl: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        messages: {
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1,
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        updatedAt: 'desc'
+      }
+    });
+
+    // Calculate unread count for each conversation
+    const conversationsWithUnread = await Promise.all(
+      conversations.map(async (conv) => {
+        const participant = conv.participants.find(p => p.userId === userId);
+        const unreadCount = await prisma.message.count({
+          where: {
+            conversationId: conv.id,
+            senderId: { not: userId },
+            createdAt: {
+              gt: participant?.lastReadAt || new Date(0)
+            },
+            deletedAt: null
+          }
+        });
+
+        return {
+          ...conv,
+          unreadCount
+        };
+      })
+    );
+
+    res.status(200).json({ conversations: conversationsWithUnread });
+
+  } catch (error) {
+    console.error('Get conversations error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching conversations' });
+  }
+});
+
+// Get messages in a conversation
+// Get messages in a conversation
+app.get('/api/conversations/:conversationId/messages', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+
+    const messages = await prisma.message.findMany({
+      where: {
+        conversationId: conversationId,
+        deletedAt: null
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+        reactions: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    });
+
+    // Get conversation data with participants
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: {
+          select: {
+            userId: true,
+            lastReadAt: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ 
+      messages,
+      conversation
+    });
+
+  } catch (error) {
+    console.error('Get messages error:', error);
+    console.error('Error details:', error.message); // ADD THIS LINE
+    res.status(500).json({ message: 'An error occurred while fetching messages', error: error.message });
+  }
+});
+
+// Send a message
+app.post('/api/messages/send', async (req, res) => {
+  try {
+    const { conversationId, senderId, content, type, imageUrl, replyToId } = req.body;
+
+    if (!conversationId || !senderId || !content) {
+      return res.status(400).json({ message: 'Conversation ID, sender ID, and content are required' });
+    }
+
+    const message = await prisma.message.create({
+      data: {
+        conversationId,
+        senderId,
+        content,
+        type: type || 'TEXT',
+        imageUrl: imageUrl || null,
+        replyToId: replyToId || null
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Update conversation updatedAt
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { updatedAt: new Date() }
+    });
+
+    res.status(201).json({ message });
+
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ message: 'An error occurred while sending message' });
+  }
+});
+
+// Mark messages as read
+app.put('/api/conversations/:conversationId/read', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    await prisma.conversationParticipant.updateMany({
+      where: {
+        conversationId,
+        userId
+      },
+      data: {
+        lastReadAt: new Date()
+      }
+    });
+
+    res.status(200).json({ message: 'Messages marked as read' });
+
+  } catch (error) {
+    console.error('Mark as read error:', error);
+    res.status(500).json({ message: 'An error occurred while marking messages as read' });
+  }
+});
+
+// Delete a message
+app.delete('/api/messages/:messageId', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { userId } = req.body;
+
+    const message = await prisma.message.findUnique({
+      where: { id: messageId }
+    });
+
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+
+    if (message.senderId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to delete this message' });
+    }
+
+    // Soft delete
+    await prisma.message.update({
+      where: { id: messageId },
+      data: { deletedAt: new Date() }
+    });
+
+    res.status(200).json({ message: 'Message deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete message error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting message' });
+  }
+});
+
+// Create group chat
+app.post('/api/conversations/group/create', async (req, res) => {
+  try {
+    const { creatorId, name, participantIds, imageUrl } = req.body;
+
+    if (!creatorId || !name || !participantIds || participantIds.length === 0) {
+      return res.status(400).json({ message: 'Creator ID, name, and participants are required' });
+    }
+
+    // Create group chat
+    const conversation = await prisma.conversation.create({
+      data: {
+        isGroupChat: true,
+        name,
+        imageUrl: imageUrl || null,
+        creatorId: creatorId,
+        participants: {
+          create: [
+            { userId: creatorId },
+            ...participantIds.map(id => ({ userId: id }))
+          ]
+        }
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: {
+                  select: {
+                    profilePictureUrl: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.status(201).json({ conversation });
+
+  } catch (error) {
+    console.error('Create group chat error:', error);
+    res.status(500).json({ message: 'An error occurred while creating group chat' });
+  }
+});
+
+// Delete a conversation (group chat)
+app.delete('/api/conversations/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: true
+      }
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Only allow deleting group chats
+    if (!conversation.isGroupChat) {
+      return res.status(400).json({ message: 'Cannot delete direct conversations' });
+    }
+
+    // Check if user is the creator
+    if (conversation.creatorId !== userId) {
+      return res.status(403).json({ message: 'Only the group creator can delete this group' });
+    }
+
+    // Delete the conversation
+    await prisma.conversation.delete({
+      where: { id: conversationId }
+    });
+
+    res.status(200).json({ message: 'Group chat deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete conversation error:', error);
+    res.status(500).json({ message: 'An error occurred while deleting the conversation' });
+  }
+});
+
+// Leave a conversation (group chat)
+app.post('/api/conversations/:conversationId/leave', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId }
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    if (!conversation.isGroupChat) {
+      return res.status(400).json({ message: 'Cannot leave direct conversations' });
+    }
+
+    // Remove user from conversation participants
+    await prisma.conversationParticipant.deleteMany({
+      where: {
+        conversationId,
+        userId
+      }
+    });
+
+    res.status(200).json({ message: 'Successfully left the conversation' });
+
+  } catch (error) {
+    console.error('Leave conversation error:', error);
+    res.status(500).json({ message: 'An error occurred while leaving the conversation' });
+  }
+});
+
+// Edit a message
+app.put('/api/messages/:messageId/edit', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { userId, content } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ message: 'Content is required' });
+    }
+
+    const message = await prisma.message.findUnique({
+      where: { id: messageId }
+    });
+
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+
+    if (message.senderId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to edit this message' });
+    }
+
+    const updatedMessage = await prisma.message.update({
+      where: { id: messageId },
+      data: { 
+        content,
+        editedAt: new Date()
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        replyTo: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+        reactions: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ message: updatedMessage });
+
+  } catch (error) {
+    console.error('Edit message error:', error);
+    res.status(500).json({ message: 'An error occurred while editing the message' });
+  }
+});
+
+// React to a message
+app.post('/api/messages/:messageId/react', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { userId, emoji } = req.body;
+
+    if (!userId || !emoji) {
+      return res.status(400).json({ message: 'User ID and emoji are required' });
+    }
+
+    // Check if user already reacted with this emoji
+    const existingReaction = await prisma.messageReaction.findUnique({
+      where: {
+        messageId_userId: {
+          messageId,
+          userId
+        }
+      }
+    });
+
+    if (existingReaction) {
+      // If same emoji, remove reaction
+      if (existingReaction.emoji === emoji) {
+        await prisma.messageReaction.delete({
+          where: {
+            messageId_userId: {
+              messageId,
+              userId
+            }
+          }
+        });
+        return res.status(200).json({ message: 'Reaction removed' });
+      } else {
+        // Update to new emoji
+        const reaction = await prisma.messageReaction.update({
+          where: {
+            messageId_userId: {
+              messageId,
+              userId
+            }
+          },
+          data: { emoji },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        });
+        return res.status(200).json({ reaction });
+      }
+    }
+
+    // Create new reaction
+    const reaction = await prisma.messageReaction.create({
+      data: {
+        messageId,
+        userId,
+        emoji
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({ reaction });
+
+  } catch (error) {
+    console.error('React to message error:', error);
+    res.status(500).json({ message: 'An error occurred while reacting to the message' });
+  }
+});
+
+// Get message reactions
+app.get('/api/messages/:messageId/reactions', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    const reactions = await prisma.messageReaction.findMany({
+      where: { messageId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ reactions });
+
+  } catch (error) {
+    console.error('Get reactions error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching reactions' });
+  }
+});
+
+// Get user's friends for group chat creation
+app.get('/api/friends/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        OR: [
+          { senderId: userId, status: 'ACCEPTED' },
+          { receiverId: userId, status: 'ACCEPTED' }
+        ]
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        receiver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const friends = friendships.map(friendship => {
+      return friendship.senderId === userId ? friendship.receiver : friendship.sender;
+    });
+
+    res.status(200).json({ friends });
+
+  } catch (error) {
+    console.error('Get friends error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching friends' });
   }
 });
 

@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import WelcomePage from './welcomePage';
 import LoginPage from './loginPage';
 import SignupPage from './signUpPage';
@@ -10,15 +10,47 @@ import MainPage from './MainPage';
 import CreatePost from './CreatePost';
 import ProfileEdit from './ProfileEdit';
 import ProfileView from './ProfileView';
+import Friends from './Friends';
+import FriendRequests from './FriendRequests';
 import LostFound from './LostFound';
 import Groups from './Groups';
 import Marketplace from './Marketplace';
 import Notifications from './Notifications';
 import Jobs from './Jobs';
+import SettingsPage from './SettingsPage';
+import BlockedUsers from './BlockedUsers';
 import { getValidUser } from './sessionUtils';
 
 function ProtectedRoute({ element }) {
-  const user = getValidUser();
+  const [user, setUser] = useState(null);
+  const [isChecking, setIsChecking] = useState(true);
+  const location = useLocation();
+
+  useEffect(() => {
+    // Check session on mount and when location changes
+    const checkSession = () => {
+      // First check if user is passed in location state (from login)
+      const stateUser = location.state?.user;
+      if (stateUser) {
+        setUser(stateUser);
+        setIsChecking(false);
+        return;
+      }
+
+      // Otherwise check localStorage
+      const validUser = getValidUser();
+      setUser(validUser);
+      setIsChecking(false);
+    };
+
+    checkSession();
+  }, [location]);
+
+  if (isChecking) {
+    // Show loading state while checking session
+    return <div>Loading...</div>;
+  }
+
   return user ? element : <LoginPage />;
 }
 
@@ -30,7 +62,6 @@ function RootRedirect() {
 }
 
 function App() {
-
   return (
     <Router>
       <Routes>
@@ -43,12 +74,17 @@ function App() {
         <Route path="/main" element={<ProtectedRoute element={<MainPage />} />} />
         <Route path="/create-post" element={<ProtectedRoute element={<CreatePost />} />} />
         <Route path="/profile" element={<ProtectedRoute element={<ProfileView />} />} />
+        <Route path="/profile-view/:userId" element={<ProtectedRoute element={<ProfileView />} />} />
         <Route path="/profile-edit" element={<ProtectedRoute element={<ProfileEdit />} />} />
+        <Route path="/friends" element={<ProtectedRoute element={<Friends />} />} />
+        <Route path="/friend-requests" element={<ProtectedRoute element={<FriendRequests />} />} />
+        <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
         <Route path="/lostfound" element={<LostFound />} />
         <Route path="/groups" element={<Groups />} />
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/jobs" element={<Jobs />} />
+        <Route path="/blocked-users" element={<BlockedUsers />} />
       </Routes>
     </Router>
   );

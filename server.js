@@ -45,6 +45,11 @@ function generateVerificationCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Normalize email to lowercase for case-insensitive auth and consistent DB storage
+function normalizeEmail(email) {
+  return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
 // Send verification email
 async function sendVerificationEmail(email, verificationCode, firstName) {
   const mailOptions = {
@@ -191,7 +196,9 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ message: 'Invalid user type' });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+
+    const existingUser = await prisma.user.findUnique({ where: { email: emailNormalized } });
 
     if (existingUser) {
       return res.status(409).json({ message: 'User with this email already exists' });
@@ -200,10 +207,10 @@ app.post('/api/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationCode = generateVerificationCode();
 
-    // Create user with PENDING verification status
+    // Create user with PENDING verification status (store email in lowercase)
     const user = await prisma.user.create({
       data: {
-        email,
+        email: emailNormalized,
         password: hashedPassword,
         firstName,
         lastName,
@@ -217,7 +224,7 @@ app.post('/api/register', async (req, res) => {
 
     // Send verification email
     try {
-      await sendVerificationEmail(email, verificationCode, firstName);
+      await sendVerificationEmail(emailNormalized, verificationCode, firstName);
       
       res.status(201).json({
         message: 'Account created successfully! Please check your email for the verification code.',
@@ -249,7 +256,10 @@ app.post('/api/resend-code', async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -262,20 +272,28 @@ app.post('/api/resend-code', async (req, res) => {
     // Generate new verification code
     const verificationCode = generateVerificationCode();
 
-    // Update user with new code and reset attempts
+    // Update user with new code and reset attempts (use id so casing doesn't matter)
     await prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: {
         verificationCode,
         verificationAttempts: 0
       }
     });
 
-    console.log(`New verification code generated for ${email}: ${verificationCode}`);
+    console.log(`New verification code generated for ${emailNormalized}: ${verificationCode}`);
+
+    // Optionally normalize stored email to lowercase
+    if (user.email !== emailNormalized) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { email: emailNormalized }
+      });
+    }
 
     // Send verification email
     try {
-      await sendVerificationEmail(email, verificationCode, user.firstName);
+      await sendVerificationEmail(emailNormalized, verificationCode, user.firstName);
       
       res.status(200).json({
         message: 'Verification code resent successfully! Please check your email.'
@@ -303,7 +321,10 @@ app.post('/api/verify', async (req, res) => {
       return res.status(400).json({ message: 'Email and verification code are required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -324,7 +345,7 @@ app.post('/api/verify', async (req, res) => {
     if (user.verificationCode !== verificationCode) {
       // Increment failed attempts
       const updatedUser = await prisma.user.update({
-        where: { email },
+        where: { id: user.id },
         data: { verificationAttempts: user.verificationAttempts + 1 }
       });
 
@@ -341,10 +362,11 @@ app.post('/api/verify', async (req, res) => {
       });
     }
 
-    // Update user to verified
+    // Update user to verified and normalize email to lowercase in DB
     const verifiedUser = await prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: {
+        email: emailNormalized,
         verificationStatus: 'VERIFIED',
         verificationCode: null,
         verificationAttempts: 0
@@ -373,7 +395,19 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
+
+    // Normalize stored email to lowercase when user logs in (one-time migration)
+    if (user && user.email !== emailNormalized) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { email: emailNormalized }
+      });
+      user.email = emailNormalized;
+    }
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
@@ -411,7 +445,10 @@ app.post('/api/request-reset', async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const emailNormalized = normalizeEmail(email);
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: 'insensitive' } }
+    });
 
     // Don't reveal if user exists or not for security
     if (!user) {
@@ -424,20 +461,28 @@ app.post('/api/request-reset', async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
 
-    // Store reset token in database
+    // Store reset token in database (use id)
     await prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: {
         resetToken,
         resetTokenExpiry
       }
     });
 
-    console.log(`Reset token generated for ${email}`);
+    console.log(`Reset token generated for ${emailNormalized}`);
+
+    // Normalize stored email to lowercase
+    if (user.email !== emailNormalized) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { email: emailNormalized }
+      });
+    }
 
     // Send reset email
     try {
-      await sendPasswordResetEmail(email, resetToken, user.firstName);
+      await sendPasswordResetEmail(emailNormalized, resetToken, user.firstName);
       
       res.status(200).json({ 
         message: 'If an account exists with this email, you will receive a reset link.' 

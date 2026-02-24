@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './Groups.css';
 import Header from './Header.js';
 import Footer from './Footer';
+import { getValidUser } from './sessionUtils';
 
 export default function Groups() {
   const navigate = useNavigate();
@@ -10,18 +11,18 @@ export default function Groups() {
   const [profilePicture, setProfilePicture] = useState(null);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all', 'my-groups', 'discover'
+  const [filter, setFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    category: 'academic',
-    privacy: 'public',
+    category: 'ACADEMIC',
+    privacy: 'PUBLIC',
     imageUrl: ''
   });
 
   useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('user') || 'null');
+    const userData = getValidUser();
     
     if (!userData) {
       navigate('/login');
@@ -92,19 +93,20 @@ export default function Groups() {
         })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         alert('Group created successfully!');
         setShowCreateModal(false);
         setFormData({
           name: '',
           description: '',
-          category: 'academic',
-          privacy: 'public',
+          category: 'ACADEMIC',
+          privacy: 'PUBLIC',
           imageUrl: ''
         });
         fetchGroups();
       } else {
-        const data = await response.json();
         alert(data.message || 'Failed to create group');
       }
     } catch (error) {
@@ -123,17 +125,80 @@ export default function Groups() {
         body: JSON.stringify({ userId: user.id })
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         alert('Successfully joined the group!');
         fetchGroups();
       } else {
-        const data = await response.json();
         alert(data.message || 'Failed to join group');
       }
     } catch (error) {
       console.error('Error joining group:', error);
       alert('An error occurred while joining the group');
     }
+  };
+
+  const handleLeaveGroup = async (groupId) => {
+    if (!window.confirm('Are you sure you want to leave this group?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/groups/${groupId}/leave`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: user.id })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('Successfully left the group!');
+        fetchGroups();
+      } else {
+        alert(data.message || 'Failed to leave group');
+      }
+    } catch (error) {
+      console.error('Error leaving group:', error);
+      alert('An error occurred while leaving the group');
+    }
+  };
+
+  const handleDeleteGroup = async (groupId) => {
+    if (!window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/groups/${groupId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: user.id })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('Group deleted successfully!');
+        fetchGroups();
+      } else {
+        alert(data.message || 'Failed to delete group');
+      }
+    } catch (error) {
+      console.error('Error deleting group:', error);
+      alert('An error occurred while deleting the group');
+    }
+  };
+
+  const formatCategory = (category) => {
+    return category.replace('_', ' ').toLowerCase().split(' ').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
   };
 
   const filteredGroups = groups.filter(group => {
@@ -206,18 +271,28 @@ export default function Groups() {
                   </div>
                 )}
                 
+                {user.id === group.creatorId && (
+                  <button 
+                    className="delete-group-button"
+                    onClick={() => handleDeleteGroup(group.id)}
+                    title="Delete this group"
+                  >
+                    🗑️
+                  </button>
+                )}
+                
                 <div className="group-content">
                   <div className="group-header-info">
                     <h3>{group.name}</h3>
-                    <span className={`privacy-badge ${group.privacy}`}>
-                      {group.privacy === 'public' ? '🌐 Public' : '🔒 Private'}
+                    <span className={`privacy-badge ${group.privacy.toLowerCase()}`}>
+                      {group.privacy === 'PUBLIC' ? '🌐 Public' : '🔒 Private'}
                     </span>
                   </div>
                   
                   <p className="group-description">{group.description}</p>
                   
                   <div className="group-meta">
-                    <span className="category-tag">{group.category}</span>
+                    <span className="category-tag">{formatCategory(group.category)}</span>
                     <span className="member-count">
                       👥 {group.memberCount || 0} members
                     </span>
@@ -225,18 +300,27 @@ export default function Groups() {
 
                   <div className="group-footer">
                     {group.members?.includes(user.id) ? (
-                      <button className="joined-button" disabled>
-                        ✓ Joined
-                      </button>
+                      <>
+                        <button className="joined-button" disabled>
+                          ✓ Joined
+                        </button>
+                        {group.creatorId !== user.id && (
+                          <button 
+                            className="leave-button"
+                            onClick={() => handleLeaveGroup(group.id)}
+                          >
+                            Leave
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <button 
                         className="join-button"
                         onClick={() => handleJoinGroup(group.id)}
                       >
-                        Join Group
+                        {group.privacy === 'PRIVATE' ? 'Request to Join' : 'Join Group'}
                       </button>
                     )}
-                    <button className="view-button">View</button>
                   </div>
                 </div>
               </div>
@@ -245,7 +329,6 @@ export default function Groups() {
         </div>
       </div>
 
-      {/* Create Group Modal */}
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -291,13 +374,13 @@ export default function Groups() {
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   required
                 >
-                  <option value="academic">Academic</option>
-                  <option value="sports">Sports & Recreation</option>
-                  <option value="arts">Arts & Culture</option>
-                  <option value="social">Social</option>
-                  <option value="professional">Professional</option>
-                  <option value="volunteer">Volunteer & Service</option>
-                  <option value="other">Other</option>
+                  <option value="ACADEMIC">Academic</option>
+                  <option value="SPORTS">Sports & Recreation</option>
+                  <option value="ARTS">Arts & Culture</option>
+                  <option value="SOCIAL">Social</option>
+                  <option value="PROFESSIONAL">Professional</option>
+                  <option value="VOLUNTEER">Volunteer & Service</option>
+                  <option value="OTHER">Other</option>
                 </select>
               </div>
 
@@ -306,16 +389,16 @@ export default function Groups() {
                 <div className="privacy-selector">
                   <button
                     type="button"
-                    className={`privacy-option ${formData.privacy === 'public' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, privacy: 'public' })}
+                    className={`privacy-option ${formData.privacy === 'PUBLIC' ? 'selected' : ''}`}
+                    onClick={() => setFormData({ ...formData, privacy: 'PUBLIC' })}
                   >
                     🌐 Public
                     <span className="privacy-desc">Anyone can join</span>
                   </button>
                   <button
                     type="button"
-                    className={`privacy-option ${formData.privacy === 'private' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, privacy: 'private' })}
+                    className={`privacy-option ${formData.privacy === 'PRIVATE' ? 'selected' : ''}`}
+                    onClick={() => setFormData({ ...formData, privacy: 'PRIVATE' })}
                   >
                     🔒 Private
                     <span className="privacy-desc">Requires approval</span>

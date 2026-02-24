@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './verificationPage.css';
+import { setSession } from './sessionUtils';
 
 function VerificationPage() {
   const [code, setCode] = useState(['', '', '', '', '', '']);
@@ -84,8 +85,12 @@ function VerificationPage() {
 
       if (response.ok) {
         setSuccess(data.message);
+        // Set session before navigating
+        if (data.user) {
+          setSession(data.user);
+        }
         setTimeout(() => {
-          navigate('/main', { state: { user: data.user } }); // Changed to /main and pass user data
+          navigate('/main', { state: { user: data.user }, replace: true }); // Changed to /main and pass user data
         }, 2000);
       } else {
         setError(data.message || 'Verification failed');

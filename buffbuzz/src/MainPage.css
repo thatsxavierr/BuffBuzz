@@ -21,8 +21,16 @@
   margin-right: auto;
 }
 
+/* Single column for button + posts so their widths match */
+.main-content-feed {
+  width: 100%;
+  max-width: 614px;
+  margin: 0 auto;
+}
+
 .create-post-button {
   width: 100%;
+  margin-bottom: 24px;
   padding: 12px 24px;
   background-color: #800000;
   color: white;
@@ -32,7 +40,6 @@
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s;
-  margin-bottom: 24px;
 }
 
 .create-post-button:hover {
@@ -68,23 +75,6 @@
   margin: 0;
   color: #6b7280;
   font-size: 16px;
-}
-
-.create-post-button {
-  padding: 12px 24px;
-  background-color: #800000;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  margin-bottom: 24px;
-}
-
-.create-post-button:hover {
-  background-color: #600000;
 }
 
 .right-sidebar {

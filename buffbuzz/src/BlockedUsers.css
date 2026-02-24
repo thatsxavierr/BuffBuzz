@@ -1,0 +1,164 @@
+.blocked-users-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    min-height: calc(100vh - 120px);
+    background-color: #f9fafb;
+  }
+  
+  .blocked-users-header {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #800000;
+  }
+  
+  .blocked-users-header h1 {
+    color: #800000;
+    margin: 0 0 10px 0;
+    font-size: 32px;
+    font-weight: 600;
+  }
+  
+  .blocked-count {
+    color: #6b7280;
+    font-size: 14px;
+    margin: 0;
+  }
+  
+  .no-blocked {
+    text-align: center;
+    padding: 60px 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .no-blocked p {
+    color: #6b7280;
+    font-size: 18px;
+    margin-bottom: 20px;
+  }
+  
+  .back-button {
+    padding: 12px 24px;
+    background-color: #800000;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .back-button:hover {
+    background-color: #800000;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(128, 0, 0, 0.3);
+  }
+  
+  .blocked-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .blocked-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    transition: box-shadow 0.2s;
+  }
+  
+  .blocked-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  .blocked-profile-pic {
+    flex-shrink: 0;
+  }
+  
+  .blocked-profile-pic img {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  
+  .profile-placeholder {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: #800000;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+  }
+  
+  .blocked-info {
+    flex: 1;
+  }
+  
+  .blocked-info h3 {
+    margin: 0 0 5px 0;
+    color: #1f2937;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  
+  .blocked-email {
+    margin: 0;
+    color: #6b7280;
+    font-size: 14px;
+  }
+  
+  .unblock-button {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .unblock-button:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+  }
+  
+  .loading,
+  .error {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6b7280;
+    font-size: 18px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .error {
+    color: #800000;
+  }
+  
+  @media (max-width: 768px) {
+    .blocked-card {
+      flex-direction: column;
+      text-align: center;
+    }
+  
+    .unblock-button {
+      width: 100%;
+    }
+  }
