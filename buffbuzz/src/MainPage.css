@@ -78,9 +78,6 @@
 }
 
 .right-sidebar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
+  flex-shrink: 0;
   z-index: 10;
 }

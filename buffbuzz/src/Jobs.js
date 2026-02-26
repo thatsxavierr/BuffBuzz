@@ -23,7 +23,8 @@ export default function Jobs() {
     description: '',
     requirements: '',
     salary: '',
-    applicationLink: ''
+    applicationLink: '',
+    applicationDeadline: ''
   });
 
   useEffect(() => {
@@ -85,9 +86,15 @@ export default function Jobs() {
       formData.requirements?.trim() ||
       formData.salary?.trim() ||
       formData.applicationLink?.trim() ||
+      formData.applicationDeadline?.trim() ||
       formData.jobType !== 'FULL_TIME' ||
       formData.category !== 'INTERNSHIP'
     );
+  };
+
+  const isJobExpired = (job) => {
+    if (job.isExpired !== undefined) return job.isExpired;
+    return job.applicationDeadline && new Date(job.applicationDeadline) < new Date();
   };
 
   const handleCloseCreateModal = () => {
@@ -105,7 +112,8 @@ export default function Jobs() {
       description: '',
       requirements: '',
       salary: '',
-      applicationLink: ''
+      applicationLink: '',
+      applicationDeadline: ''
     });
   };
 
@@ -119,7 +127,8 @@ export default function Jobs() {
       description: job.description || '',
       requirements: job.requirements || '',
       salary: job.salary || '',
-      applicationLink: job.applicationLink || ''
+      applicationLink: job.applicationLink || '',
+      applicationDeadline: job.applicationDeadline ? job.applicationDeadline.slice(0, 10) : ''
     });
     setEditingJobId(job.id);
     setShowCreateModal(true);
@@ -137,11 +146,17 @@ export default function Jobs() {
           },
           body: JSON.stringify({
             ...formData,
+            applicationDeadline: formData.applicationDeadline?.trim() || null,
             userId: user.id
           })
         });
 
-        const data = await response.json();
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (_) {
+          // Server may have returned non-JSON (e.g. HTML error page)
+        }
 
         if (response.ok) {
           alert('Job updated successfully!');
@@ -156,11 +171,12 @@ export default function Jobs() {
             description: '',
             requirements: '',
             salary: '',
-            applicationLink: ''
+            applicationLink: '',
+            applicationDeadline: ''
           });
           fetchJobs(filter === 'all' ? null : filter);
         } else {
-          alert(data.message || 'Failed to update job');
+          alert(data.message || `Failed to update job (${response.status})`);
         }
       } else {
         const response = await fetch('http://localhost:5000/api/jobs/create', {
@@ -170,6 +186,7 @@ export default function Jobs() {
           },
           body: JSON.stringify({
             ...formData,
+            applicationDeadline: formData.applicationDeadline?.trim() || null,
             posterId: user.id
           })
         });
@@ -188,7 +205,8 @@ export default function Jobs() {
             description: '',
             requirements: '',
             salary: '',
-            applicationLink: ''
+            applicationLink: '',
+            applicationDeadline: ''
           });
           fetchJobs();
         } else {
@@ -197,11 +215,16 @@ export default function Jobs() {
       }
     } catch (error) {
       console.error('Error saving job:', error);
-      alert('An error occurred while saving the job');
+      const msg = error.message || 'An error occurred while saving the job';
+      alert(msg.includes('fetch') || msg.includes('Network') ? 'Could not reach the server. Is the backend running on port 5000?' : 'An error occurred while saving the job');
     }
   };
 
   const handleApply = (job) => {
+    if (isJobExpired(job)) {
+      alert('This job posting has expired. Applications are no longer accepted.');
+      return;
+    }
     if (job.applicationLink) {
       window.open(job.applicationLink, '_blank');
     } else {
@@ -340,6 +363,9 @@ export default function Jobs() {
                     <p className="company-name">{job.company}</p>
                   </div>
                   <div className="job-header-right">
+                    {isJobExpired(job) && (
+                      <span className="job-expired-badge">Expired</span>
+                    )}
                     <span className={`job-type-badge ${job.jobType.toLowerCase()}`}>
                       {getTypeIcon(job.jobType)} {formatJobType(job.jobType)}
                     </span>
@@ -384,12 +410,17 @@ export default function Jobs() {
                 <div className="job-footer">
                   <span className="posted-date">
                     Posted {new Date(job.createdAt).toLocaleDateString()}
+                    {job.applicationDeadline && (
+                      <> · Deadline: {new Date(job.applicationDeadline).toLocaleDateString()}</>
+                    )}
                   </span>
                   <button 
-                    className="apply-button"
+                    className={`apply-button ${isJobExpired(job) ? 'apply-button-disabled' : ''}`}
                     onClick={() => handleApply(job)}
+                    disabled={isJobExpired(job)}
+                    title={isJobExpired(job) ? 'Applications closed' : 'Apply for this job'}
                   >
-                    Apply Now
+                    {isJobExpired(job) ? 'Applications closed' : 'Apply Now'}
                   </button>
                 </div>
               </div>
@@ -530,6 +561,17 @@ export default function Jobs() {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="applicationDeadline">Application deadline (optional)</label>
+                <input
+                  type="date"
+                  id="applicationDeadline"
+                  value={formData.applicationDeadline}
+                  onChange={(e) => setFormData({ ...formData, applicationDeadline: e.target.value })}
+                />
+                <span className="form-hint">After this date, the job will show as expired and users cannot apply.</span>
               </div>
 
               <div className="modal-actions">

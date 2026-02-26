@@ -14,11 +14,9 @@ export default function CreatePost() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Get user from localStorage
     const userData = JSON.parse(localStorage.getItem('user') || 'null');
     
     if (!userData) {
-      // Redirect to login if not logged in
       navigate('/login');
     } else {
       setUser(userData);
@@ -29,7 +27,6 @@ export default function CreatePost() {
   const fetchProfilePicture = async (userId) => {
     try {
       const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
-      
       if (response.ok) {
         const data = await response.json();
         if (data.profile?.profilePictureUrl) {
@@ -59,6 +56,24 @@ export default function CreatePost() {
     navigate('/main');
   };
 
+  const processFiles = (files, e) => {
+    const maxImages = 5;
+    const remaining = maxImages - imagePreviews.length;
+    const toAdd = files.slice(0, remaining);
+    if (toAdd.length < files.length) {
+      alert(`Maximum ${maxImages} images per post. ${files.length - toAdd.length} image(s) not added.`);
+    }
+    const readers = toAdd.map(file => new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    }));
+    Promise.all(readers).then(results => {
+      setImagePreviews(prev => [...prev, ...results].slice(0, maxImages));
+    });
+    if (e) e.target.value = '';
+  };
+
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -71,28 +86,22 @@ export default function CreatePost() {
       return;
     }
 
-    const maxImages = 5;
-    const remaining = maxImages - imagePreviews.length;
-    const toAdd = validFiles.slice(0, remaining);
-    if (toAdd.length < validFiles.length) {
-      alert(`Maximum ${maxImages} images per post. ${validFiles.length - toAdd.length} image(s) not added.`);
+    const MAX_SIZE_MB = 5;
+    const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+    const oversizedFiles = validFiles.filter(f => f.size > MAX_SIZE_BYTES);
+    if (oversizedFiles.length > 0) {
+      const names = oversizedFiles.map(f => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join(', ');
+      alert(`The following image(s) exceed the ${MAX_SIZE_MB}MB limit and were not added:\n${names}`);
+      const sizeValidFiles = validFiles.filter(f => f.size <= MAX_SIZE_BYTES);
+      if (sizeValidFiles.length === 0) {
+        e.target.value = '';
+        return;
+      }
+      processFiles(sizeValidFiles, e);
+      return;
     }
 
-    const readers = toAdd.map(file => {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(file);
-      });
-    });
-
-    Promise.all(readers).then(results => {
-      setImagePreviews(prev => {
-        const combined = [...prev, ...results];
-        return combined.slice(0, maxImages);
-      });
-    });
-    e.target.value = '';
+    processFiles(validFiles, e);
   };
 
   const handleRemoveImage = (index) => {
@@ -190,7 +199,8 @@ export default function CreatePost() {
                 />
                 <label htmlFor="image" className="image-upload-label">
                   <span className="upload-icon">📷</span>
-                  <span>Click to upload images (multiple allowed)</span>
+                  <span className="upload-main-text">Click to upload images (multiple allowed)</span>
+                  <span className="upload-sub-text">Max 5 images · 5MB per image · JPEG, PNG, GIF, WebP</span>
                 </label>
               </div>
               {imagePreviews.length > 0 && (

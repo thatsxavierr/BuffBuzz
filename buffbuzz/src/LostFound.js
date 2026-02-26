@@ -14,6 +14,7 @@ export default function LostFound() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [detailItem, setDetailItem] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -121,19 +122,29 @@ export default function LostFound() {
   };
 
   const MAX_IMAGES = 5;
+  const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB per image
+  const MAX_IMAGE_SIZE_MB = 5;
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    const validFiles = files.filter(f => allowedTypes.includes(f.type));
-    if (validFiles.length !== files.length) {
+    const validTypes = files.filter(f => allowedTypes.includes(f.type));
+    if (validTypes.length !== files.length) {
       alert('Only image files are accepted (JPEG, PNG, GIF, WebP).');
       e.target.value = '';
       return;
     }
 
+    const overSize = validTypes.filter(f => f.size > MAX_IMAGE_SIZE_BYTES);
+    if (overSize.length > 0) {
+      alert(`Each image must be ${MAX_IMAGE_SIZE_MB}MB or smaller. ${overSize.length} image(s) were not added because they exceed the size limit.`);
+      e.target.value = '';
+      return;
+    }
+
+    const validFiles = validTypes;
     const current = formData.imageUrls || [];
     const remaining = MAX_IMAGES - current.length;
     const toAdd = validFiles.slice(0, remaining);
@@ -182,7 +193,10 @@ export default function LostFound() {
           })
         });
 
-        const data = await response.json();
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (_) {}
 
         if (response.ok) {
           alert('Item updated successfully!');
@@ -199,7 +213,7 @@ export default function LostFound() {
           });
           fetchItems(filter === 'all' ? null : filter);
         } else {
-          alert(data.message || 'Failed to update item');
+          alert(data.message || `Failed to update item (${response.status})`);
         }
       } else {
         const response = await fetch('http://localhost:5000/api/lostfound/create', {
@@ -284,6 +298,28 @@ export default function LostFound() {
     });
   };
 
+  const handleMarkResolved = async (itemId, resolved) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/lostfound/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, resolved })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        fetchItems(filter === 'all' ? null : filter);
+        if (detailItem?.id === itemId) {
+          setDetailItem(prev => ({ ...prev, resolved }));
+        }
+      } else {
+        alert(data.message || 'Failed to update item');
+      }
+    } catch (error) {
+      console.error('Error updating resolved status:', error);
+      alert('An error occurred while updating the item');
+    }
+  };
+
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
     setLoading(true);
@@ -343,72 +379,87 @@ export default function LostFound() {
               <p>Be the first to post a lost or found item!</p>
             </div>
           ) : (
-            items.map(item => (
-              <div key={item.id} className="item-card">
-                <div className={`item-badge ${item.category.toLowerCase()}`}>
-                  {item.category === 'LOST' ? '🔍 Lost' : '✨ Found'}
-                </div>
-                
-                {user.id === item.userId && (
-                  <div className="item-owner-actions">
-                    <button 
-                      className="edit-item-button"
-                      onClick={() => handleEditItem(item)}
-                      title="Edit this item"
-                    >
-                      ✏️
-                    </button>
-                    <button 
-                      className="delete-item-button"
-                      onClick={() => handleDeleteItem(item.id)}
-                      title="Delete this item"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                )}
-                
-                {(item.imageUrls?.length > 0 || item.imageUrl) && (
-                  <ImageCarousel
-                    images={item.imageUrls?.length > 0 ? item.imageUrls : [item.imageUrl]}
-                    alt={item.title}
-                    className="item-image"
-                  />
-                )}
-                
-                <div className="item-content">
-                  <h3>{item.title}</h3>
-                  <p className="item-description">{item.description}</p>
-                  
-                  <div className="item-details">
-                    {item.location && (
-                      <div className="detail-item">
-                        <span className="detail-icon">📍</span>
-                        <span>{item.location}</span>
-                      </div>
-                    )}
-                    {item.date && (
-                      <div className="detail-item">
-                        <span className="detail-icon">📅</span>
-                        <span>{new Date(item.date).toLocaleDateString()}</span>
-                      </div>
+            items.map(item => {
+              const images = item.imageUrls?.length > 0 ? item.imageUrls : (item.imageUrl ? [item.imageUrl] : []);
+              return (
+                <div
+                  key={item.id}
+                  className="item-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailItem(item)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailItem(item); } }}
+                >
+                  <div className="item-card-badges">
+                    <div className={`item-badge ${item.category.toLowerCase()}`}>
+                      {item.category === 'LOST' ? '🔍 Lost' : '✨ Found'}
+                    </div>
+                    {item.resolved && (
+                      <span className="item-resolved-badge">✓ Resolved</span>
                     )}
                   </div>
-
-                  <div className="item-footer">
-                    <span className="posted-by">Posted by {item.userName || 'Anonymous'}</span>
-                    {item.userId !== user.id && (
+                  {user.id === item.userId && (
+                    <div className="item-owner-actions" onClick={(e) => e.stopPropagation()}>
                       <button 
-                        className="contact-button"
-                        onClick={() => handleContactPoster(item)}
+                        className="edit-item-button"
+                        onClick={() => handleEditItem(item)}
+                        title="Edit this item"
                       >
-                        Contact
+                        ✏️
                       </button>
-                    )}
+                      <button 
+                        className="delete-item-button"
+                        onClick={() => handleDeleteItem(item.id)}
+                        title="Delete this item"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  )}
+                  {images.length > 0 ? (
+                    <ImageCarousel
+                      images={images}
+                      alt={item.title}
+                      className="item-image"
+                    />
+                  ) : (
+                    <div className="item-image-placeholder">
+                      <span className="placeholder-icon">📷</span>
+                    </div>
+                  )}
+                  <div className="item-content">
+                    <h3>{item.title}</h3>
+                    <p className="item-description">{item.description}</p>
+                    <div className="item-details">
+                      {item.location && (
+                        <div className="detail-item">
+                          <span className="detail-icon">📍</span>
+                          <span>{item.location}</span>
+                        </div>
+                      )}
+                      {item.date && (
+                        <div className="detail-item">
+                          <span className="detail-icon">📅</span>
+                          <span>{new Date(item.date).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="item-footer">
+                      <span className="posted-by">Posted by {item.userName || 'Anonymous'}</span>
+                      {item.userId !== user.id && (
+                        <button 
+                          type="button"
+                          className="contact-button"
+                          onClick={(e) => { e.stopPropagation(); handleContactPoster(item); }}
+                        >
+                          Contact
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -510,6 +561,7 @@ export default function LostFound() {
 
               <div className="form-group">
                 <label htmlFor="image">Add Images (Optional, up to 5)</label>
+                <p className="image-size-hint">Each image must be 5MB or smaller.</p>
                 <input
                   type="file"
                   id="image"
@@ -550,6 +602,90 @@ export default function LostFound() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {detailItem && (
+        <div className="detail-modal-overlay" onClick={() => setDetailItem(null)}>
+          <div className="detail-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="detail-modal-close" onClick={() => setDetailItem(null)} aria-label="Close">×</button>
+            <div className="detail-modal-badges">
+              <div className={`detail-modal-badge ${detailItem.category?.toLowerCase()}`}>
+                {detailItem.category === 'LOST' ? '🔍 Lost' : '✨ Found'}
+              </div>
+              {detailItem.resolved && (
+                <span className="detail-resolved-badge">✓ Resolved</span>
+              )}
+            </div>
+            <div className="detail-modal-carousel">
+              {(detailItem.imageUrls?.length > 0 || detailItem.imageUrl) ? (
+                <ImageCarousel
+                  images={detailItem.imageUrls?.length > 0 ? detailItem.imageUrls : [detailItem.imageUrl]}
+                  alt={detailItem.title}
+                  className="detail-carousel"
+                />
+              ) : (
+                <div className="detail-modal-image-placeholder">
+                  <span className="placeholder-icon">📷</span>
+                </div>
+              )}
+            </div>
+            <div className="detail-modal-info">
+              <h2 className="detail-modal-title">{detailItem.title}</h2>
+              <p className="detail-modal-description">{detailItem.description}</p>
+              {detailItem.location && (
+                <p className="detail-modal-meta-item"><span className="detail-icon">📍</span> {detailItem.location}</p>
+              )}
+              {detailItem.date && (
+                <p className="detail-modal-meta-item"><span className="detail-icon">📅</span> {new Date(detailItem.date).toLocaleDateString()}</p>
+              )}
+              {detailItem.contactInfo && (
+                <p className="detail-modal-contact-info">Contact: {detailItem.contactInfo}</p>
+              )}
+              {detailItem.userId === user.id && (
+                <div className="detail-modal-resolve-actions">
+                  {detailItem.resolved ? (
+                    <button
+                      type="button"
+                      className="mark-active-button"
+                      onClick={() => handleMarkResolved(detailItem.id, false)}
+                    >
+                      Mark as active again
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mark-resolved-button"
+                      onClick={() => handleMarkResolved(detailItem.id, true)}
+                    >
+                      Mark as resolved
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="detail-modal-poster">
+                <span className="detail-posted-by">Posted by {detailItem.userName || 'Anonymous'}</span>
+                {detailItem.userId && (
+                  <button
+                    type="button"
+                    className="detail-view-profile-btn"
+                    onClick={() => { setDetailItem(null); navigate(`/profile-view/${detailItem.userId}`); }}
+                  >
+                    View poster profile
+                  </button>
+                )}
+                {detailItem.userId && detailItem.userId !== user.id && (
+                  <button
+                    type="button"
+                    className="contact-button"
+                    onClick={() => { setDetailItem(null); handleContactPoster(detailItem); }}
+                  >
+                    Contact
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

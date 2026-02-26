@@ -1980,6 +1980,7 @@ app.post('/api/jobs/create', async (req, res) => {
       requirements,
       salary,
       applicationLink,
+      applicationDeadline,
       posterId
     } = req.body;
 
@@ -1998,6 +1999,7 @@ app.post('/api/jobs/create', async (req, res) => {
         requirements,
         salary: salary || null,
         applicationLink,
+        applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
         posterId
       },
       include: {
@@ -2047,7 +2049,13 @@ app.get('/api/jobs', async (req, res) => {
       }
     });
 
-    res.status(200).json({ jobs });
+    const now = new Date();
+    const jobsWithExpired = jobs.map(j => ({
+      ...j,
+      isExpired: j.applicationDeadline != null && new Date(j.applicationDeadline) < now
+    }));
+
+    res.status(200).json({ jobs: jobsWithExpired });
 
   } catch (error) {
     console.error('Get jobs error:', error);
@@ -2078,11 +2086,84 @@ app.get('/api/jobs/:jobId', async (req, res) => {
       return res.status(404).json({ message: 'Job not found' });
     }
 
-    res.status(200).json({ job });
+    const isExpired = job.applicationDeadline != null && new Date(job.applicationDeadline) < new Date();
+    res.status(200).json({ job: { ...job, isExpired } });
 
   } catch (error) {
     console.error('Get job error:', error);
     res.status(500).json({ message: 'An error occurred while fetching the job' });
+  }
+});
+
+// Update a job
+app.put('/api/jobs/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const {
+      title,
+      company,
+      location,
+      jobType,
+      category,
+      description,
+      requirements,
+      salary,
+      applicationLink,
+      applicationDeadline,
+      userId
+    } = req.body;
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId }
+    });
+
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
+    if (job.posterId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to update this job' });
+    }
+
+    // Parse application deadline only if it's a valid date string
+    let deadlineValue = null;
+    if (applicationDeadline !== undefined && applicationDeadline !== null && String(applicationDeadline).trim() !== '') {
+      const d = new Date(applicationDeadline);
+      if (!isNaN(d.getTime())) deadlineValue = d;
+    }
+
+    const updated = await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        ...(title != null && { title }),
+        ...(company != null && { company }),
+        ...(location != null && { location }),
+        ...(jobType != null && { jobType }),
+        ...(category != null && { category }),
+        ...(description != null && { description }),
+        ...(requirements != null && { requirements }),
+        ...(salary !== undefined && { salary: salary || null }),
+        ...(applicationLink != null && { applicationLink }),
+        ...(applicationDeadline !== undefined && { applicationDeadline: deadlineValue })
+      },
+      include: {
+        poster: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    const isExpired = updated.applicationDeadline != null && new Date(updated.applicationDeadline) < new Date();
+    res.status(200).json({ message: 'Job updated successfully', job: { ...updated, isExpired } });
+  } catch (error) {
+    console.error('Update job error:', error);
+    const message = error.code === 'P2025' ? 'Job not found' : (error.meta?.cause || error.message || 'An error occurred while updating the job');
+    res.status(500).json({ message });
   }
 });
 
@@ -2267,6 +2348,67 @@ app.get('/api/marketplace/:itemId', async (req, res) => {
   }
 });
 
+// Update a marketplace item (seller only)
+app.put('/api/marketplace/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const {
+      title,
+      description,
+      price,
+      category,
+      condition,
+      imageUrl,
+      imageUrls,
+      userId
+    } = req.body;
+
+    const item = await prisma.marketplaceItem.findUnique({
+      where: { id: itemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sellerId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to update this item' });
+    }
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (price !== undefined) updateData.price = parseFloat(price);
+    if (category !== undefined) updateData.category = category;
+    if (condition !== undefined) updateData.condition = condition;
+    if (imageUrls !== undefined || imageUrl !== undefined) {
+      const urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
+      const filtered = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+      updateData.imageUrl = filtered.length > 0 ? JSON.stringify(filtered) : null;
+    }
+
+    const updated = await prisma.marketplaceItem.update({
+      where: { id: itemId },
+      data: updateData,
+      include: {
+        seller: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    const itemWithUrls = { ...updated, imageUrls: getImageUrlsFromItem(updated), sellerName: `${updated.seller.firstName} ${updated.seller.lastName}` };
+    res.status(200).json({ message: 'Item updated successfully', item: itemWithUrls });
+  } catch (error) {
+    console.error('Update marketplace item error:', error);
+    res.status(500).json({ message: error.message || 'An error occurred while updating the item' });
+  }
+});
+
 // Delete a marketplace item
 app.delete('/api/marketplace/:itemId', async (req, res) => {
   try {
@@ -2426,6 +2568,74 @@ app.get('/api/lostfound/:itemId', async (req, res) => {
   } catch (error) {
     console.error('Get lost/found item error:', error);
     res.status(500).json({ message: 'An error occurred while fetching the item' });
+  }
+});
+
+// Update a lost/found item (edit or mark resolved) – poster only
+app.put('/api/lostfound/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const {
+      title,
+      description,
+      category,
+      location,
+      date,
+      contactInfo,
+      imageUrl,
+      imageUrls,
+      resolved,
+      userId
+    } = req.body;
+
+    const item = await prisma.lostFoundItem.findUnique({
+      where: { id: itemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.userId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to update this item' });
+    }
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (category !== undefined) updateData.category = category;
+    if (location !== undefined) updateData.location = location;
+    if (date !== undefined && date !== null && String(date).trim() !== '') {
+      const d = new Date(date);
+      if (!isNaN(d.getTime())) updateData.date = d;
+    }
+    if (contactInfo !== undefined) updateData.contactInfo = contactInfo;
+    if (resolved !== undefined) updateData.resolved = !!resolved;
+    if (imageUrls !== undefined || imageUrl !== undefined) {
+      const urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
+      const filtered = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+      updateData.imageUrl = filtered.length > 0 ? JSON.stringify(filtered) : null;
+    }
+
+    const updated = await prisma.lostFoundItem.update({
+      where: { id: itemId },
+      data: updateData,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    const itemWithUrls = { ...updated, imageUrls: getImageUrlsFromItem(updated), userName: `${updated.user.firstName} ${updated.user.lastName}` };
+    res.status(200).json({ message: 'Item updated successfully', item: itemWithUrls });
+  } catch (error) {
+    console.error('Update lost/found item error:', error);
+    res.status(500).json({ message: 'An error occurred while updating the item' });
   }
 });
 

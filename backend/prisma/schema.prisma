@@ -237,22 +237,23 @@ enum JobCategory {
 }
 
 model Job {
-  id              String      @id @default(uuid())
-  title           String
-  company         String
-  location        String
-  jobType         JobType
-  category        JobCategory
-  description     String      @db.Text
-  requirements    String      @db.Text
-  salary          String?
-  applicationLink String
-  
-  posterId        String
-  poster          User        @relation(fields: [posterId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                   String      @id @default(uuid())
+  title                String
+  company              String
+  location             String
+  jobType              JobType
+  category             JobCategory
+  description          String      @db.Text
+  requirements         String      @db.Text
+  salary               String?
+  applicationLink      String
+  applicationDeadline  DateTime?   // After this date, job is considered expired; no new applications
+
+  posterId             String
+  poster               User        @relation(fields: [posterId], references: [id], onDelete: Cascade)
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   @@map("jobs")
   @@index([posterId])
@@ -312,10 +313,11 @@ model LostFoundItem {
   date        DateTime
   contactInfo String
   imageUrl    String?             @db.Text
-  
+  resolved    Boolean             @default(false)  // Poster can mark as resolved so others know item is recovered
+
   userId      String
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 

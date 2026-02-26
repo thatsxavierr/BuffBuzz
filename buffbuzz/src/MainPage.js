@@ -61,6 +61,7 @@ export default function MainPage() {
         <LeftSidebar />
         
         <div className="main-content">
+          <div className="main-content-feed">
           <button 
             onClick={() => navigate('/create-post')} 
             className="create-post-button"
@@ -89,6 +90,7 @@ export default function MainPage() {
                 />
               ))
             )}
+          </div>
           </div>
         </div>
         

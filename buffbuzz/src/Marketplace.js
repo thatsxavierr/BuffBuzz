@@ -14,6 +14,7 @@ export default function Marketplace() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [detailItem, setDetailItem] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -116,19 +117,29 @@ export default function Marketplace() {
   };
 
   const MAX_IMAGES = 5;
+  const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB per image
+  const MAX_IMAGE_SIZE_MB = 5;
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    const validFiles = files.filter(f => allowedTypes.includes(f.type));
-    if (validFiles.length !== files.length) {
+    const validTypes = files.filter(f => allowedTypes.includes(f.type));
+    if (validTypes.length !== files.length) {
       alert('Only image files are accepted (JPEG, PNG, GIF, WebP).');
       e.target.value = '';
       return;
     }
 
+    const overSize = validTypes.filter(f => f.size > MAX_IMAGE_SIZE_BYTES);
+    if (overSize.length > 0) {
+      alert(`Each image must be ${MAX_IMAGE_SIZE_MB}MB or smaller. ${overSize.length} image(s) were not added because they exceed the size limit.`);
+      e.target.value = '';
+      return;
+    }
+
+    const validFiles = validTypes;
     const current = formData.imageUrls || [];
     const remaining = MAX_IMAGES - current.length;
     const toAdd = validFiles.slice(0, remaining);
@@ -177,7 +188,10 @@ export default function Marketplace() {
           })
         });
 
-        const data = await response.json();
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (_) {}
 
         if (response.ok) {
           alert('Item updated successfully!');
@@ -193,7 +207,7 @@ export default function Marketplace() {
           });
           fetchItems(filter === 'all' ? null : filter);
         } else {
-          alert(data.message || 'Failed to update item');
+          alert(data.message || `Failed to update item (${response.status})`);
         }
       } else {
         const response = await fetch('http://localhost:5000/api/marketplace/create', {
@@ -364,68 +378,74 @@ export default function Marketplace() {
               <p>Be the first to list an item!</p>
             </div>
           ) : (
-            items.map(item => (
-              <div key={item.id} className="marketplace-card">
-                {(item.imageUrls?.length > 0 || item.imageUrl) ? (
-                  <ImageCarousel
-                    images={item.imageUrls?.length > 0 ? item.imageUrls : [item.imageUrl]}
-                    alt={item.title}
-                    className="marketplace-image"
-                  />
-                ) : (
-                  <div className="marketplace-image-placeholder">
-                    <span className="placeholder-icon">📦</span>
-                  </div>
-                )}
-                
-                {user.id === item.sellerId && (
-                  <div className="item-owner-actions">
-                    <button 
-                      className="edit-item-button"
-                      onClick={() => handleEditItem(item)}
-                      title="Edit this listing"
-                    >
-                      ✏️
-                    </button>
-                    <button 
-                      className="delete-item-button"
-                      onClick={() => handleDeleteItem(item.id)}
-                      title="Delete this listing"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                )}
-                
-                <div className="marketplace-content">
-                  <div className="item-header">
-                    <h3>{item.title}</h3>
-                    <span className="price">${parseFloat(item.price).toFixed(2)}</span>
-                  </div>
-                  
-                  <p className="item-description">{item.description}</p>
-                  
-                  <div className="item-meta">
-                    <span className={`condition-badge ${item.condition.toLowerCase().replace('_', '-')}`}>
-                      {formatCondition(item.condition)}
-                    </span>
-                    <span className="category-tag">{formatCategory(item.category)}</span>
-                  </div>
-
-                  <div className="item-footer">
-                    <span className="seller-info">Sold by {item.sellerName || 'Anonymous'}</span>
-                    {item.sellerId !== user.id && (
+            items.map(item => {
+              const images = item.imageUrls?.length > 0 ? item.imageUrls : (item.imageUrl ? [item.imageUrl] : []);
+              return (
+                <div
+                  key={item.id}
+                  className="marketplace-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailItem(item)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailItem(item); } }}
+                >
+                  {images.length > 0 ? (
+                    <ImageCarousel
+                      images={images}
+                      alt={item.title}
+                      className="marketplace-image"
+                    />
+                  ) : (
+                    <div className="marketplace-image-placeholder">
+                      <span className="placeholder-icon">📦</span>
+                    </div>
+                  )}
+                  {user.id === item.sellerId && (
+                    <div className="item-owner-actions" onClick={(e) => e.stopPropagation()}>
                       <button 
-                        className="message-button"
-                        onClick={() => handleMessageSeller(item)}
+                        className="edit-item-button"
+                        onClick={() => handleEditItem(item)}
+                        title="Edit this listing"
                       >
-                        Message
+                        ✏️
                       </button>
-                    )}
+                      <button 
+                        className="delete-item-button"
+                        onClick={() => handleDeleteItem(item.id)}
+                        title="Delete this listing"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  )}
+                  <div className="marketplace-content">
+                    <div className="item-header">
+                      <h3>{item.title}</h3>
+                      <span className="price">${parseFloat(item.price).toFixed(2)}</span>
+                    </div>
+                    <p className="item-description">{item.description}</p>
+                    <div className="item-meta">
+                      <span className={`condition-badge ${item.condition.toLowerCase().replace('_', '-')}`}>
+                        {formatCondition(item.condition)}
+                      </span>
+                      <span className="category-tag">{formatCategory(item.category)}</span>
+                    </div>
+                    <div className="item-footer">
+                      <span className="seller-info">Sold by {item.sellerName || 'Anonymous'}</span>
+                      {item.sellerId !== user.id && (
+                        <button 
+                          type="button"
+                          className="message-button"
+                          onClick={(e) => { e.stopPropagation(); handleMessageSeller(item); }}
+                        >
+                          Message
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -537,6 +557,7 @@ export default function Marketplace() {
 
               <div className="form-group">
                 <label htmlFor="image">Add Images (Optional, up to 5)</label>
+                <p className="image-size-hint">Each image must be 5MB or smaller.</p>
                 <input
                   type="file"
                   id="image"
@@ -577,6 +598,59 @@ export default function Marketplace() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {detailItem && (
+        <div className="detail-modal-overlay" onClick={() => setDetailItem(null)}>
+          <div className="detail-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="detail-modal-close" onClick={() => setDetailItem(null)} aria-label="Close">×</button>
+            <div className="detail-modal-carousel">
+              {(detailItem.imageUrls?.length > 0 || detailItem.imageUrl) ? (
+                <ImageCarousel
+                  images={detailItem.imageUrls?.length > 0 ? detailItem.imageUrls : [detailItem.imageUrl]}
+                  alt={detailItem.title}
+                  className="detail-carousel"
+                />
+              ) : (
+                <div className="detail-modal-image-placeholder">
+                  <span className="placeholder-icon">📦</span>
+                </div>
+              )}
+            </div>
+            <div className="detail-modal-info">
+              <h2 className="detail-modal-title">{detailItem.title}</h2>
+              <p className="detail-modal-price">${parseFloat(detailItem.price).toFixed(2)}</p>
+              <p className="detail-modal-description">{detailItem.description}</p>
+              <div className="detail-modal-meta">
+                <span className={`condition-badge ${(detailItem.condition || '').toLowerCase().replace('_', '-')}`}>
+                  {formatCondition(detailItem.condition)}
+                </span>
+                <span className="category-tag">{formatCategory(detailItem.category)}</span>
+              </div>
+              <div className="detail-modal-seller">
+                <span className="detail-seller-label">Sold by {detailItem.sellerName || 'Anonymous'}</span>
+                {detailItem.sellerId && (
+                  <button
+                    type="button"
+                    className="detail-view-profile-btn"
+                    onClick={() => { setDetailItem(null); navigate(`/profile-view/${detailItem.sellerId}`); }}
+                  >
+                    View seller profile
+                  </button>
+                )}
+                {detailItem.sellerId && detailItem.sellerId !== user.id && (
+                  <button
+                    type="button"
+                    className="message-button"
+                    onClick={() => { setDetailItem(null); handleMessageSeller(detailItem); }}
+                  >
+                    Message seller
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

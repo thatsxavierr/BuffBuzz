@@ -215,7 +215,7 @@ const SettingsPage = () => {
   return (
     <div className="settings-container">
       <div className="settings-header">
-        <button onClick={handleBack} className="back-button">← Back</button>
+        <button onClick={handleBack} className="settings-back-button">← Back</button>
         <h1>Settings</h1>
       </div>
 

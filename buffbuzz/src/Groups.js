@@ -15,6 +15,7 @@ export default function Groups() {
   const [filter, setFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState(null);
+  const [detailGroup, setDetailGroup] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -338,7 +339,11 @@ export default function Groups() {
             </div>
           ) : (
             filteredGroups.map(group => (
-              <div key={group.id} className="group-card">
+              <div 
+                key={group.id} 
+                className="group-card group-card-clickable"
+                onClick={() => setDetailGroup(group)}
+              >
                 {group.imageUrl ? (
                   <div className="group-image-wrapper">
                     <ImageCarousel images={[group.imageUrl]} alt={group.name} className="group-image" />
@@ -350,7 +355,7 @@ export default function Groups() {
                 )}
                 
                 {user.id === group.creatorId && (
-                  <div className="group-owner-actions">
+                  <div className="group-owner-actions" onClick={(e) => e.stopPropagation()}>
                     <button 
                       className="edit-group-button"
                       onClick={() => handleEditGroup(group)}
@@ -385,7 +390,7 @@ export default function Groups() {
                     </span>
                   </div>
 
-                  <div className="group-footer">
+                  <div className="group-footer" onClick={(e) => e.stopPropagation()}>
                     {group.members?.includes(user.id) ? (
                       <>
                         <button className="joined-button" disabled>
@@ -522,6 +527,64 @@ export default function Groups() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Group detail modal */}
+      {detailGroup && (
+        <div className="group-detail-overlay" onClick={() => setDetailGroup(null)}>
+          <div className="group-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="group-detail-close" 
+              onClick={() => setDetailGroup(null)}
+              title="Close"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            {detailGroup.imageUrl ? (
+              <div className="group-detail-image-wrapper">
+                <img src={detailGroup.imageUrl} alt={detailGroup.name} />
+              </div>
+            ) : (
+              <div className="group-detail-image-placeholder">
+                <span className="placeholder-icon">👥</span>
+              </div>
+            )}
+            <div className="group-detail-body">
+              <h2 className="group-detail-name">{detailGroup.name}</h2>
+              <span className={`privacy-badge ${detailGroup.privacy.toLowerCase()}`}>
+                {detailGroup.privacy === 'PUBLIC' ? '🌐 Public' : '🔒 Private'}
+              </span>
+              <p className="group-detail-description">{detailGroup.description}</p>
+              <div className="group-detail-meta">
+                <span className="category-tag">{formatCategory(detailGroup.category)}</span>
+                <span className="member-count">👥 {detailGroup.memberCount || 0} members</span>
+              </div>
+              <div className="group-detail-actions" onClick={(e) => e.stopPropagation()}>
+                {detailGroup.members?.includes(user.id) ? (
+                  <>
+                    <button className="joined-button" disabled>✓ Joined</button>
+                    {detailGroup.creatorId !== user.id && (
+                      <button 
+                        className="leave-button"
+                        onClick={() => { handleLeaveGroup(detailGroup.id); setDetailGroup(null); }}
+                      >
+                        Leave
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button 
+                    className="join-button"
+                    onClick={() => { handleJoinGroup(detailGroup.id); setDetailGroup(null); }}
+                  >
+                    {detailGroup.privacy === 'PRIVATE' ? 'Request to Join' : 'Join Group'}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
