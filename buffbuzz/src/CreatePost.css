@@ -90,6 +90,8 @@
   cursor: pointer;
   transition: all 0.3s ease;
   background-color: #f9fafb;
+  text-align: center;
+  gap: 8px;
 }
 
 .image-upload-label:hover {
@@ -99,12 +101,19 @@
 
 .upload-icon {
   font-size: 48px;
-  margin-bottom: 12px;
+  line-height: 1;
 }
 
-.image-upload-label span:last-child {
-  color: #6b7280;
-  font-size: 14px;
+.upload-main-text {
+  color: #374151;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.upload-sub-text {
+  color: #9ca3af;
+  font-size: 12px;
+  letter-spacing: 0.3px;
 }
 
 .image-previews-grid {
