@@ -36,6 +36,10 @@ export default function ResetPasswordPage() {
       setError("Password must be at least 8 characters long.");
       return false;
     }
+    if (/\s/.test(formData.password)) {
+      setError("Password cannot contain spaces.");
+      return false;
+    }
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match.");
       return false;

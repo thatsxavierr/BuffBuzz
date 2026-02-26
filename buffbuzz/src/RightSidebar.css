@@ -978,3 +978,15 @@
 .chat-action-btn:hover {
   background-color: rgba(255, 255, 255, 0.2);
 }
+
+.message-sender-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 4px;
+  padding-left: 8px;
+}
+
+.message-received .message-sender-name {
+  color: #4b5563;
+}

@@ -23,7 +23,7 @@
   margin-bottom: 20px;
 }
 
-label {
+.login-container label {
   display: block;
   text-align: left;
   margin-top: 15px;
@@ -31,16 +31,17 @@ label {
   font-weight: bold;
 }
 
-input {
+.login-container input {
   width: 100%;
   padding: 12px;
   margin-top: 8px;
   border: 1px solid #ccc;
   border-radius: 8px;
   font-size: 16px;
+  box-sizing: border-box;
 }
 
-button {
+.login-container button {
   margin-top: 25px;
   background-color: #800000;
   color: white;
@@ -50,9 +51,10 @@ button {
   font-size: 18px;
   cursor: pointer;
   transition: background-color 0.2s ease-in-out;
+  width: 100%;
 }
 
-button:hover {
+.login-container button:hover {
   background-color: #600000;
 }
 
@@ -64,6 +66,7 @@ button:hover {
 .login-links a {
   color: #800000;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .login-links a:hover {
@@ -77,11 +80,64 @@ button:hover {
   text-align: center;
 }
 
-button:disabled {
+.login-container button:disabled {
   background-color: #999;
   cursor: not-allowed;
 }
 
-button:disabled:hover {
+.login-container button:disabled:hover {
   background-color: #999;
+}
+
+/* Error and warning boxes for login attempts */
+.error-box {
+  background-color: #fee;
+  color: #c33;
+  padding: 12px;
+  border-radius: 6px;
+  margin: 15px 0;
+  text-align: center;
+  font-size: 14px;
+  border: 1px solid #fcc;
+  line-height: 1.5;
+}
+
+.error-box.warning {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+}
+
+.error-box.locked {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+}
+
+.error-box.unverified {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+}
+
+/* Verify email button */
+.login-container .verify-email-btn {
+  margin-top: 15px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 30px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+  width: 100%;
+}
+
+.login-container .verify-email-btn:hover {
+  background-color: #218838;
 }

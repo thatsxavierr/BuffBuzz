@@ -9,8 +9,8 @@ Students often ignore official emails but frequently check social media for upda
 
 ## Tech Stack  
 - **Frontend**: React, CSS  
-- **Backend**: Django (Python), Django Rest Framework  
+- **Backend**: Node.js 
 - **Database**: PostgreSQL + Prisma ORM  
-- **Real-Time**: WebSockets
+- **Real-Time**: WebSockets (Soon to be integrated)
 - **Authentication**: WTAMU Email Integration  
 

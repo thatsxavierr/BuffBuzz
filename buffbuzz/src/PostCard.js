@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './PostCard.css';
 import CommentModel from './CommentModel';
+import ImageCarousel from './ImageCarousel';
 
-export default function PostCard({ post, currentUserId, onDelete, friendIds = new Set() }) {
+export default function PostCard({ post, currentUserId, onDelete, onUpdate, friendIds = new Set() }) {
   const navigate = useNavigate();
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [isLiked, setIsLiked] = useState(post.isLiked || false);
@@ -11,11 +12,15 @@ export default function PostCard({ post, currentUserId, onDelete, friendIds = ne
   const [likeCount, setLikeCount] = useState(post._count?.likes || 0);
   const [commentCount, setCommentCount] = useState(post._count?.comments || 0);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTitle, setEditTitle] = useState(post.title || '');
+  const [editContent, setEditContent] = useState(post.content || '');
+  const [editImagePreviews, setEditImagePreviews] = useState(
+    post.imageUrls?.length > 0 ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : [])
+  );
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Debug: Log the post data
-  console.log('Post data:', post);
-  console.log('Image URL:', post.imageUrl);
-  console.log('Image URL length:', post.imageUrl?.length);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -123,6 +128,66 @@ export default function PostCard({ post, currentUserId, onDelete, friendIds = ne
     setCommentCount(commentCount + 1);
   };
 
+  const handleEditClick = () => {
+    setEditTitle(post.title || '');
+    setEditContent(post.content || '');
+    setEditImagePreviews(post.imageUrls?.length > 0 ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : []));
+    setShowEditModal(true);
+  };
+
+  const handleEditImageChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const validFiles = files.filter(f => allowedTypes.includes(f.type));
+    const toAdd = validFiles.slice(0, 5 - editImagePreviews.length);
+    toAdd.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditImagePreviews(prev => [...prev, reader.result].slice(0, 5));
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleRemoveEditImage = (index) => {
+    setEditImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdatePost = async (e) => {
+    e.preventDefault();
+    if (!editTitle?.trim() || !editContent?.trim()) {
+      alert('Title and content are required');
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      const response = await fetch(`http://localhost:5000/api/posts/${post.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUserId,
+          title: editTitle.trim(),
+          content: editContent.trim(),
+          imageUrls: editImagePreviews.length > 0 ? editImagePreviews : undefined
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.post) {
+        if (onUpdate) onUpdate(data.post);
+        setShowEditModal(false);
+      } else {
+        alert(data.message || 'Failed to update post');
+      }
+    } catch (err) {
+      console.error('Error updating post:', err);
+      alert('An error occurred while updating the post');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <>
       <div className="post-card">
@@ -153,43 +218,46 @@ export default function PostCard({ post, currentUserId, onDelete, friendIds = ne
               </button>
             )}
             {post.author.id === currentUserId && (
-              <button 
-                className="delete-button" 
-                onClick={handleDelete}
-                disabled={isDeleting}
-                title="Delete post"
-              >
-                {isDeleting ? (
+              <div className="post-owner-actions">
+                <button 
+                  className="edit-button" 
+                  onClick={handleEditClick}
+                  title="Edit post"
+                >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M12 6v6M12 18h.01"/>
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                  </svg>
-                )}
-              </button>
+                </button>
+                <button 
+                  className="delete-button" 
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  title="Delete post"
+                >
+                  {isDeleting ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 6v6M12 18h.01"/>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </div>
 
         {/* Post Image - Fixed to handle base64 properly */}
-        {post.imageUrl && (
+        {(post.imageUrls?.length > 0 || post.imageUrl) && (
           <div className="post-image-container">
-            <img 
-              src={post.imageUrl} 
-              alt="Post content" 
+            <ImageCarousel
+              images={post.imageUrls?.length > 0 ? post.imageUrls : [post.imageUrl]}
+              alt="Post content"
               className="post-image"
-              onError={(e) => {
-                console.error('Image failed to load');
-                console.error('Image src:', e.target.src);
-                console.error('Starts with data:', post.imageUrl.startsWith('data:'));
-                e.target.style.display = 'none';
-              }}
-              onLoad={() => {
-                console.log('Image loaded successfully!');
-              }}
             />
           </div>
         )}
@@ -270,6 +338,58 @@ export default function PostCard({ post, currentUserId, onDelete, friendIds = ne
           />
         </div>
       </div>
+
+      {/* Edit Post Modal */}
+      {showEditModal && (
+        <div className="post-edit-modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="post-edit-modal-content" onClick={e => e.stopPropagation()}>
+            <h3>Edit Post</h3>
+            <form onSubmit={handleUpdatePost}>
+              <div className="post-edit-form-group">
+                <label>Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="post-edit-form-group">
+                <label>Content</label>
+                <textarea
+                  value={editContent}
+                  onChange={e => setEditContent(e.target.value)}
+                  rows={4}
+                  required
+                />
+              </div>
+              <div className="post-edit-form-group">
+                <label>Images (optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleEditImageChange}
+                />
+                {editImagePreviews.length > 0 && (
+                  <div className="post-edit-image-previews">
+                    {editImagePreviews.map((src, i) => (
+                      <div key={i} className="post-edit-preview-item">
+                        <img src={src} alt={`Preview ${i + 1}`} />
+                        <button type="button" onClick={() => handleRemoveEditImage(i)}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="post-edit-modal-actions">
+                <button type="button" onClick={() => setShowEditModal(false)}>Cancel</button>
+                <button type="submit" disabled={isUpdating}>{isUpdating ? 'Saving...' : 'Save'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Comment Modal */}
       <CommentModel 

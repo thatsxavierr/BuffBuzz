@@ -80,4 +80,3 @@ export function getSessionTimeRemaining() {
   
   return Math.max(0, timeRemaining);
 }
-

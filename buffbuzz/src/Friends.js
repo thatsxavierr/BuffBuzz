@@ -10,13 +10,28 @@ const Friends = () => {
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
     const currentUser = getValidUser();
+    
     if (!currentUser) {
       navigate('/login');
       return;
     }
+
+    setCurrentUserId(currentUser.id);
+
+    // Fetch current user's profile for the header using the CORRECT endpoint
+    fetch(`http://localhost:5000/api/profile/${currentUser.id}?viewerId=${currentUser.id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.profile?.profilePictureUrl) {
+          setCurrentUserProfile(data.profile.profilePictureUrl);
+        }
+      })
+      .catch(err => console.error('Error fetching user profile:', err));
 
     fetchFriends(currentUser.id);
   }, [navigate]);
@@ -70,10 +85,15 @@ const Friends = () => {
     navigate('/profile', { state: { userId } });
   };
 
+
   if (loading) {
     return (
       <div>
-        <Header onBackClick={() => navigate('/main')} />
+        <Header 
+          onBackClick={() => navigate('/main')} 
+          profilePictureUrl={currentUserProfile}
+          currentUserId={currentUserId}
+        />
         <div className="friends-container">
           <div className="loading">Loading friends...</div>
         </div>
@@ -85,7 +105,11 @@ const Friends = () => {
   if (error) {
     return (
       <div>
-        <Header onBackClick={() => navigate('/main')} />
+        <Header 
+          onBackClick={() => navigate('/main')} 
+          profilePictureUrl={currentUserProfile}
+          currentUserId={currentUserId}
+        />
         <div className="friends-container">
           <div className="error">{error}</div>
         </div>
@@ -96,7 +120,11 @@ const Friends = () => {
 
   return (
     <div>
-      <Header onBackClick={() => navigate('/main')} />
+      <Header 
+        onBackClick={() => navigate('/main')} 
+        profilePictureUrl={currentUserProfile}
+        currentUserId={currentUserId}
+      />
       
       <div className="friends-container">
         <div className="friends-header">

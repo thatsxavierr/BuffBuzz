@@ -3,11 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import './CreatePost.css';
 import Header from './Header.js';
 import Footer from './Footer';
-import { getValidUser } from './sessionUtils';
-
-// Max image size for post uploads (5MB) – users are informed when exceeded
-const MAX_POST_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-const MAX_POST_IMAGE_SIZE_MB = 5;
 
 export default function CreatePost() {
   const navigate = useNavigate();
@@ -15,16 +10,15 @@ export default function CreatePost() {
   const [profilePicture, setProfilePicture] = useState(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [imagePreview, setImagePreview] = useState(null);
-  const [imageError, setImageError] = useState('');
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Get user with session validation (checks expiration)
-    const userData = getValidUser();
+    // Get user from localStorage
+    const userData = JSON.parse(localStorage.getItem('user') || 'null');
     
     if (!userData) {
-      // Redirect to login if not logged in or session expired
+      // Redirect to login if not logged in
       navigate('/login');
     } else {
       setUser(userData);
@@ -47,39 +41,62 @@ export default function CreatePost() {
     }
   };
 
+  const hasUnsavedChanges = () => {
+    return !!(title?.trim() || content?.trim() || imagePreviews.length > 0);
+  };
+
   const handleBackClick = () => {
+    if (hasUnsavedChanges() && !window.confirm('Discard unsaved changes? Your post will not be saved.')) {
+      return;
+    }
+    navigate('/main');
+  };
+
+  const handleCancel = () => {
+    if (hasUnsavedChanges() && !window.confirm('Discard unsaved changes? Your post will not be saved.')) {
+      return;
+    }
     navigate('/main');
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-    setImageError('');
-
-    if (!file.type.startsWith('image/')) {
-      setImageError('Please select an image file (e.g. JPEG, PNG, GIF).');
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const validFiles = files.filter(f => allowedTypes.includes(f.type));
+    if (validFiles.length !== files.length) {
+      alert('Only image files are accepted (JPEG, PNG, GIF, WebP).');
       e.target.value = '';
       return;
     }
 
-    if (file.size > MAX_POST_IMAGE_SIZE_BYTES) {
-      setImageError(`Image is too large. Maximum size is ${MAX_POST_IMAGE_SIZE_MB}MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)}MB.`);
-      setImagePreview(null);
-      e.target.value = '';
-      return;
+    const maxImages = 5;
+    const remaining = maxImages - imagePreviews.length;
+    const toAdd = validFiles.slice(0, remaining);
+    if (toAdd.length < validFiles.length) {
+      alert(`Maximum ${maxImages} images per post. ${validFiles.length - toAdd.length} image(s) not added.`);
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+    const readers = toAdd.map(file => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readers).then(results => {
+      setImagePreviews(prev => {
+        const combined = [...prev, ...results];
+        return combined.slice(0, maxImages);
+      });
+    });
+    e.target.value = '';
   };
 
-  const handleRemoveImage = () => {
-    setImagePreview(null);
-    setImageError('');
+  const handleRemoveImage = (index) => {
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
@@ -102,7 +119,7 @@ export default function CreatePost() {
         body: JSON.stringify({
           title,
           content,
-          imageUrl: imagePreview,
+          imageUrls: imagePreviews.length > 0 ? imagePreviews : undefined,
           authorId: user.id
         })
       });
@@ -113,15 +130,7 @@ export default function CreatePost() {
         alert('Post created successfully!');
         navigate('/main');
       } else {
-        const message = data.message || 'Failed to create post';
-        if (response.status === 413) {
-          setImageError(message);
-          setImagePreview(null);
-          const fileInput = document.getElementById('create-post-image-input');
-          if (fileInput) fileInput.value = '';
-        } else {
-          alert(message);
-        }
+        alert(data.message || 'Failed to create post');
       }
     } catch (error) {
       console.error('Create post error:', error);
@@ -129,10 +138,6 @@ export default function CreatePost() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCancel = () => {
-    navigate('/main');
   };
 
   if (!user) {
@@ -173,33 +178,36 @@ export default function CreatePost() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="create-post-image-input">Add Image (Optional)</label>
-              <p className="create-post-image-hint">Maximum size: {MAX_POST_IMAGE_SIZE_MB}MB</p>
-              {!imagePreview ? (
-                <div className="image-upload-area">
-                  <input
-                    type="file"
-                    id="create-post-image-input"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="image-input"
-                  />
-                  <label htmlFor="create-post-image-input" className="image-upload-label">
-                    <span className="upload-icon">📷</span>
-                    <span>Click to upload image</span>
-                  </label>
-                  {imageError && <p className="create-post-image-error" role="alert">{imageError}</p>}
-                </div>
-              ) : (
-                <div className="image-preview-container">
-                  <img src={imagePreview} alt="Preview" className="image-preview" />
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    className="remove-image-button"
-                  >
-                    Remove Image
-                  </button>
+              <label htmlFor="image">Add Images (Optional)</label>
+              <div className="image-upload-area">
+                <input
+                  type="file"
+                  id="image"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageChange}
+                  className="image-input"
+                />
+                <label htmlFor="image" className="image-upload-label">
+                  <span className="upload-icon">📷</span>
+                  <span>Click to upload images (multiple allowed)</span>
+                </label>
+              </div>
+              {imagePreviews.length > 0 && (
+                <div className="image-previews-grid">
+                  {imagePreviews.map((src, index) => (
+                    <div key={index} className="image-preview-item">
+                      <img src={src} alt={`Preview ${index + 1}`} className="image-preview" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(index)}
+                        className="remove-image-button"
+                        aria-label="Remove image"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

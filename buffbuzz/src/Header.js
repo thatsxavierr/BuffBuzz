@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Header.css';
-import { clearSession } from './sessionUtils';
+import { clearSession, getValidUser } from './sessionUtils';
 
 export default function Header({ onBackClick, profilePictureUrl, currentUserId }) {
   const navigate = useNavigate();
@@ -10,8 +10,10 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
   const [searchText, setSearchText] = useState("");
   const [results, setResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const resultsRef = useRef(null);
 
+  const searchTimeoutRef = useRef(null);
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (resultsRef.current && !resultsRef.current.contains(event.target)) {
@@ -22,6 +24,40 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
+
+  // Fetch pending friend requests count
+  useEffect(() => {
+    const fetchPendingRequestsCount = async () => {
+      const user = getValidUser();
+      if (!user) return;
+
+      try {
+        const response = await fetch(`http://localhost:5000/api/friends/requests/${user.id}`);
+        const data = await response.json();
+        
+        if (response.ok) {
+          setPendingRequestsCount(data.requests.length);
+        }
+      } catch (err) {
+        console.error('Error fetching pending requests count:', err);
+      }
+    };
+
+    fetchPendingRequestsCount();
+
+    // Poll every 30 seconds to update count
+    const interval = setInterval(fetchPendingRequestsCount, 50000);
+
+    // Listen for friend request updates
+    const handleRefresh = () => fetchPendingRequestsCount();
+    window.addEventListener('friendRequestsUpdated', handleRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('friendRequestsUpdated', handleRefresh);
     };
   }, []);
 
@@ -55,8 +91,8 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
     }
   };
 
-  // Search functionality
-  const handleSearch = async (e) => {
+  // Search functionality with debounce to reduce API calls while typing
+  const handleSearch = (e) => {
     const value = e.target.value;
     setSearchText(value);
 
@@ -66,26 +102,26 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
       return;
     }
 
-    try {
-      const response = await fetch(
-        `http://localhost:5000/api/search-users?query=${encodeURIComponent(value)}`
-      );
-      const data = await response.json();
-
-      const users = Array.isArray(data) ? data : data.users || [];
-
-      if (!response.ok) {
-        setResults([]);
-        setShowResults(false);
-        return;
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `http://localhost:5000/api/search-users?query=${encodeURIComponent(value)}`
+        );
+        const data = await response.json();
+        const users = Array.isArray(data) ? data : data.users || [];
+        if (response.ok) {
+          setResults(users);
+          setShowResults(true);
+        } else {
+          setResults([]);
+          setShowResults(false);
+        }
+      } catch (error) {
+        console.error("Search error:", error);
       }
-
-      setResults(users);
-      setShowResults(true);
-
-    } catch (error) {
-      console.error("Search error:", error);
-    }
+      searchTimeoutRef.current = null;
+    }, 300);
   };
 
   // When clicking a search result
@@ -161,7 +197,12 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
         <div className="header-right">
           <button className="header-button" onClick={handleHomeClick}>🏠 Home</button>
           <button className="header-button" onClick={handleFriendsClick}>👥 Friends</button>
-          <button className="header-button" onClick={handleFriendRequestsClick}>📬 Requests</button>
+          <button className="header-button friend-requests-button" onClick={handleFriendRequestsClick}>
+            📬 Requests
+            {pendingRequestsCount > 0 && (
+              <span className="notification-badge">{pendingRequestsCount}</span>
+            )}
+          </button>
           <button className="header-button" onClick={handleSettingsClick}>⚙️ Settings</button>
 
           <div

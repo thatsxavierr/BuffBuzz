@@ -1,15 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './ProfileEdit.css';
 import Header from './Header';
-import { getValidUser } from './sessionUtils';
 import ImageCropModal from './ImageCropModal';
+import { getValidUser } from './sessionUtils';
+
+const WTAMU_DEPARTMENTS = [
+  "Agricultural Sciences",
+  "Chemistry and Physics",
+  "Life, Earth and Environmental Sciences",
+  "Business",
+  "Education",
+  "Political Science and Criminal Justice",
+  "Psychology, Sociology and Social Work",
+  "Engineering",
+  "Art, Theatre and Dance",
+  "Communication",
+  "English, Philosophy and Modern Languages",
+  "History",
+  "Music",
+  "General Majors",
+  "Speech and Hearing Sciences",
+  "Nursing",
+  "Sports and Exercise Sciences"
+].sort();
 
 export default function ProfileEdit() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
+  const [isFirstTime, setIsFirstTime] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     pronouns: '',
     bio: '',
     major: '',
@@ -38,17 +61,43 @@ export default function ProfileEdit() {
     
     setUser(userData);
 
+    setFormData(prev => ({
+      ...prev,
+      firstName: userData.firstName || '',
+      lastName: userData.lastName || '',
+      department: userData.department || ''
+    }));
+
+    if (location.state?.isFirstTime) {
+      setIsFirstTime(true);
+    }
+
     const fetchProfile = async () => {
       try {
         const response = await fetch(`http://localhost:5000/api/profile/${userData.id}`);
         
         if (response.ok) {
           const data = await response.json();
+          const profileUser = data.profile?.user || {};
+          let firstName = profileUser.firstName || userData.firstName || '';
+          let lastName = profileUser.lastName || userData.lastName || '';
+
+          if ((!firstName || !lastName) && data.profile?.name) {
+            const nameParts = data.profile.name.trim().split(/\s+/);
+            if (!firstName && nameParts[0]) {
+              firstName = nameParts[0];
+            }
+            if (!lastName && nameParts.length > 1) {
+              lastName = nameParts.slice(1).join(' ');
+            }
+          }
+
           setFormData({
-            name: data.profile.name || '',
+            firstName,
+            lastName,
             bio: data.profile.bio || '',
             major: data.profile.major || '',
-            department: data.profile.department || '',
+            department: data.profile.department || userData.department || '',
             graduationYear: data.profile.graduationYear || '',
             classification: data.profile.classification || '',
             clubs: data.profile.clubs || '',
@@ -63,7 +112,7 @@ export default function ProfileEdit() {
             setPreviewImage(data.profile.profilePictureUrl);
           }
         } else if (response.status === 404) {
-          console.log('No profile found, will create new one on save');
+          // No profile found, will create new one on save
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
@@ -94,12 +143,11 @@ export default function ProfileEdit() {
         return;
       }
 
-      // Store the file and show crop modal
       setFormData(prev => ({
         ...prev,
         profilePicture: file
       }));
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setImageToCrop(reader.result);
@@ -107,7 +155,6 @@ export default function ProfileEdit() {
       };
       reader.readAsDataURL(file);
     }
-    // Reset the input so the same file can be selected again
     e.target.value = '';
   };
 
@@ -117,22 +164,13 @@ export default function ProfileEdit() {
     setImageToCrop(null);
   };
 
-  const handleCropCancel = () => {
+  const handleCropClose = () => {
     setShowCropModal(false);
     setImageToCrop(null);
-    // Reset the file input
-    setFormData(prev => ({
-      ...prev,
-      profilePicture: null
-    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    console.log('=== FORM SUBMITTED ===');
-    console.log('User:', user);
-    console.log('Form Data:', formData);
     
     if (!user) {
       alert('You must be logged in to update profile');
@@ -143,9 +181,12 @@ export default function ProfileEdit() {
     setIsLoading(true);
 
     try {
+      const firstName = formData.firstName.trim();
+      const lastName = formData.lastName.trim();
+      const fullName = `${firstName} ${lastName}`.trim();
       const payload = {
         userId: user.id,
-        name: formData.name,
+        name: fullName,
         bio: formData.bio,
         major: formData.major,
         department: formData.department,
@@ -160,9 +201,6 @@ export default function ProfileEdit() {
         privacy: formData.privacy
       };
       
-      console.log('=== SENDING UPDATE ===');
-      console.log('Payload:', payload);
-      
       const response = await fetch('http://localhost:5000/api/profile/update', {
         method: 'PUT',
         headers: {
@@ -171,22 +209,14 @@ export default function ProfileEdit() {
         body: JSON.stringify(payload)
       });
 
-      console.log('Response status:', response.status);
-      
       if (response.ok) {
-        const data = await response.json();
-        console.log('Response data:', data);
         alert('Profile updated successfully!');
         navigate('/profile', { 
-          state: { 
-            userId: user.id, 
-            refresh: Date.now() 
-          },
+          state: { userId: user.id, refresh: Date.now() },
           replace: true 
         });
       } else {
         const error = await response.json();
-        console.error('Error response:', error);
         alert(error.message || 'Failed to update profile');
       }
     } catch (error) {
@@ -211,16 +241,9 @@ export default function ProfileEdit() {
   return (
     <div>
       <Header onBackClick={() => navigate('/main')} profilePictureUrl={previewImage} />
-      {showCropModal && imageToCrop && (
-        <ImageCropModal
-          image={imageToCrop}
-          onClose={handleCropCancel}
-          onCropComplete={handleCropComplete}
-        />
-      )}
       <div className="profile-edit-container">
         <div className="profile-edit-card">
-          <h1>Edit Profile</h1>
+          <h1>{isFirstTime ? 'Create Your Profile' : 'Edit Profile'}</h1>
           
           <form onSubmit={handleSubmit}>
             {/* Profile Picture Section */}
@@ -248,14 +271,27 @@ export default function ProfileEdit() {
             <div className="section-header">Basic Information</div>
 
             <div className="form-group">
-              <label htmlFor="name">Name *</label>
+              <label htmlFor="firstName">First Name *</label>
               <input
-                id="name"
+                id="firstName"
                 type="text"
-                name="name"
-                value={formData.name}
+                name="firstName"
+                value={formData.firstName}
                 onChange={handleChange}
-                placeholder="Enter your name"
+                placeholder="Enter your first name"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="lastName">Last Name *</label>
+              <input
+                id="lastName"
+                type="text"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                placeholder="Enter your last name"
                 required
               />
             </div>
@@ -309,14 +345,17 @@ export default function ProfileEdit() {
 
             <div className="form-group">
               <label htmlFor="department">Department</label>
-              <input
+              <select
                 id="department"
-                type="text"
                 name="department"
                 value={formData.department}
                 onChange={handleChange}
-                placeholder="e.g., College of Engineering"
-              />
+              >
+                <option value="">Select Department...</option>
+                {WTAMU_DEPARTMENTS.map((dept, index) => (
+                  <option key={index} value={dept}>{dept}</option>
+                ))}
+              </select>
             </div>
 
             <div className="form-group">
@@ -452,12 +491,20 @@ export default function ProfileEdit() {
                 className="save-button"
                 disabled={isLoading}
               >
-                {isLoading ? 'Saving...' : 'Save Changes'}
+                {isLoading ? 'Saving...' : (isFirstTime ? 'Create Profile' : 'Save Changes')}
               </button>
             </div>
           </form>
         </div>
       </div>
+
+      {showCropModal && imageToCrop && (
+        <ImageCropModal
+          image={imageToCrop}
+          onClose={handleCropClose}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 }

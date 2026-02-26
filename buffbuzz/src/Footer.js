@@ -9,14 +9,12 @@ export default function Footer() {
           <h3>Quick Links</h3>
           <ul>
             <li><a href="#">Link 1</a></li>
-            <li><a href="#">Link 2</a></li>
-            <li><a href="#">Link 3</a></li>
           </ul>
         </div>
         
         <div className="footer-section">
           <h3>Contact</h3>
-          <p>contact@buffbuzz.com</p>
+          <p>buffbuzz2025@gmail.com</p>
         </div>
         
         <div className="footer-section">

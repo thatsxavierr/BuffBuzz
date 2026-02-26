@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './Groups.css';
 import Header from './Header.js';
 import Footer from './Footer';
+import ImageCarousel from './ImageCarousel';
 import { getValidUser } from './sessionUtils';
 
 export default function Groups() {
@@ -13,6 +14,7 @@ export default function Groups() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -67,12 +69,55 @@ export default function Groups() {
     navigate('/main');
   };
 
+  const hasUnsavedChanges = () => {
+    return !!(
+      formData.name?.trim() ||
+      formData.description?.trim() ||
+      formData.imageUrl ||
+      formData.category !== 'ACADEMIC' ||
+      formData.privacy !== 'PUBLIC'
+    );
+  };
+
+  const handleCloseCreateModal = () => {
+    if (hasUnsavedChanges() && !window.confirm('Discard unsaved changes? Your group will not be created.')) {
+      return;
+    }
+    setShowCreateModal(false);
+    setEditingGroupId(null);
+    setFormData({
+      name: '',
+      description: '',
+      category: 'ACADEMIC',
+      privacy: 'PUBLIC',
+      imageUrl: ''
+    });
+  };
+
+  const handleEditGroup = (group) => {
+    setFormData({
+      name: group.name || '',
+      description: group.description || '',
+      category: group.category || 'ACADEMIC',
+      privacy: group.privacy || 'PUBLIC',
+      imageUrl: group.imageUrl || ''
+    });
+    setEditingGroupId(group.id);
+    setShowCreateModal(true);
+  };
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Only image files are accepted (JPEG, PNG, GIF, WebP). Please select an image file.');
+        e.target.value = '';
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setFormData({ ...formData, imageUrl: reader.result });
+        setFormData(prev => ({ ...prev, imageUrl: reader.result }));
       };
       reader.readAsDataURL(file);
     }
@@ -82,36 +127,67 @@ export default function Groups() {
     e.preventDefault();
     
     try {
-      const response = await fetch('http://localhost:5000/api/groups/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          creatorId: user.id
-        })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        alert('Group created successfully!');
-        setShowCreateModal(false);
-        setFormData({
-          name: '',
-          description: '',
-          category: 'ACADEMIC',
-          privacy: 'PUBLIC',
-          imageUrl: ''
+      if (editingGroupId) {
+        const response = await fetch(`http://localhost:5000/api/groups/${editingGroupId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...formData,
+            userId: user.id
+          })
         });
-        fetchGroups();
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Group updated successfully!');
+          setShowCreateModal(false);
+          setEditingGroupId(null);
+          setFormData({
+            name: '',
+            description: '',
+            category: 'ACADEMIC',
+            privacy: 'PUBLIC',
+            imageUrl: ''
+          });
+          fetchGroups();
+        } else {
+          alert(data.message || 'Failed to update group');
+        }
       } else {
-        alert(data.message || 'Failed to create group');
+        const response = await fetch('http://localhost:5000/api/groups/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...formData,
+            creatorId: user.id
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Group created successfully!');
+          setShowCreateModal(false);
+          setFormData({
+            name: '',
+            description: '',
+            category: 'ACADEMIC',
+            privacy: 'PUBLIC',
+            imageUrl: ''
+          });
+          fetchGroups();
+        } else {
+          alert(data.message || 'Failed to create group');
+        }
       }
     } catch (error) {
-      console.error('Error creating group:', error);
-      alert('An error occurred while creating the group');
+      console.error('Error saving group:', error);
+      alert('An error occurred while saving the group');
     }
   };
 
@@ -264,7 +340,9 @@ export default function Groups() {
             filteredGroups.map(group => (
               <div key={group.id} className="group-card">
                 {group.imageUrl ? (
-                  <div className="group-image" style={{backgroundImage: `url(${group.imageUrl})`}}></div>
+                  <div className="group-image-wrapper">
+                    <ImageCarousel images={[group.imageUrl]} alt={group.name} className="group-image" />
+                  </div>
                 ) : (
                   <div className="group-image-placeholder">
                     <span className="placeholder-icon">👥</span>
@@ -272,13 +350,22 @@ export default function Groups() {
                 )}
                 
                 {user.id === group.creatorId && (
-                  <button 
-                    className="delete-group-button"
-                    onClick={() => handleDeleteGroup(group.id)}
-                    title="Delete this group"
-                  >
-                    🗑️
-                  </button>
+                  <div className="group-owner-actions">
+                    <button 
+                      className="edit-group-button"
+                      onClick={() => handleEditGroup(group)}
+                      title="Edit this group"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      className="delete-group-button"
+                      onClick={() => handleDeleteGroup(group.id)}
+                      title="Delete this group"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 )}
                 
                 <div className="group-content">
@@ -330,13 +417,13 @@ export default function Groups() {
       </div>
 
       {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="modal-overlay" onClick={handleCloseCreateModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Create New Group</h2>
+              <h2>{editingGroupId ? 'Edit Group' : 'Create New Group'}</h2>
               <button 
                 className="close-modal"
-                onClick={() => setShowCreateModal(false)}
+                onClick={handleCloseCreateModal}
               >
                 ×
               </button>
@@ -425,13 +512,13 @@ export default function Groups() {
               <div className="modal-actions">
                 <button 
                   type="button" 
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={handleCloseCreateModal}
                   className="cancel-btn"
                 >
                   Cancel
                 </button>
                 <button type="submit" className="submit-btn">
-                  Create Group
+                  {editingGroupId ? 'Save Changes' : 'Create Group'}
                 </button>
               </div>
             </form>

@@ -1,26 +1,40 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './RightSidebar.css';
 import { getValidUser } from './sessionUtils';
 
-export default function RightSidebar() {
+export default function RightSidebar({ initialOpenChat }) {
+  const navigate = useNavigate();
   const [chatExpanded, setChatExpanded] = useState(false);
   const [openChats, setOpenChats] = useState([]);
   const [friends, setFriends] = useState([]);
   const [conversations, setConversations] = useState({});
   const [showGroupChatModal, setShowGroupChatModal] = useState(false);
   const [allConversations, setAllConversations] = useState([]);
-  const user = getValidUser();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const [loading, setLoading] = useState(true); // ADD this state
+  useEffect(() => {
+    setUser(getValidUser());
+  }, []);
 
-useEffect(() => {
-  if (user) {
-    fetchFriends();
-    fetchAllConversations(); // Fetch groups on load
-  }
-}, [user]);
+  useEffect(() => {
+    if (user) {
+      fetchFriends();
+      fetchAllConversations();
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (initialOpenChat && user?.id && initialOpenChat.id !== user.id) {
+      setChatExpanded(true);
+      openChat(initialOpenChat);
+      navigate('/main', { replace: true, state: {} });
+    }
+  }, [initialOpenChat?.id, user?.id]);
 
   const fetchFriends = async () => {
+    if (!user?.id) return;
     try {
       const response = await fetch(`http://localhost:5000/api/friends/${user.id}`);
       if (response.ok) {
@@ -33,6 +47,7 @@ useEffect(() => {
   };
 
   const fetchAllConversations = async () => {
+  if (!user?.id) return;
   try {
     const response = await fetch(`http://localhost:5000/api/conversations/${user.id}`);
     if (response.ok) {
@@ -118,12 +133,10 @@ const openConversation = async (conversation) => {
 };
 
   const fetchMessages = async (conversationId, friendId) => {
-  console.log('Fetching messages for:', { conversationId, friendId });
   try {
     const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}/messages`);
     if (response.ok) {
       const data = await response.json();
-      console.log('Messages received:', data.messages?.length || 0);
       
       // Update conversation with messages AND participant data
       setConversations(prev => {
@@ -825,22 +838,29 @@ const handleDeleteGroup = async () => {
           <p className="no-messages">No messages yet. Say hi! 👋</p>
         ) : (
           messages.map((msg) => (
-            <div 
-              key={msg.id} 
-              className={`message ${msg.senderId === currentUserId ? 'message-sent' : 'message-received'}`}
-            >
-              {/* Reply Preview */}
-              {msg.replyTo && (
-                <div className="reply-preview">
-                  <div className="reply-line"></div>
-                  <div className="reply-content">
-                    <span className="reply-sender">{msg.replyTo.sender.firstName}</span>
-                    <span className="reply-text">{msg.replyTo.content}</span>
-                  </div>
-                </div>
-              )}
-              
-              <div className="message-bubble">
+  <div 
+    key={msg.id} 
+    className={`message ${msg.senderId === currentUserId ? 'message-sent' : 'message-received'}`}
+  >
+    {/* Show sender name for group chats (except your own messages) */}
+    {friend.isGroup && msg.senderId !== currentUserId && msg.sender && (
+      <div className="message-sender-name">
+        {msg.sender.firstName} {msg.sender.lastName}
+      </div>
+    )}
+    
+    {/* Reply Preview */}
+    {msg.replyTo && (
+      <div className="reply-preview">
+        <div className="reply-line"></div>
+        <div className="reply-content">
+          <span className="reply-sender">{msg.replyTo.sender.firstName}</span>
+          <span className="reply-text">{msg.replyTo.content}</span>
+        </div>
+      </div>
+    )}
+    
+    <div className="message-bubble">
                 {msg.type === 'IMAGE' && msg.imageUrl && (
                   <img 
                     src={msg.imageUrl} 

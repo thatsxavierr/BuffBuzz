@@ -18,91 +18,31 @@ export default function MainPage() {
   const [friendIds, setFriendIds] = useState(new Set());
 
   useEffect(() => {
-    // Check if user has a valid session (not expired)
     const userData = location.state?.user || getValidUser();
     
     if (!userData) {
-      // Redirect to login if not logged in or session expired
       navigate('/login');
     } else {
       setUser(userData);
-      fetchProfilePicture(userData.id);
-      fetchPosts(userData.id);
-      fetchFriends(userData.id);
+      // Run fetches in parallel instead of sequentially
+      Promise.all([
+        fetch(`http://localhost:5000/api/profile/${userData.id}`).then(r => r.ok ? r.json() : null),
+        fetch(`http://localhost:5000/api/posts?userId=${userData.id}`).then(r => r.ok ? r.json() : null),
+        fetch(`http://localhost:5000/api/friends/${userData.id}`).then(r => r.ok ? r.json() : null)
+      ]).then(([profileRes, postsRes, friendsRes]) => {
+        if (profileRes?.profile?.profilePictureUrl) setProfilePicture(profileRes.profile.profilePictureUrl);
+        if (postsRes?.posts) setPosts(postsRes.posts);
+        if (friendsRes?.friends) setFriendIds(new Set(friendsRes.friends.map(f => f.id)));
+      }).catch(err => console.error('Fetch error:', err)).finally(() => setLoading(false));
     }
   }, [navigate, location]);
 
-  const [searchResults, setSearchResults] = useState([]);
-const [searching, setSearching] = useState(false);
-
-const handleSearch = async (query) => {
-  if (!query.trim()) {
-    setSearchResults([]);
-    return;
-  }
-
-  setSearching(true);
-
-  try {
-    const res = await fetch(`http://localhost:5000/api/search?q=${query}`);
-    const data = await res.json();
-    setSearchResults(data.users);
-  } catch (err) {
-    console.error("Search error:", err);
-  }
-
-  setSearching(false);
-};
-
-
-  const fetchProfilePicture = async (userId) => {
-    try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.profile?.profilePictureUrl) {
-          setProfilePicture(data.profile.profilePictureUrl);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching profile picture:', error);
-    }
-  };
-
-  const fetchPosts = async (userId) => {
-    try {
-      const response = await fetch(`http://localhost:5000/api/posts?userId=${userId}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setPosts(data.posts);
-      }
-    } catch (error) {
-      console.error('Error fetching posts:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchFriends = async (userId) => {
-    try {
-      const response = await fetch(`http://localhost:5000/api/friends/${userId}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        // Create a Set of friend IDs for quick lookup
-        const friendIdSet = new Set(data.friends.map(friend => friend.id));
-        setFriendIds(friendIdSet);
-      }
-    } catch (error) {
-      console.error('Error fetching friends:', error);
-    }
-  };
-
   const handlePostDelete = (postId) => {
-    // Remove the deleted post from the posts array
     setPosts(posts.filter(post => post.id !== postId));
+  };
+
+  const handlePostUpdate = (updatedPost) => {
+    setPosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p));
   };
 
   const handleBackClick = () => {
@@ -121,16 +61,15 @@ const handleSearch = async (query) => {
         <LeftSidebar />
         
         <div className="main-content">
-          <div className="main-content-feed">
-            <button 
-              onClick={() => navigate('/create-post')} 
-              className="create-post-button"
-            >
-              + Create New Post
-            </button>
-            
-            {/* Posts Feed */}
-            <div className="posts-feed">
+          <button 
+            onClick={() => navigate('/create-post')} 
+            className="create-post-button"
+          >
+            + Create New Post
+          </button>
+          
+          {/* Posts Feed */}
+          <div className="posts-feed">
             {loading ? (
               <div className="loading-posts">Loading posts...</div>
             ) : posts.length === 0 ? (
@@ -145,15 +84,15 @@ const handleSearch = async (query) => {
                   post={post} 
                   currentUserId={user.id}
                   onDelete={handlePostDelete}
+                  onUpdate={handlePostUpdate}
                   friendIds={friendIds}
                 />
               ))
             )}
-            </div>
           </div>
         </div>
         
-        <RightSidebar />
+        <RightSidebar initialOpenChat={location.state?.openChatWithUser} />
       </div>
       <Footer />
     </div>

@@ -7,6 +7,339 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id                      String                    @id @default(uuid())
+  email                   String                    @unique
+  password                String
+  firstName               String
+  lastName                String
+  userType                UserType
+  department              String?                   // ← ADD THIS
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  resetToken              String?
+  resetTokenExpiry        DateTime?
+  verificationAttempts    Int                       @default(0)
+  loginAttempts           Int                       @default(0)
+  lockUntil               DateTime?
+  verificationCode        String?
+  verificationStatus      VerificationStatus        @default(PENDING)
+  blocksReceived          Block[]                   @relation("BlockedRelation")
+  blocksMade              Block[]                   @relation("BlockerRelation")
+  comments                Comment[]
+  conversations           ConversationParticipant[]
+  receivedFriendships     Friendship[]              @relation("FriendshipReceiver")
+  sentFriendships         Friendship[]              @relation("FriendshipSender")
+  groupMemberships        GroupMember[]
+  createdGroups           Group[]                   @relation("GroupCreator")
+  jobs                    Job[]
+  likes                   Like[]
+  lostFoundItems          LostFoundItem[]
+  marketplaceItems        MarketplaceItem[]
+  messageReactions        MessageReaction[]
+  messages                Message[]                 @relation("MessageSender")
+  notificationPreferences NotificationPreferences?
+  posts                   Post[]
+  profile                 Profile?
+  shares                  Share[]
+
+  @@map("users")
+}
+
+model Profile {
+  id                String       @id @default(uuid())
+  userId            String       @unique
+  name              String?
+  pronouns          String?
+  bio               String?
+  major             String?
+  department        String?
+  graduationYear    String?
+  classification    String?
+  clubs             String?
+  instagramHandle   String?
+  linkedinUrl       String?
+  facebookHandle    String?
+  profilePictureUrl String?
+  privacy           PrivacyLevel @default(PUBLIC)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model NotificationPreferences {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  emailNotifications Boolean  @default(true)
+  pushNotifications  Boolean  @default(true)
+  postLikes          Boolean  @default(true)
+  comments           Boolean  @default(true)
+  newFollowers       Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model Post {
+  id        String    @id @default(uuid())
+  title     String
+  content   String
+  imageUrl  String?
+  authorId  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  comments  Comment[]
+  likes     Like[]
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  shares    Share[]
+
+  @@index([authorId])
+  @@index([createdAt])
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  postId    String
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([authorId])
+  @@map("comments")
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@map("likes")
+}
+
+model Share {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([userId])
+  @@map("shares")
+}
+
+model Friendship {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  receiver   User     @relation("FriendshipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User     @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+  @@map("friendships")
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocked   User     @relation("BlockedRelation", fields: [blockedId], references: [id], onDelete: Cascade)
+  blocker   User     @relation("BlockerRelation", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+  @@map("blocks")
+}
+
+model Job {
+  id              String      @id @default(uuid())
+  title           String
+  company         String
+  location        String
+  jobType         JobType
+  category        JobCategory
+  description     String
+  requirements    String
+  salary          String?
+  applicationLink String
+  posterId        String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  poster          User        @relation(fields: [posterId], references: [id], onDelete: Cascade)
+
+  @@index([posterId])
+  @@index([category])
+  @@index([jobType])
+  @@index([createdAt])
+  @@map("jobs")
+}
+
+model MarketplaceItem {
+  id          String              @id @default(uuid())
+  title       String
+  description String
+  price       Decimal             @db.Decimal(10, 2)
+  category    MarketplaceCategory
+  condition   ItemCondition
+  imageUrl    String?
+  sellerId    String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  seller      User                @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+  @@index([category])
+  @@index([createdAt])
+  @@map("marketplace_items")
+}
+
+model LostFoundItem {
+  id          String            @id @default(uuid())
+  title       String
+  description String
+  category    LostFoundCategory
+  location    String
+  date        DateTime
+  contactInfo String
+  imageUrl    String?
+  userId      String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([createdAt])
+  @@map("lostfound_items")
+}
+
+model Group {
+  id          String        @id @default(uuid())
+  name        String
+  description String
+  category    GroupCategory
+  privacy     GroupPrivacy  @default(PUBLIC)
+  imageUrl    String?
+  creatorId   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  members     GroupMember[]
+  creator     User          @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([category])
+  @@index([createdAt])
+  @@map("groups")
+}
+
+model GroupMember {
+  id       String   @id @default(uuid())
+  groupId  String
+  userId   String
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+model Conversation {
+  id           String                    @id @default(uuid())
+  isGroupChat  Boolean                   @default(false)
+  name         String?
+  imageUrl     String?
+  creatorId    String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([createdAt])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime?
+  joinedAt       DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String            @id @default(uuid())
+  content        String
+  type           MessageType       @default(TEXT)
+  imageUrl       String?
+  conversationId String
+  senderId       String
+  replyToId      String?
+  deletedAt      DateTime?
+  editedAt       DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  reactions      MessageReaction[]
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  replyTo        Message?          @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies        Message[]         @relation("MessageReplies")
+  sender         User              @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+  @@map("message_reactions")
+}
+
 enum UserType {
   STUDENT
   PROFESSOR
@@ -18,128 +351,63 @@ enum VerificationStatus {
   FAILED
 }
 
-model User {
-  id                    String              @id @default(uuid())
-  email                 String              @unique
-  password              String
-  firstName             String
-  lastName              String
-  userType              UserType
-  verificationStatus    VerificationStatus  @default(PENDING)
-  verificationCode      String?
-  verificationAttempts  Int                 @default(0)
-  resetToken            String?
-  resetTokenExpiry      DateTime?
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  
-  // Relations
-  profile               Profile?
-  posts                 Post[]
-  comments              Comment[]
-  likes                 Like[]
-  shares                Share[]
-
-  @@map("users")
+enum PrivacyLevel {
+  PUBLIC
+  FRIENDS_ONLY
+  PRIVATE
 }
 
-model Profile {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  name              String?
-  pronouns          String?
-  bio               String?
-  major             String?
-  department        String?
-  graduationYear    String?
-  classification    String?
-  clubs             String?
-  
-  // Social Media
-  instagramHandle   String?
-  linkedinUrl       String?
-  facebookHandle    String?
-  
-  // Profile Picture
-  profilePictureUrl String?
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@map("profiles")
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
 }
 
-model Post {
-  id          String    @id @default(uuid())
-  title       String
-  content     String
-  imageUrl    String?
-  
-  authorId    String
-  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  // Relations
-  comments    Comment[]
-  likes       Like[]
-  shares      Share[]
-
-  @@map("posts")
-  @@index([authorId])
-  @@index([createdAt])
+enum JobCategory {
+  INTERNSHIP
+  ON_CAMPUS
+  REMOTE
+  LOCAL
 }
 
-model Comment {
-  id          String   @id @default(uuid())
-  content     String
-  
-  postId      String
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  
-  authorId    String
-  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("comments")
-  @@index([postId])
-  @@index([authorId])
+enum MarketplaceCategory {
+  TEXTBOOKS
+  ELECTRONICS
+  FURNITURE
+  CLOTHING
+  SCHOOL_SUPPLIES
+  OTHER
 }
 
-model Like {
-  id          String   @id @default(uuid())
-  
-  postId      String
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime @default(now())
-
-  @@unique([postId, userId])
-  @@map("likes")
-  @@index([postId])
-  @@index([userId])
+enum ItemCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
 }
 
-model Share {
-  id          String   @id @default(uuid())
-  
-  postId      String
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime @default(now())
+enum LostFoundCategory {
+  LOST
+  FOUND
+}
 
-  @@map("shares")
-  @@index([postId])
-  @@index([userId])
+enum GroupCategory {
+  ACADEMIC
+  SPORTS
+  ARTS
+  SOCIAL
+  PROFESSIONAL
+  VOLUNTEER
+  OTHER
+}
+
+enum GroupPrivacy {
+  PUBLIC
+  PRIVATE
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
 }
