@@ -130,7 +130,7 @@ async function sendVerificationEmail(email, verificationCode, firstName) {
 
 // Send password reset email
 async function sendPasswordResetEmail(email, resetToken, firstName) {
-  const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+  const resetLink = `http://localhost:5000/reset-password?token=${resetToken}`;
   
   const mailOptions = {
     from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
@@ -248,7 +248,7 @@ async function sendAccountLockedEmail(email, firstName, lockMinutes) {
 app.post('/api/register', async (req, res) => {
   try {
     console.log('Register request received:', req.body);
-    const { email, password, firstName, lastName, userType } = req.body;
+    const { email, password, firstName, lastName, userType, department } = req.body;
 
     if (!email || !password || !firstName || !lastName || !userType) {
       return res.status(400).json({ message: 'All fields are required' });
@@ -279,6 +279,7 @@ app.post('/api/register', async (req, res) => {
         firstName,
         lastName,
         userType: userType.toUpperCase(),
+        department,
         verificationCode,
         verificationStatus: 'PENDING'
       }

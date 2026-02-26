@@ -37,7 +37,7 @@ export default function Groups() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/profile/${userId}`);
+      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -52,7 +52,7 @@ export default function Groups() {
 
   const fetchGroups = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/groups');
+      const response = await fetch('http://localhost:5000/api/groups');
       
       if (response.ok) {
         const data = await response.json();
@@ -128,7 +128,7 @@ export default function Groups() {
     
     try {
       if (editingGroupId) {
-        const response = await fetch(`http://localhost:3000/api/groups/${editingGroupId}`, {
+        const response = await fetch(`http://localhost:5000/api/groups/${editingGroupId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -157,7 +157,7 @@ export default function Groups() {
           alert(data.message || 'Failed to update group');
         }
       } else {
-        const response = await fetch('http://localhost:3000/api/groups/create', {
+        const response = await fetch('http://localhost:5000/api/groups/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -193,7 +193,7 @@ export default function Groups() {
 
   const handleJoinGroup = async (groupId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/groups/${groupId}/join`, {
+      const response = await fetch(`http://localhost:5000/api/groups/${groupId}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -221,7 +221,7 @@ export default function Groups() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3000/api/groups/${groupId}/leave`, {
+      const response = await fetch(`http://localhost:5000/api/groups/${groupId}/leave`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -249,7 +249,7 @@ export default function Groups() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3000/api/groups/${groupId}`, {
+      const response = await fetch(`http://localhost:5000/api/groups/${groupId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

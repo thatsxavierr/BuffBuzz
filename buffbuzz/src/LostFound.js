@@ -39,7 +39,7 @@ export default function LostFound() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/profile/${userId}`);
+      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -55,8 +55,8 @@ export default function LostFound() {
   const fetchItems = async (category = null) => {
     try {
       const url = category && category !== 'all' 
-        ? `http://localhost:3000/api/lostfound?category=${category.toUpperCase()}`
-        : 'http://localhost:3000/api/lostfound';
+        ? `http://localhost:5000/api/lostfound?category=${category.toUpperCase()}`
+        : 'http://localhost:5000/api/lostfound';
       
       const response = await fetch(url);
       
@@ -170,7 +170,7 @@ export default function LostFound() {
     
     try {
       if (editingItemId) {
-        const response = await fetch(`http://localhost:3000/api/lostfound/${editingItemId}`, {
+        const response = await fetch(`http://localhost:5000/api/lostfound/${editingItemId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -202,7 +202,7 @@ export default function LostFound() {
           alert(data.message || 'Failed to update item');
         }
       } else {
-        const response = await fetch('http://localhost:3000/api/lostfound/create', {
+        const response = await fetch('http://localhost:5000/api/lostfound/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -245,7 +245,7 @@ export default function LostFound() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3000/api/lostfound/${itemId}`, {
+      const response = await fetch(`http://localhost:5000/api/lostfound/${itemId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

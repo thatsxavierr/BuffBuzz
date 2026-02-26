@@ -44,7 +44,7 @@ export default function ProfileView() {
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        const url = `http://localhost:3000/api/profile/${targetUserId}?viewerId=${userData.id}`;
+        const url = `http://localhost:5000/api/profile/${targetUserId}?viewerId=${userData.id}`;
         
         const response = await fetch(url);
         
@@ -74,7 +74,7 @@ export default function ProfileView() {
 
   const fetchFriendshipStatus = async (userId, otherUserId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/friends/status/${userId}/${otherUserId}`);
+      const response = await fetch(`http://localhost:5000/api/friends/status/${userId}/${otherUserId}`);
       const data = await response.json();
       
       if (response.ok) {
@@ -89,7 +89,7 @@ export default function ProfileView() {
 
   const fetchBlockStatus = async (userId, otherUserId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/block-status/${userId}/${otherUserId}`);
+      const response = await fetch(`http://localhost:5000/api/block-status/${userId}/${otherUserId}`);
       const data = await response.json();
       
       if (response.ok) {
@@ -104,7 +104,7 @@ export default function ProfileView() {
   const handleAddFriend = async () => {
     setFriendButtonLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/api/friends/request', {
+      const response = await fetch('http://localhost:5000/api/friends/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -136,7 +136,7 @@ export default function ProfileView() {
     
     setFriendButtonLoading(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/friends/reject/${friendshipId}`, {
+      const response = await fetch(`http://localhost:5000/api/friends/reject/${friendshipId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId })
@@ -165,8 +165,8 @@ export default function ProfileView() {
     setFriendButtonLoading(true);
     try {
       const url = accept 
-        ? `http://localhost:3000/api/friends/accept/${friendshipId}`
-        : `http://localhost:3000/api/friends/reject/${friendshipId}`;
+        ? `http://localhost:5000/api/friends/accept/${friendshipId}`
+        : `http://localhost:5000/api/friends/reject/${friendshipId}`;
       
       const method = accept ? 'PUT' : 'DELETE';
 
@@ -206,7 +206,7 @@ export default function ProfileView() {
     
     setFriendButtonLoading(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/friends/remove/${friendshipId}`, {
+      const response = await fetch(`http://localhost:5000/api/friends/remove/${friendshipId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId })
@@ -235,7 +235,7 @@ export default function ProfileView() {
     
     setBlockLoading(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/block/${viewingUserId}`, {
+      const response = await fetch(`http://localhost:5000/api/block/${viewingUserId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ blockerId: currentUserId })
@@ -264,7 +264,7 @@ export default function ProfileView() {
     
     setBlockLoading(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/unblock/${viewingUserId}`, {
+      const response = await fetch(`http://localhost:5000/api/unblock/${viewingUserId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ blockerId: currentUserId })

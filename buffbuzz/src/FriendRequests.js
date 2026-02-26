@@ -24,7 +24,7 @@ const FriendRequests = () => {
     setCurrentUserId(currentUser.id);
 
     // Fetch current user's profile for the header using the CORRECT endpoint
-    fetch(`http://localhost:3000/api/profile/${currentUser.id}?viewerId=${currentUser.id}`)
+    fetch(`http://localhost:5000/api/profile/${currentUser.id}?viewerId=${currentUser.id}`)
       .then(res => res.json())
       .then(data => {
         console.log('Full API response:', data);
@@ -46,7 +46,7 @@ const FriendRequests = () => {
   const fetchRequests = async (userId) => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:3000/api/friends/requests/${userId}`);
+      const response = await fetch(`http://localhost:5000/api/friends/requests/${userId}`);
       const data = await response.json();
 
       if (response.ok) {
@@ -72,7 +72,7 @@ const FriendRequests = () => {
     if (!currentUser) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/friends/accept/${friendshipId}`, {
+      const response = await fetch(`http://localhost:5000/api/friends/accept/${friendshipId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id })
@@ -97,7 +97,7 @@ const FriendRequests = () => {
     if (!currentUser) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/friends/reject/${friendshipId}`, {
+      const response = await fetch(`http://localhost:5000/api/friends/reject/${friendshipId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id })

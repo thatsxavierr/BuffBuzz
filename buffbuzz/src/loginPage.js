@@ -40,7 +40,7 @@ export default function LoginPage() {
   // Check if user has a profile
   const checkUserProfile = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/profile/${userId}`);
+      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
       
       if (response.ok) {
         // Profile exists
@@ -67,7 +67,7 @@ export default function LoginPage() {
     setIsUnverified(false);
 
     try {
-      const response = await fetch('http://localhost:3000/api/login', {
+      const response = await fetch('http://localhost:5000/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

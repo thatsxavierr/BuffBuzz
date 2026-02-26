@@ -44,7 +44,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
   const handleLike = async () => {
     try {
       if (isLiked) {
-        const response = await fetch(`http://localhost:3000/api/posts/${post.id}/unlike`, {
+        const response = await fetch(`http://localhost:5000/api/posts/${post.id}/unlike`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentUserId })
@@ -53,7 +53,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
         setIsLiked(false);
         setLikeCount(data.likeCount);
       } else {
-        const response = await fetch(`http://localhost:3000/api/posts/${post.id}/like`, {
+        const response = await fetch(`http://localhost:5000/api/posts/${post.id}/like`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentUserId })
@@ -69,7 +69,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
 
   const handleShare = async () => {
     try {
-      const response = await fetch(`http://localhost:3000/api/posts/${post.id}/share`, {
+      const response = await fetch(`http://localhost:5000/api/posts/${post.id}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId })
@@ -100,7 +100,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
     setIsDeleting(true);
     
     try {
-      const response = await fetch(`http://localhost:3000/api/posts/${post.id}`, {
+      const response = await fetch(`http://localhost:5000/api/posts/${post.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId })
@@ -163,7 +163,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
     }
     setIsUpdating(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/posts/${post.id}`, {
+      const response = await fetch(`http://localhost:5000/api/posts/${post.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

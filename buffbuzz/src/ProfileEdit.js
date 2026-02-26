@@ -5,6 +5,25 @@ import Header from './Header';
 import ImageCropModal from './ImageCropModal';
 import { getValidUser } from './sessionUtils';
 
+const WTAMU_DEPARTMENTS = [
+  "Agricultural Sciences",
+  "Chemistry and Physics",
+  "Life, Earth and Environmental Sciences",
+  "Business",
+  "Education",
+  "Political Science and Criminal Justice",
+  "Psychology, Sociology and Social Work",
+  "Engineering",
+  "Art, Theatre and Dance",
+  "Communication",
+  "English, Philosophy and Modern Languages",
+  "History",
+  "Music",
+  "General Majors",
+  "Speech and Hearing Sciences",
+  "Nursing",
+  "Sports and Exercise Sciences"
+].sort();
 
 export default function ProfileEdit() {
   const navigate = useNavigate();
@@ -45,17 +64,17 @@ export default function ProfileEdit() {
     setFormData(prev => ({
       ...prev,
       firstName: userData.firstName || '',
-      lastName: userData.lastName || ''
+      lastName: userData.lastName || '',
+      department: userData.department || ''
     }));
 
-    // Check if this is first-time profile creation from location state
     if (location.state?.isFirstTime) {
       setIsFirstTime(true);
     }
 
     const fetchProfile = async () => {
       try {
-        const response = await fetch(`http://localhost:3000/api/profile/${userData.id}`);
+        const response = await fetch(`http://localhost:5000/api/profile/${userData.id}`);
         
         if (response.ok) {
           const data = await response.json();
@@ -78,7 +97,7 @@ export default function ProfileEdit() {
             lastName,
             bio: data.profile.bio || '',
             major: data.profile.major || '',
-            department: data.profile.department || '',
+            department: data.profile.department || userData.department || '',
             graduationYear: data.profile.graduationYear || '',
             classification: data.profile.classification || '',
             clubs: data.profile.clubs || '',
@@ -153,10 +172,6 @@ export default function ProfileEdit() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    console.log('=== FORM SUBMITTED ===');
-    console.log('User:', user);
-    console.log('Form Data:', formData);
-    
     if (!user) {
       alert('You must be logged in to update profile');
       navigate('/login');
@@ -186,7 +201,7 @@ export default function ProfileEdit() {
         privacy: formData.privacy
       };
       
-      const response = await fetch('http://localhost:3000/api/profile/update', {
+      const response = await fetch('http://localhost:5000/api/profile/update', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -194,22 +209,14 @@ export default function ProfileEdit() {
         body: JSON.stringify(payload)
       });
 
-      console.log('Response status:', response.status);
-      
       if (response.ok) {
-        const data = await response.json();
-        console.log('Response data:', data);
         alert('Profile updated successfully!');
         navigate('/profile', { 
-          state: { 
-            userId: user.id, 
-            refresh: Date.now() 
-          },
+          state: { userId: user.id, refresh: Date.now() },
           replace: true 
         });
       } else {
         const error = await response.json();
-        console.error('Error response:', error);
         alert(error.message || 'Failed to update profile');
       }
     } catch (error) {
@@ -338,14 +345,17 @@ export default function ProfileEdit() {
 
             <div className="form-group">
               <label htmlFor="department">Department</label>
-              <input
+              <select
                 id="department"
-                type="text"
                 name="department"
                 value={formData.department}
                 onChange={handleChange}
-                placeholder="e.g., College of Engineering"
-              />
+              >
+                <option value="">Select Department...</option>
+                {WTAMU_DEPARTMENTS.map((dept, index) => (
+                  <option key={index} value={dept}>{dept}</option>
+                ))}
+              </select>
             </div>
 
             <div className="form-group">
@@ -477,12 +487,12 @@ export default function ProfileEdit() {
                 Cancel
               </button>
               <button 
-              type="submit" 
-              className="save-button"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Saving...' : (isFirstTime ? 'Create Profile' : 'Save Changes')}
-            </button>
+                type="submit" 
+                className="save-button"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Saving...' : (isFirstTime ? 'Create Profile' : 'Save Changes')}
+              </button>
             </div>
           </form>
         </div>

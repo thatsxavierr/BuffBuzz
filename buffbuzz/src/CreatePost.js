@@ -28,7 +28,7 @@ export default function CreatePost() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/profile/${userId}`);
+      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -111,7 +111,7 @@ export default function CreatePost() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/posts/create', {
+      const response = await fetch('http://localhost:5000/api/posts/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

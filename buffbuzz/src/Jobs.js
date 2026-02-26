@@ -40,7 +40,7 @@ export default function Jobs() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/profile/${userId}`);
+      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -56,8 +56,8 @@ export default function Jobs() {
   const fetchJobs = async (category = null) => {
     try {
       const url = category && category !== 'all' 
-        ? `http://localhost:3000/api/jobs?category=${category.toUpperCase()}`
-        : 'http://localhost:3000/api/jobs';
+        ? `http://localhost:5000/api/jobs?category=${category.toUpperCase()}`
+        : 'http://localhost:5000/api/jobs';
       
       const response = await fetch(url);
       
@@ -130,7 +130,7 @@ export default function Jobs() {
     
     try {
       if (editingJobId) {
-        const response = await fetch(`http://localhost:3000/api/jobs/${editingJobId}`, {
+        const response = await fetch(`http://localhost:5000/api/jobs/${editingJobId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -163,7 +163,7 @@ export default function Jobs() {
           alert(data.message || 'Failed to update job');
         }
       } else {
-        const response = await fetch('http://localhost:3000/api/jobs/create', {
+        const response = await fetch('http://localhost:5000/api/jobs/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -215,7 +215,7 @@ export default function Jobs() {
   }
 
   try {
-    const response = await fetch(`http://localhost:3000/api/jobs/${jobId}`, {
+    const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

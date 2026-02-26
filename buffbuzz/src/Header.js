@@ -35,7 +35,7 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
       if (!user) return;
 
       try {
-        const response = await fetch(`http://localhost:3000/api/friends/requests/${user.id}`);
+        const response = await fetch(`http://localhost:5000/api/friends/requests/${user.id}`);
         const data = await response.json();
         
         if (response.ok) {
@@ -49,7 +49,7 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
     fetchPendingRequestsCount();
 
     // Poll every 30 seconds to update count
-    const interval = setInterval(fetchPendingRequestsCount, 30000);
+    const interval = setInterval(fetchPendingRequestsCount, 50000);
 
     // Listen for friend request updates
     const handleRefresh = () => fetchPendingRequestsCount();
@@ -106,7 +106,7 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          `http://localhost:3000/api/search-users?query=${encodeURIComponent(value)}`
+          `http://localhost:5000/api/search-users?query=${encodeURIComponent(value)}`
         );
         const data = await response.json();
         const users = Array.isArray(data) ? data : data.users || [];

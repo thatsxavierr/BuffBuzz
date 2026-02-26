@@ -38,7 +38,7 @@ export default function Marketplace() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/profile/${userId}`);
+      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -54,8 +54,8 @@ export default function Marketplace() {
   const fetchItems = async (category = null) => {
     try {
       const url = category && category !== 'all' 
-        ? `http://localhost:3000/api/marketplace?category=${category.toUpperCase()}`
-        : 'http://localhost:3000/api/marketplace';
+        ? `http://localhost:5000/api/marketplace?category=${category.toUpperCase()}`
+        : 'http://localhost:5000/api/marketplace';
       
       const response = await fetch(url);
       
@@ -165,7 +165,7 @@ export default function Marketplace() {
     
     try {
       if (editingItemId) {
-        const response = await fetch(`http://localhost:3000/api/marketplace/${editingItemId}`, {
+        const response = await fetch(`http://localhost:5000/api/marketplace/${editingItemId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -196,7 +196,7 @@ export default function Marketplace() {
           alert(data.message || 'Failed to update item');
         }
       } else {
-        const response = await fetch('http://localhost:3000/api/marketplace/create', {
+        const response = await fetch('http://localhost:5000/api/marketplace/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -238,7 +238,7 @@ export default function Marketplace() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3000/api/marketplace/${itemId}`, {
+      const response = await fetch(`http://localhost:5000/api/marketplace/${itemId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
