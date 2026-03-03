@@ -38,6 +38,8 @@ model User {
   marketplaceItems        MarketplaceItem[]
   messageReactions        MessageReaction[]
   messages                Message[]                 @relation("MessageSender")
+  notificationsReceived   Notification[]            @relation("NotificationRecipient")
+  notificationsSent      Notification[]            @relation("NotificationActor")
   notificationPreferences NotificationPreferences?
   posts                   Post[]
   profile                 Profile?
@@ -82,6 +84,23 @@ model NotificationPreferences {
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_preferences")
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  recipientId String
+  actorId     String
+  type        String   // 'like', 'comment', etc.
+  postId      String?
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor       User     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId])
+  @@index([createdAt])
+  @@map("notifications")
 }
 
 model Post {

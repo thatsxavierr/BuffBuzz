@@ -1258,6 +1258,18 @@ app.post('/api/posts/:postId/like', async (req, res) => {
       }
     });
 
+    // Create notification for post author (don't notify if they liked their own post)
+    if (post.authorId !== userId) {
+      await prisma.notification.create({
+        data: {
+          recipientId: post.authorId,
+          actorId: userId,
+          type: 'like',
+          postId
+        }
+      });
+    }
+
     // Get updated like count
     const likeCount = await prisma.like.count({
       where: { postId }
@@ -1390,6 +1402,18 @@ app.post('/api/posts/:postId/comment', async (req, res) => {
         }
       }
     });
+
+    // Create notification for post author (don't notify if they commented on their own post)
+    if (post.authorId !== userId) {
+      await prisma.notification.create({
+        data: {
+          recipientId: post.authorId,
+          actorId: userId,
+          type: 'comment',
+          postId
+        }
+      });
+    }
 
     // Get updated comment count
     const commentCount = await prisma.comment.count({
@@ -2174,6 +2198,94 @@ app.put('/api/settings/notifications', async (req, res) => {
   } catch (error) {
     console.error('Update preferences error:', error);
     res.status(500).json({ message: 'An error occurred while updating preferences' });
+  }
+});
+
+// ==================== NOTIFICATIONS ====================
+
+// Get notifications for a user
+app.get('/api/notifications/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const notifications = await prisma.notification.findMany({
+      where: { recipientId: userId },
+      include: {
+        actor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formatted = notifications.map(n => ({
+      id: n.id,
+      type: n.type,
+      read: n.read,
+      postId: n.postId,
+      createdAt: n.createdAt,
+      userName: `${n.actor.firstName} ${n.actor.lastName}`,
+      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type
+    }));
+
+    res.status(200).json({ notifications: formatted });
+  } catch (error) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching notifications' });
+  }
+});
+
+// Mark notification as read
+app.put('/api/notifications/:notificationId/read', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    await prisma.notification.update({
+      where: { id: notificationId },
+      data: { read: true }
+    });
+
+    res.status(200).json({ message: 'Notification marked as read' });
+  } catch (error) {
+    console.error('Mark read error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+
+// Mark all notifications as read
+app.put('/api/notifications/:userId/read-all', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    await prisma.notification.updateMany({
+      where: { recipientId: userId },
+      data: { read: true }
+    });
+
+    res.status(200).json({ message: 'All notifications marked as read' });
+  } catch (error) {
+    console.error('Mark all read error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+
+// Delete a notification
+app.delete('/api/notifications/:notificationId', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    await prisma.notification.delete({
+      where: { id: notificationId }
+    });
+
+    res.status(200).json({ message: 'Notification deleted' });
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    res.status(500).json({ message: 'An error occurred' });
   }
 });
 
