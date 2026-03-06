@@ -13,9 +13,11 @@ export default function Marketplace() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [detailItem, setDetailItem] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
+  const [profilePrivacy, setProfilePrivacy] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -27,7 +29,6 @@ export default function Marketplace() {
 
   useEffect(() => {
     const userData = getValidUser();
-    
     if (!userData) {
       navigate('/login');
     } else {
@@ -37,29 +38,37 @@ export default function Marketplace() {
     }
   }, [navigate]);
 
+  // Debounced search — re-runs whenever searchTerm or filter changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(true);
+      fetchItems(filter === 'all' ? null : filter, searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, filter]);
+
   const fetchProfilePicture = async (userId) => {
     try {
       const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
-      
       if (response.ok) {
         const data = await response.json();
-        if (data.profile?.profilePictureUrl) {
-          setProfilePicture(data.profile.profilePictureUrl);
-        }
+        if (data.profile?.profilePictureUrl) setProfilePicture(data.profile.profilePictureUrl);
+        setProfilePrivacy(data.profile?.privacy || 'PUBLIC');
       }
     } catch (error) {
       console.error('Error fetching profile picture:', error);
     }
   };
 
-  const fetchItems = async (category = null) => {
+  const fetchItems = async (category = null, search = '') => {
     try {
-      const url = category && category !== 'all' 
-        ? `http://localhost:5000/api/marketplace?category=${category.toUpperCase()}`
-        : 'http://localhost:5000/api/marketplace';
-      
+      const params = new URLSearchParams();
+      if (category && category !== 'all') params.set('category', category.toUpperCase());
+      if (search && search.trim()) params.set('search', search.trim());
+      const query = params.toString();
+      const url = `http://localhost:5000/api/marketplace${query ? `?${query}` : ''}`;
+
       const response = await fetch(url);
-      
       if (response.ok) {
         const data = await response.json();
         setItems(data.items || []);
@@ -71,35 +80,22 @@ export default function Marketplace() {
     }
   };
 
-  const handleBackClick = () => {
-    navigate('/main');
-  };
+  const handleBackClick = () => navigate('/main');
 
-  const hasUnsavedChanges = () => {
-    return !!(
-      formData.title?.trim() ||
-      formData.description?.trim() ||
-      formData.price?.trim() ||
-      (formData.imageUrls?.length > 0) ||
-      formData.category !== 'TEXTBOOKS' ||
-      formData.condition !== 'NEW'
-    );
-  };
+  const hasUnsavedChanges = () => !!(
+    formData.title?.trim() ||
+    formData.description?.trim() ||
+    formData.price?.trim() ||
+    (formData.imageUrls?.length > 0) ||
+    formData.category !== 'TEXTBOOKS' ||
+    formData.condition !== 'NEW'
+  );
 
   const handleCloseCreateModal = () => {
-    if (hasUnsavedChanges() && !window.confirm('Discard unsaved changes? Your listing will not be saved.')) {
-      return;
-    }
+    if (hasUnsavedChanges() && !window.confirm('Discard unsaved changes? Your listing will not be saved.')) return;
     setShowCreateModal(false);
     setEditingItemId(null);
-    setFormData({
-      title: '',
-      description: '',
-      price: '',
-      category: 'TEXTBOOKS',
-      condition: 'NEW',
-      imageUrls: []
-    });
+    setFormData({ title: '', description: '', price: '', category: 'TEXTBOOKS', condition: 'NEW', imageUrls: [] });
   };
 
   const handleEditItem = (item) => {
@@ -117,7 +113,7 @@ export default function Marketplace() {
   };
 
   const MAX_IMAGES = 5;
-  const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB per image
+  const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
   const MAX_IMAGE_SIZE_MB = 5;
 
   const handleImageChange = (e) => {
@@ -134,108 +130,64 @@ export default function Marketplace() {
 
     const overSize = validTypes.filter(f => f.size > MAX_IMAGE_SIZE_BYTES);
     if (overSize.length > 0) {
-      alert(`Each image must be ${MAX_IMAGE_SIZE_MB}MB or smaller. ${overSize.length} image(s) were not added because they exceed the size limit.`);
+      alert(`Each image must be ${MAX_IMAGE_SIZE_MB}MB or smaller. ${overSize.length} image(s) were not added.`);
       e.target.value = '';
       return;
     }
 
-    const validFiles = validTypes;
     const current = formData.imageUrls || [];
     const remaining = MAX_IMAGES - current.length;
-    const toAdd = validFiles.slice(0, remaining);
-    if (toAdd.length < validFiles.length) {
-      alert(`Maximum ${MAX_IMAGES} images per listing. ${validFiles.length - toAdd.length} image(s) not added.`);
+    const toAdd = validTypes.slice(0, remaining);
+    if (toAdd.length < validTypes.length) {
+      alert(`Maximum ${MAX_IMAGES} images per listing. ${validTypes.length - toAdd.length} image(s) not added.`);
     }
 
-    const readers = toAdd.map(file => {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(file);
-      });
-    });
-
-    Promise.all(readers).then(results => {
-      setFormData(prev => ({
-        ...prev,
-        imageUrls: [...(prev.imageUrls || []), ...results].slice(0, MAX_IMAGES)
-      }));
+    Promise.all(toAdd.map(file => new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    }))).then(results => {
+      setFormData(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...results].slice(0, MAX_IMAGES) }));
     });
     e.target.value = '';
   };
 
   const handleRemoveImage = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      imageUrls: (prev.imageUrls || []).filter((_, i) => i !== index)
-    }));
+    setFormData(prev => ({ ...prev, imageUrls: (prev.imageUrls || []).filter((_, i) => i !== index) }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     try {
       if (editingItemId) {
         const response = await fetch(`http://localhost:5000/api/marketplace/${editingItemId}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...formData,
-            imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined,
-            userId: user.id
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...formData, imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined, userId: user.id })
         });
-
         let data = {};
-        try {
-          data = await response.json();
-        } catch (_) {}
-
+        try { data = await response.json(); } catch (_) {}
         if (response.ok) {
           alert('Item updated successfully!');
           setShowCreateModal(false);
           setEditingItemId(null);
-          setFormData({
-            title: '',
-            description: '',
-            price: '',
-            category: 'TEXTBOOKS',
-            condition: 'NEW',
-            imageUrls: []
-          });
-          fetchItems(filter === 'all' ? null : filter);
+          setFormData({ title: '', description: '', price: '', category: 'TEXTBOOKS', condition: 'NEW', imageUrls: [] });
+          fetchItems(filter === 'all' ? null : filter, searchTerm);
         } else {
           alert(data.message || `Failed to update item (${response.status})`);
         }
       } else {
         const response = await fetch('http://localhost:5000/api/marketplace/create', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...formData,
-            imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined,
-            sellerId: user.id
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...formData, imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined, sellerId: user.id })
         });
-
         const data = await response.json();
-
         if (response.ok) {
           alert('Item listed successfully!');
           setShowCreateModal(false);
-          setFormData({
-            title: '',
-            description: '',
-            price: '',
-            category: 'TEXTBOOKS',
-            condition: 'NEW',
-            imageUrls: []
-          });
-          fetchItems();
+          setFormData({ title: '', description: '', price: '', category: 'TEXTBOOKS', condition: 'NEW', imageUrls: [] });
+          fetchItems(filter === 'all' ? null : filter, searchTerm);
         } else {
           alert(data.message || 'Failed to list item');
         }
@@ -247,26 +199,17 @@ export default function Marketplace() {
   };
 
   const handleDeleteItem = async (itemId) => {
-    if (!window.confirm('Are you sure you want to delete this listing?')) {
-      return;
-    }
-
+    if (!window.confirm('Are you sure you want to delete this listing?')) return;
     try {
       const response = await fetch(`http://localhost:5000/api/marketplace/${itemId}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.id
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
       });
-
       const data = await response.json();
-
       if (response.ok) {
         alert('Item deleted successfully!');
-        fetchItems(filter === 'all' ? null : filter);
+        fetchItems(filter === 'all' ? null : filter, searchTerm);
       } else {
         alert(data.message || 'Failed to delete item');
       }
@@ -279,48 +222,30 @@ export default function Marketplace() {
   const handleMessageSeller = (item) => {
     if (item.sellerId === user.id) return;
     const seller = item.seller || {};
-    navigate('/main', {
-      state: {
-        openChatWithUser: {
-          id: item.sellerId,
-          firstName: seller.firstName || 'User',
-          lastName: seller.lastName || '',
-          profile: seller.profile
-        }
-      }
-    });
+    navigate('/main', { state: { openChatWithUser: { id: item.sellerId, firstName: seller.firstName || 'User', lastName: seller.lastName || '', profile: seller.profile } } });
   };
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
     setLoading(true);
-    fetchItems(newFilter);
+    fetchItems(newFilter === 'all' ? null : newFilter, searchTerm);
   };
 
   const formatCondition = (condition) => {
-    const conditionMap = {
-      'NEW': '✨ New',
-      'LIKE_NEW': '⭐ Like New',
-      'GOOD': '👍 Good',
-      'FAIR': '📦 Fair'
-    };
-    return conditionMap[condition] || condition;
+    const map = { 'NEW': '✨ New', 'LIKE_NEW': '⭐ Like New', 'GOOD': '👍 Good', 'FAIR': '📦 Fair' };
+    return map[condition] || condition;
   };
 
   const formatCategory = (category) => {
-    return category.replace('_', ' ').toLowerCase().split(' ').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
+    return category.replace('_', ' ').toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   };
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <div className="marketplace-page">
       <Header onBackClick={handleBackClick} profilePictureUrl={profilePicture} />
-      
+
       <div className="marketplace-container">
         <div className="marketplace-header">
           <h1>Marketplace</h1>
@@ -328,54 +253,71 @@ export default function Marketplace() {
         </div>
 
         <div className="marketplace-actions">
-          <button 
-            className="sell-item-button"
-            onClick={() => setShowCreateModal(true)}
-          >
+          <button className="sell-item-button" onClick={() => setShowCreateModal(true)}>
             + Sell Item
           </button>
 
           <div className="filter-buttons">
-            <button 
-              className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('all')}
-            >
-              All Items
-            </button>
-            <button 
-              className={`filter-btn ${filter === 'textbooks' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('textbooks')}
-            >
-              Textbooks
-            </button>
-            <button 
-              className={`filter-btn ${filter === 'electronics' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('electronics')}
-            >
-              Electronics
-            </button>
-            <button 
-              className={`filter-btn ${filter === 'furniture' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('furniture')}
-            >
-              Furniture
-            </button>
-            <button 
-              className={`filter-btn ${filter === 'other' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('other')}
-            >
-              Other
-            </button>
+            {[
+              { key: 'all', label: 'All Items' },
+              { key: 'textbooks', label: 'Textbooks' },
+              { key: 'electronics', label: 'Electronics' },
+              { key: 'furniture', label: 'Furniture' },
+              { key: 'other', label: 'Other' }
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                className={`filter-btn ${filter === key ? 'active' : ''}`}
+                onClick={() => handleFilterChange(key)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
+
+        {/* Search Bar */}
+        <div className="search-bar-wrapper" style={{ marginBottom: '24px' }}>
+          <div className="search-bar">
+            <span className="search-icon">🔍</span>
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by title or description…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button className="search-clear-btn" onClick={() => setSearchTerm('')}>✕</button>
+            )}
+          </div>
+        </div>
+
+        {/* Results summary */}
+        {!loading && searchTerm.trim() && (
+          <p className="search-results-summary">
+            {items.length === 0
+              ? `No results for "${searchTerm}"`
+              : `${items.length} result${items.length !== 1 ? 's' : ''} for "${searchTerm}"`}
+          </p>
+        )}
 
         <div className="items-grid">
           {loading ? (
             <div className="loading">Loading items...</div>
           ) : items.length === 0 ? (
             <div className="no-items">
-              <h3>No items available</h3>
-              <p>Be the first to list an item!</p>
+              {searchTerm.trim() ? (
+                <>
+                  <h3>No items found</h3>
+                  <p>Try a different keyword or clear the search.</p>
+                </>
+              ) : (
+                <>
+                  <h3>No items available</h3>
+                  <p>Be the first to list an item!</p>
+                </>
+              )}
             </div>
           ) : (
             items.map(item => {
@@ -390,11 +332,7 @@ export default function Marketplace() {
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailItem(item); } }}
                 >
                   {images.length > 0 ? (
-                    <ImageCarousel
-                      images={images}
-                      alt={item.title}
-                      className="marketplace-image"
-                    />
+                    <ImageCarousel images={images} alt={item.title} className="marketplace-image" />
                   ) : (
                     <div className="marketplace-image-placeholder">
                       <span className="placeholder-icon">📦</span>
@@ -402,20 +340,8 @@ export default function Marketplace() {
                   )}
                   {user.id === item.sellerId && (
                     <div className="item-owner-actions" onClick={(e) => e.stopPropagation()}>
-                      <button 
-                        className="edit-item-button"
-                        onClick={() => handleEditItem(item)}
-                        title="Edit this listing"
-                      >
-                        ✏️
-                      </button>
-                      <button 
-                        className="delete-item-button"
-                        onClick={() => handleDeleteItem(item.id)}
-                        title="Delete this listing"
-                      >
-                        🗑️
-                      </button>
+                      <button className="edit-item-button" onClick={() => handleEditItem(item)} title="Edit this listing">✏️</button>
+                      <button className="delete-item-button" onClick={() => handleDeleteItem(item.id)} title="Delete this listing">🗑️</button>
                     </div>
                   )}
                   <div className="marketplace-content">
@@ -433,7 +359,7 @@ export default function Marketplace() {
                     <div className="item-footer">
                       <span className="seller-info">Sold by {item.sellerName || 'Anonymous'}</span>
                       {item.sellerId !== user.id && (
-                        <button 
+                        <button
                           type="button"
                           className="message-button"
                           onClick={(e) => { e.stopPropagation(); handleMessageSeller(item); }}
@@ -455,13 +381,15 @@ export default function Marketplace() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{editingItemId ? 'Edit Listing' : 'List an Item for Sale'}</h2>
-              <button 
-                className="close-modal"
-                onClick={handleCloseCreateModal}
-              >
-                ×
-              </button>
+              <button className="close-modal" onClick={handleCloseCreateModal}>×</button>
             </div>
+
+            {profilePrivacy && profilePrivacy !== 'PUBLIC' && (
+              <div className="privacy-warning-banner">
+                ⚠️ Your profile is currently set to <strong>{profilePrivacy === 'FRIENDS_ONLY' ? 'Friends Only' : 'Private'}</strong>. 
+                Buyers won't be able to view your profile. Consider switching to <strong>Public</strong> in your profile settings so people can contact you.
+              </div>
+            )}
 
             <form onSubmit={handleSubmit}>
               <div className="form-group">
@@ -502,7 +430,6 @@ export default function Marketplace() {
                     required
                   />
                 </div>
-
                 <div className="form-group">
                   <label htmlFor="category">Category *</label>
                   <select
@@ -524,61 +451,29 @@ export default function Marketplace() {
               <div className="form-group">
                 <label>Condition *</label>
                 <div className="condition-selector">
-                  <button
-                    type="button"
-                    className={`condition-option ${formData.condition === 'NEW' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, condition: 'NEW' })}
-                  >
-                    ✨ New
-                  </button>
-                  <button
-                    type="button"
-                    className={`condition-option ${formData.condition === 'LIKE_NEW' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, condition: 'LIKE_NEW' })}
-                  >
-                    ⭐ Like New
-                  </button>
-                  <button
-                    type="button"
-                    className={`condition-option ${formData.condition === 'GOOD' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, condition: 'GOOD' })}
-                  >
-                    👍 Good
-                  </button>
-                  <button
-                    type="button"
-                    className={`condition-option ${formData.condition === 'FAIR' ? 'selected' : ''}`}
-                    onClick={() => setFormData({ ...formData, condition: 'FAIR' })}
-                  >
-                    📦 Fair
-                  </button>
+                  {['NEW', 'LIKE_NEW', 'GOOD', 'FAIR'].map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`condition-option ${formData.condition === c ? 'selected' : ''}`}
+                      onClick={() => setFormData({ ...formData, condition: c })}
+                    >
+                      {formatCondition(c)}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               <div className="form-group">
                 <label htmlFor="image">Add Images (Optional, up to 5)</label>
                 <p className="image-size-hint">Each image must be 5MB or smaller.</p>
-                <input
-                  type="file"
-                  id="image"
-                  accept="image/*"
-                  multiple
-                  onChange={handleImageChange}
-                  className="file-input"
-                />
+                <input type="file" id="image" accept="image/*" multiple onChange={handleImageChange} className="file-input" />
                 {formData.imageUrls?.length > 0 && (
                   <div className="image-previews-grid">
                     {formData.imageUrls.map((src, index) => (
                       <div key={index} className="image-preview-item">
                         <img src={src} alt={`Preview ${index + 1}`} className="image-preview" />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveImage(index)}
-                          className="remove-image-button"
-                          aria-label="Remove image"
-                        >
-                          ×
-                        </button>
+                        <button type="button" onClick={() => handleRemoveImage(index)} className="remove-image-button" aria-label="Remove image">×</button>
                       </div>
                     ))}
                   </div>
@@ -586,16 +481,8 @@ export default function Marketplace() {
               </div>
 
               <div className="modal-actions">
-                <button 
-                  type="button" 
-                  onClick={handleCloseCreateModal}
-                  className="cancel-btn"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="submit-btn">
-                  {editingItemId ? 'Save Changes' : 'List Item'}
-                </button>
+                <button type="button" onClick={handleCloseCreateModal} className="cancel-btn">Cancel</button>
+                <button type="submit" className="submit-btn">{editingItemId ? 'Save Changes' : 'List Item'}</button>
               </div>
             </form>
           </div>
