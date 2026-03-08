@@ -16,6 +16,7 @@ export default function ProfileView() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [viewingUserId, setViewingUserId] = useState(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
+  const [currentUserProfilePictureUrl, setCurrentUserProfilePictureUrl] = useState(null);
   
   // Friendship states
   const [friendshipStatus, setFriendshipStatus] = useState('NONE');
@@ -65,10 +66,20 @@ export default function ProfileView() {
     
     fetchProfile();
 
-    // Fetch friendship and block status if viewing another user's profile
+    // When viewing someone else's profile, fetch current user's profile picture for the header
     if (targetUserId !== userData.id) {
       fetchFriendshipStatus(userData.id, targetUserId);
       fetchBlockStatus(userData.id, targetUserId);
+      fetch(`http://localhost:5000/api/profile/${userData.id}`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data?.profile?.profilePictureUrl) {
+            setCurrentUserProfilePictureUrl(data.profile.profilePictureUrl);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setCurrentUserProfilePictureUrl(null);
     }
   }, [location.state?.userId, location.state?.refresh, navigate]);
 
@@ -355,6 +366,7 @@ export default function ProfileView() {
       <div>
         <Header 
           onBackClick={() => navigate('/main')} 
+          profilePictureUrl={currentUserProfilePictureUrl}
           currentUserId={currentUserId}
         />
         <div className="profile-view-container">
@@ -369,6 +381,7 @@ export default function ProfileView() {
       <div>
         <Header 
           onBackClick={() => navigate('/main')} 
+          profilePictureUrl={currentUserProfilePictureUrl}
           currentUserId={currentUserId}
         />
         <div className="profile-view-container">
@@ -396,7 +409,7 @@ export default function ProfileView() {
     <div>
       <Header 
         onBackClick={() => navigate('/main')} 
-        profilePictureUrl={isOwnProfile ? profile.profilePictureUrl : null}
+        profilePictureUrl={isOwnProfile ? profile.profilePictureUrl : currentUserProfilePictureUrl}
         currentUserId={currentUserId}
       />
       

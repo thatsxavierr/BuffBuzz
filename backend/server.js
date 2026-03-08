@@ -13,7 +13,7 @@ dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
@@ -48,6 +48,22 @@ function generateVerificationCode() {
 // Normalize email to lowercase for case-insensitive auth and consistent DB storage
 function normalizeEmail(email) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
+// Parse post imageUrl: supports JSON array (multiple images) or single URL
+function parsePostImages(imageUrl) {
+  if (!imageUrl) return [];
+  if (typeof imageUrl !== 'string') return [];
+  const trimmed = imageUrl.trim();
+  if (trimmed.startsWith('[')) {
+    try {
+      const arr = JSON.parse(trimmed);
+      return Array.isArray(arr) ? arr : [imageUrl];
+    } catch {
+      return [imageUrl];
+    }
+  }
+  return [imageUrl];
 }
 
 // Send verification email
@@ -114,7 +130,7 @@ async function sendVerificationEmail(email, verificationCode, firstName) {
 
 // Send password reset email
 async function sendPasswordResetEmail(email, resetToken, firstName) {
-  const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+  const resetLink = `http://localhost:5000/reset-password?token=${resetToken}`;
   
   const mailOptions = {
     from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
@@ -179,17 +195,67 @@ async function sendPasswordResetEmail(email, resetToken, firstName) {
   }
 }
 
+// Send account locked email (when too many failed login attempts)
+async function sendAccountLockedEmail(email, firstName, lockMinutes) {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    to: email,
+    subject: 'BuffBuzz - Account Temporarily Locked',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #800000; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+          .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Account Temporarily Locked</h1>
+          </div>
+          <div class="content">
+            <h2>Hi ${firstName}!</h2>
+            <p>Your BuffBuzz account has been temporarily locked due to too many failed login attempts.</p>
+            <p>Your account will be unlocked in <strong>${lockMinutes} minutes</strong>.</p>
+            <p>If you did not attempt to log in, please change your password as soon as your account is unlocked.</p>
+            <p>Best regards,<br>The BuffBuzz Team</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 BuffBuzz. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('Error sending lock email:', error);
+    throw error;
+  }
+}
+
 // ==================== AUTHENTICATION ENDPOINTS ====================
 
 // Registration endpoint
 app.post('/api/register', async (req, res) => {
   try {
     console.log('Register request received:', req.body);
-    
-    const { email, password, firstName, lastName, userType } = req.body;
+    const { email, password, firstName, lastName, userType, department } = req.body;
 
     if (!email || !password || !firstName || !lastName || !userType) {
       return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    if (/\s/.test(password)) {
+      return res.status(400).json({ message: 'Password cannot contain spaces' });
     }
 
     if (userType !== 'student' && userType !== 'professor') {
@@ -197,9 +263,7 @@ app.post('/api/register', async (req, res) => {
     }
 
     const emailNormalized = normalizeEmail(email);
-
     const existingUser = await prisma.user.findUnique({ where: { email: emailNormalized } });
-
     if (existingUser) {
       return res.status(409).json({ message: 'User with this email already exists' });
     }
@@ -215,6 +279,7 @@ app.post('/api/register', async (req, res) => {
         firstName,
         lastName,
         userType: userType.toUpperCase(),
+        department,
         verificationCode,
         verificationStatus: 'PENDING'
       }
@@ -312,7 +377,7 @@ app.post('/api/resend-code', async (req, res) => {
   }
 });
 
-// Verification endpoint
+// Enhanced Verification endpoint
 app.post('/api/verify', async (req, res) => {
   try {
     const { email, verificationCode } = req.body;
@@ -327,17 +392,32 @@ app.post('/api/verify', async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ 
+        message: 'Account not found. Please sign up again.' 
+      });
     }
 
+    // If already verified, let them know they can log in
     if (user.verificationStatus === 'VERIFIED') {
-      return res.status(400).json({ message: 'User already verified' });
+      return res.status(200).json({ 
+        message: 'Email already verified! You can log in now.',
+        alreadyVerified: true
+      });
+    }
+
+    // Check if verification code exists
+    if (!user.verificationCode) {
+      return res.status(400).json({ 
+        message: 'No verification code found. Please request a new code.',
+        needsNewCode: true
+      });
     }
 
     // Check if too many attempts
     if (user.verificationAttempts >= 3) {
       return res.status(400).json({ 
-        message: 'Too many failed attempts. Please sign up again.' 
+        message: 'Too many failed attempts. Please request a new verification code.',
+        needsNewCode: true
       });
     }
 
@@ -353,16 +433,18 @@ app.post('/api/verify', async (req, res) => {
       
       if (remainingAttempts <= 0) {
         return res.status(400).json({ 
-          message: 'Too many failed attempts. Please sign up again.' 
+          message: 'Too many failed attempts. Please request a new verification code.',
+          needsNewCode: true
         });
       }
 
       return res.status(400).json({ 
-        message: `Invalid verification code. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.` 
+        message: `Invalid verification code. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.`,
+        attemptsRemaining: remainingAttempts
       });
     }
 
-    // Update user to verified and normalize email to lowercase in DB
+    // Successful verification - update user to verified
     const verifiedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -373,11 +455,14 @@ app.post('/api/verify', async (req, res) => {
       }
     });
 
+    console.log(`Email verified successfully for user: ${verifiedUser.email}`);
+
     const { password: _, ...userWithoutPassword } = verifiedUser;
 
     res.status(200).json({
       message: 'Email verified successfully! Welcome to BuffBuzz!',
-      user: userWithoutPassword
+      user: userWithoutPassword,
+      verified: true
     });
 
   } catch (error) {
@@ -432,7 +517,7 @@ app.get('/api/search-users', async (req, res) => {
 });
 
 
-// Login endpoint
+// Login endpoint with attempt tracking
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -463,13 +548,111 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ message: 'Please verify your email first' });
     }
 
+    console.log('=== LOGIN ATTEMPT DEBUG ===');
+    console.log('User email:', user.email);
+    console.log('Current loginAttempts:', user.loginAttempts);
+    console.log('Current lockUntil:', user.lockUntil);
+    console.log('==========================');
+
+    // Check if account is locked
+    if (user.lockUntil && user.lockUntil > new Date()) {
+      const lockTimeRemaining = Math.ceil((user.lockUntil - new Date()) / 60000);
+      console.log('ACCOUNT IS LOCKED! Time remaining:', lockTimeRemaining, 'minutes');
+      return res.status(423).json({ 
+        message: `Account locked due to too many failed login attempts. Try again in ${lockTimeRemaining} minute${lockTimeRemaining === 1 ? '' : 's'}.`,
+        locked: true,
+        lockTimeRemaining
+      });
+    }
+
+    // If lock time has expired, reset login attempts
+    if (user.lockUntil && user.lockUntil <= new Date()) {
+      console.log('Lock expired, resetting attempts');
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          loginAttempts: 0,
+          lockUntil: null
+        }
+      });
+    }
+
+    // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      console.log('INVALID PASSWORD - Incrementing attempts');
+      
+      // Increment login attempts
+      const MAX_LOGIN_ATTEMPTS = 5;
+      const LOCK_TIME_MINUTES = 15;
+      const newAttempts = user.loginAttempts + 1;
+      
+      console.log('New attempt count will be:', newAttempts);
+      
+      const updateData = {
+        loginAttempts: newAttempts
+      };
+
+      // Lock account if max attempts reached
+      if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+        const lockUntil = new Date(Date.now() + LOCK_TIME_MINUTES * 60 * 1000);
+        updateData.lockUntil = lockUntil;
+        
+        console.log('MAX ATTEMPTS REACHED! Locking account until:', lockUntil);
+        
+        // Update user
+        await prisma.user.update({
+          where: { id: user.id },
+          data: updateData
+        });
+
+        // Send email notification about account lock
+        try {
+          await sendAccountLockedEmail(user.email, user.firstName, LOCK_TIME_MINUTES);
+          console.log('Lock email sent successfully');
+        } catch (emailError) {
+          console.error('Failed to send lock notification email:', emailError);
+        }
+
+        return res.status(423).json({ 
+          message: `Account locked due to too many failed login attempts. Try again in ${LOCK_TIME_MINUTES} minutes. Check your email for more information.`,
+          locked: true,
+          lockTimeRemaining: LOCK_TIME_MINUTES
+        });
+      }
+
+      // Update attempts without locking
+      console.log('Updating login attempts to:', newAttempts);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: updateData
+      });
+
+      const attemptsLeft = MAX_LOGIN_ATTEMPTS - newAttempts;
+      console.log('Attempts left:', attemptsLeft);
+      
+      return res.status(401).json({ 
+        message: `Invalid email or password. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} remaining before account lock.`,
+        attemptsRemaining: attemptsLeft
+      });
+    }
+
+    // Successful login - reset attempts if any existed
+    if (user.loginAttempts > 0 || user.lockUntil) {
+      console.log('SUCCESSFUL LOGIN - Resetting attempts');
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          loginAttempts: 0,
+          lockUntil: null
+        }
+      });
     }
 
     const { password: _, ...userWithoutPassword } = user;
+
+    console.log(`Successful login for user: ${user.email}`);
 
     res.status(200).json({
       message: 'Login successful',
@@ -625,16 +808,11 @@ app.get('/api/profile/:userId', async (req, res) => {
     const isOwner = viewerId && viewerId === userId;
     let canViewFullProfile = false;
 
-    console.log('Profile check:', { userId, viewerId, isOwner, privacy });
-
     if (isOwner) {
-      console.log('Owner viewing own profile');
       canViewFullProfile = true;
     } else if (privacy === 'PUBLIC') {
-      console.log('Public profile - allowing full view');
       canViewFullProfile = true;
     } else if (privacy === 'FRIENDS_ONLY' && viewerId) {
-      console.log('Checking friendship status');
       const friendship = await prisma.friendship.findFirst({
         where: {
           OR: [
@@ -644,14 +822,10 @@ app.get('/api/profile/:userId', async (req, res) => {
         }
       });
       canViewFullProfile = !!friendship;
-      console.log('Friendship found:', !!friendship);
-    } else {
-      console.log('Private profile or no viewer - hiding details');
     }
 
     // If can view full profile, return everything
     if (canViewFullProfile) {
-      console.log('Returning full profile data');
       return res.status(200).json({ 
         profile: profile,
         canViewFullProfile: true,
@@ -660,7 +834,6 @@ app.get('/api/profile/:userId', async (req, res) => {
     }
 
     // Otherwise, return limited data
-    console.log('Returning limited profile data');
     const limitedProfile = {
       id: profile.id,
       userId: profile.userId,
@@ -770,36 +943,26 @@ app.put('/api/profile/update', async (req, res) => {
 
 // ==================== POST ENDPOINTS ====================
 
-// Max post image size (5MB) – validate before saving
-const MAX_POST_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-
 // Create a post
 app.post('/api/posts/create', async (req, res) => {
   try {
-    const { title, content, imageUrl, authorId } = req.body;
+    const { title, content, imageUrl, imageUrls, authorId } = req.body;
 
     if (!title || !content || !authorId) {
       return res.status(400).json({ message: 'Title, content, and author are required' });
     }
 
-    if (imageUrl && typeof imageUrl === 'string') {
-      // Base64 data URL: "data:image/...;base64,<data>". Byte size ≈ (base64 length * 3) / 4
-      const base64Prefix = ';base64,';
-      const base64Start = imageUrl.indexOf(base64Prefix);
-      const base64Length = base64Start >= 0 ? imageUrl.length - base64Start - base64Prefix.length : imageUrl.length;
-      const estimatedBytes = Math.ceil((base64Length * 3) / 4);
-      if (estimatedBytes > MAX_POST_IMAGE_SIZE_BYTES) {
-        return res.status(413).json({
-          message: `Image size exceeds the maximum allowed (5MB). Please choose a smaller image.`
-        });
-      }
+    // Support both single imageUrl (legacy) and imageUrls array
+    let storedImageUrl = imageUrl;
+    if (Array.isArray(imageUrls) && imageUrls.length > 0) {
+      storedImageUrl = JSON.stringify(imageUrls);
     }
 
     const post = await prisma.post.create({
       data: {
         title,
         content,
-        imageUrl,
+        imageUrl: storedImageUrl,
         authorId
       },
       include: {
@@ -865,12 +1028,17 @@ app.get('/api/posts', async (req, res) => {
       }
     });
 
-    // Add isLiked flag for each post
-    const postsWithLikeStatus = posts.map(post => ({
-      ...post,
-      isLiked: userId ? post.likes?.length > 0 : false,
-      likes: undefined // Remove likes array from response
-    }));
+    // Add isLiked flag and imageUrls for each post
+    const postsWithLikeStatus = posts.map(post => {
+      const imageUrls = parsePostImages(post.imageUrl);
+      return {
+        ...post,
+        imageUrls: imageUrls.length > 0 ? imageUrls : null,
+        imageUrl: imageUrls[0] || post.imageUrl, // Keep imageUrl for backward compat
+        isLiked: userId ? post.likes?.length > 0 : false,
+        likes: undefined
+      };
+    });
 
     res.status(200).json({ posts: postsWithLikeStatus });
 
@@ -927,7 +1095,14 @@ app.get('/api/posts/:postId', async (req, res) => {
       return res.status(404).json({ message: 'Post not found' });
     }
 
-    res.status(200).json({ post });
+    const imageUrls = parsePostImages(post.imageUrl);
+    const postWithImages = {
+      ...post,
+      imageUrls: imageUrls.length > 0 ? imageUrls : null,
+      imageUrl: imageUrls[0] || post.imageUrl
+    };
+
+    res.status(200).json({ post: postWithImages });
 
   } catch (error) {
     console.error('Get post error:', error);
@@ -962,6 +1137,81 @@ app.delete('/api/posts/:postId', async (req, res) => {
   } catch (error) {
     console.error('Delete post error:', error);
     res.status(500).json({ message: 'An error occurred while deleting the post' });
+  }
+});
+
+// Update a post (author only)
+app.put('/api/posts/:postId', async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const { userId, title, content, imageUrl, imageUrls } = req.body;
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId }
+    });
+
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    if (post.authorId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to edit this post' });
+    }
+
+    let storedImageUrl = post.imageUrl;
+    if (imageUrls !== undefined) {
+      storedImageUrl = Array.isArray(imageUrls) && imageUrls.length > 0 ? JSON.stringify(imageUrls) : null;
+    } else if (imageUrl !== undefined) {
+      storedImageUrl = imageUrl || null;
+    }
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (content !== undefined) updateData.content = content;
+    if (storedImageUrl !== undefined) updateData.imageUrl = storedImageUrl;
+
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: updateData,
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            comments: true,
+            likes: true,
+            shares: true
+          }
+        }
+      }
+    });
+
+    const imageUrlsArr = parsePostImages(updated.imageUrl);
+    const likeCheck = userId ? await prisma.like.findUnique({
+      where: { postId_userId: { postId, userId } }
+    }) : null;
+    const postWithImages = {
+      ...updated,
+      imageUrls: imageUrlsArr.length > 0 ? imageUrlsArr : null,
+      imageUrl: imageUrlsArr[0] || updated.imageUrl,
+      isLiked: !!likeCheck
+    };
+
+    res.status(200).json({ message: 'Post updated successfully', post: postWithImages });
+
+  } catch (error) {
+    console.error('Update post error:', error);
+    res.status(500).json({ message: 'An error occurred while updating the post' });
   }
 });
 
@@ -1007,6 +1257,18 @@ app.post('/api/posts/:postId/like', async (req, res) => {
         userId
       }
     });
+
+    // Create notification for post author (don't notify if they liked their own post)
+    if (post.authorId !== userId) {
+      await prisma.notification.create({
+        data: {
+          recipientId: post.authorId,
+          actorId: userId,
+          type: 'like',
+          postId
+        }
+      });
+    }
 
     // Get updated like count
     const likeCount = await prisma.like.count({
@@ -1140,6 +1402,18 @@ app.post('/api/posts/:postId/comment', async (req, res) => {
         }
       }
     });
+
+    // Create notification for post author (don't notify if they commented on their own post)
+    if (post.authorId !== userId) {
+      await prisma.notification.create({
+        data: {
+          recipientId: post.authorId,
+          actorId: userId,
+          type: 'comment',
+          postId
+        }
+      });
+    }
 
     // Get updated comment count
     const commentCount = await prisma.comment.count({
@@ -1807,6 +2081,10 @@ app.put('/api/settings/password', async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 8 characters' });
     }
 
+    if (/\s/.test(newPassword)) {
+      return res.status(400).json({ message: 'Password cannot contain spaces' });
+    }
+
     // Get user
     const user = await prisma.user.findUnique({
       where: { id: userId }
@@ -1923,6 +2201,94 @@ app.put('/api/settings/notifications', async (req, res) => {
   }
 });
 
+// ==================== NOTIFICATIONS ====================
+
+// Get notifications for a user
+app.get('/api/notifications/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const notifications = await prisma.notification.findMany({
+      where: { recipientId: userId },
+      include: {
+        actor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formatted = notifications.map(n => ({
+      id: n.id,
+      type: n.type,
+      read: n.read,
+      postId: n.postId,
+      createdAt: n.createdAt,
+      userName: `${n.actor.firstName} ${n.actor.lastName}`,
+      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type
+    }));
+
+    res.status(200).json({ notifications: formatted });
+  } catch (error) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching notifications' });
+  }
+});
+
+// Mark notification as read
+app.put('/api/notifications/:notificationId/read', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    await prisma.notification.update({
+      where: { id: notificationId },
+      data: { read: true }
+    });
+
+    res.status(200).json({ message: 'Notification marked as read' });
+  } catch (error) {
+    console.error('Mark read error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+
+// Mark all notifications as read
+app.put('/api/notifications/:userId/read-all', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    await prisma.notification.updateMany({
+      where: { recipientId: userId },
+      data: { read: true }
+    });
+
+    res.status(200).json({ message: 'All notifications marked as read' });
+  } catch (error) {
+    console.error('Mark all read error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+
+// Delete a notification
+app.delete('/api/notifications/:notificationId', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    await prisma.notification.delete({
+      where: { id: notificationId }
+    });
+
+    res.status(200).json({ message: 'Notification deleted' });
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+
 // Delete Account
 app.delete('/api/settings/delete-account', async (req, res) => {
   try {
@@ -1980,7 +2346,6 @@ app.post('/api/jobs/create', async (req, res) => {
       requirements,
       salary,
       applicationLink,
-      applicationDeadline,
       posterId
     } = req.body;
 
@@ -1999,7 +2364,6 @@ app.post('/api/jobs/create', async (req, res) => {
         requirements,
         salary: salary || null,
         applicationLink,
-        applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
         posterId
       },
       include: {
@@ -2049,13 +2413,7 @@ app.get('/api/jobs', async (req, res) => {
       }
     });
 
-    const now = new Date();
-    const jobsWithExpired = jobs.map(j => ({
-      ...j,
-      isExpired: j.applicationDeadline != null && new Date(j.applicationDeadline) < now
-    }));
-
-    res.status(200).json({ jobs: jobsWithExpired });
+    res.status(200).json({ jobs });
 
   } catch (error) {
     console.error('Get jobs error:', error);
@@ -2086,84 +2444,11 @@ app.get('/api/jobs/:jobId', async (req, res) => {
       return res.status(404).json({ message: 'Job not found' });
     }
 
-    const isExpired = job.applicationDeadline != null && new Date(job.applicationDeadline) < new Date();
-    res.status(200).json({ job: { ...job, isExpired } });
+    res.status(200).json({ job });
 
   } catch (error) {
     console.error('Get job error:', error);
     res.status(500).json({ message: 'An error occurred while fetching the job' });
-  }
-});
-
-// Update a job
-app.put('/api/jobs/:jobId', async (req, res) => {
-  try {
-    const { jobId } = req.params;
-    const {
-      title,
-      company,
-      location,
-      jobType,
-      category,
-      description,
-      requirements,
-      salary,
-      applicationLink,
-      applicationDeadline,
-      userId
-    } = req.body;
-
-    const job = await prisma.job.findUnique({
-      where: { id: jobId }
-    });
-
-    if (!job) {
-      return res.status(404).json({ message: 'Job not found' });
-    }
-
-    if (job.posterId !== userId) {
-      return res.status(403).json({ message: 'Not authorized to update this job' });
-    }
-
-    // Parse application deadline only if it's a valid date string
-    let deadlineValue = null;
-    if (applicationDeadline !== undefined && applicationDeadline !== null && String(applicationDeadline).trim() !== '') {
-      const d = new Date(applicationDeadline);
-      if (!isNaN(d.getTime())) deadlineValue = d;
-    }
-
-    const updated = await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        ...(title != null && { title }),
-        ...(company != null && { company }),
-        ...(location != null && { location }),
-        ...(jobType != null && { jobType }),
-        ...(category != null && { category }),
-        ...(description != null && { description }),
-        ...(requirements != null && { requirements }),
-        ...(salary !== undefined && { salary: salary || null }),
-        ...(applicationLink != null && { applicationLink }),
-        ...(applicationDeadline !== undefined && { applicationDeadline: deadlineValue })
-      },
-      include: {
-        poster: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      }
-    });
-
-    const isExpired = updated.applicationDeadline != null && new Date(updated.applicationDeadline) < new Date();
-    res.status(200).json({ message: 'Job updated successfully', job: { ...updated, isExpired } });
-  } catch (error) {
-    console.error('Update job error:', error);
-    const message = error.code === 'P2025' ? 'Job not found' : (error.meta?.cause || error.message || 'An error occurred while updating the job');
-    res.status(500).json({ message });
   }
 });
 
@@ -2194,6 +2479,57 @@ app.delete('/api/jobs/:jobId', async (req, res) => {
   } catch (error) {
     console.error('Delete job error:', error);
     res.status(500).json({ message: 'An error occurred while deleting the job' });
+  }
+});
+
+// Update a job posting (poster only)
+app.put('/api/jobs/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { userId, title, company, location, jobType, category, description, requirements, salary, applicationLink } = req.body;
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId }
+    });
+
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
+    if (job.posterId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to edit this job' });
+    }
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (company !== undefined) updateData.company = company;
+    if (location !== undefined) updateData.location = location;
+    if (jobType !== undefined) updateData.jobType = jobType;
+    if (category !== undefined) updateData.category = category;
+    if (description !== undefined) updateData.description = description;
+    if (requirements !== undefined) updateData.requirements = requirements;
+    if (salary !== undefined) updateData.salary = salary || null;
+    if (applicationLink !== undefined) updateData.applicationLink = applicationLink;
+
+    const updated = await prisma.job.update({
+      where: { id: jobId },
+      data: updateData,
+      include: {
+        poster: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ message: 'Job updated successfully', job: updated });
+
+  } catch (error) {
+    console.error('Update job error:', error);
+    res.status(500).json({ message: 'An error occurred while updating the job' });
   }
 });
 
@@ -2240,10 +2576,14 @@ app.post('/api/marketplace/create', async (req, res) => {
 
     let urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
     urls = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
-    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
-    if (urls.length > 0) {
-      console.log('Marketplace create: saving', urls.length, 'image(s)');
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    for (const url of urls) {
+      const dataUrlMatch = url.match(/^data:(image\/[a-zA-Z]+);base64,/);
+      if (!dataUrlMatch || !allowedImageTypes.includes(dataUrlMatch[1])) {
+        return res.status(400).json({ message: 'Only image files are accepted (JPEG, PNG, GIF, WebP)' });
+      }
     }
+    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
 
     const item = await prisma.marketplaceItem.create({
       data: {
@@ -2295,7 +2635,12 @@ app.get('/api/marketplace', async (req, res) => {
           select: {
             id: true,
             firstName: true,
-            lastName: true
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
           }
         }
       }
@@ -2348,67 +2693,6 @@ app.get('/api/marketplace/:itemId', async (req, res) => {
   }
 });
 
-// Update a marketplace item (seller only)
-app.put('/api/marketplace/:itemId', async (req, res) => {
-  try {
-    const { itemId } = req.params;
-    const {
-      title,
-      description,
-      price,
-      category,
-      condition,
-      imageUrl,
-      imageUrls,
-      userId
-    } = req.body;
-
-    const item = await prisma.marketplaceItem.findUnique({
-      where: { id: itemId }
-    });
-
-    if (!item) {
-      return res.status(404).json({ message: 'Item not found' });
-    }
-
-    if (item.sellerId !== userId) {
-      return res.status(403).json({ message: 'Not authorized to update this item' });
-    }
-
-    const updateData = {};
-    if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
-    if (price !== undefined) updateData.price = parseFloat(price);
-    if (category !== undefined) updateData.category = category;
-    if (condition !== undefined) updateData.condition = condition;
-    if (imageUrls !== undefined || imageUrl !== undefined) {
-      const urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
-      const filtered = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
-      updateData.imageUrl = filtered.length > 0 ? JSON.stringify(filtered) : null;
-    }
-
-    const updated = await prisma.marketplaceItem.update({
-      where: { id: itemId },
-      data: updateData,
-      include: {
-        seller: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
-    });
-
-    const itemWithUrls = { ...updated, imageUrls: getImageUrlsFromItem(updated), sellerName: `${updated.seller.firstName} ${updated.seller.lastName}` };
-    res.status(200).json({ message: 'Item updated successfully', item: itemWithUrls });
-  } catch (error) {
-    console.error('Update marketplace item error:', error);
-    res.status(500).json({ message: error.message || 'An error occurred while updating the item' });
-  }
-});
-
 // Delete a marketplace item
 app.delete('/api/marketplace/:itemId', async (req, res) => {
   try {
@@ -2439,6 +2723,63 @@ app.delete('/api/marketplace/:itemId', async (req, res) => {
   }
 });
 
+// Update a marketplace item (owner only)
+app.put('/api/marketplace/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { userId, title, description, price, category, condition, imageUrl, imageUrls } = req.body;
+
+    const item = await prisma.marketplaceItem.findUnique({
+      where: { id: itemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sellerId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to edit this item' });
+    }
+
+    let storedImageUrl = item.imageUrl;
+    if (Array.isArray(imageUrls)) {
+      const urls = imageUrls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+      storedImageUrl = urls.length > 0 ? JSON.stringify(urls) : null;
+    } else if (imageUrl !== undefined) {
+      storedImageUrl = imageUrl || null;
+    }
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (price !== undefined) updateData.price = parseFloat(price);
+    if (category !== undefined) updateData.category = category;
+    if (condition !== undefined) updateData.condition = condition;
+    if (storedImageUrl !== undefined) updateData.imageUrl = storedImageUrl;
+
+    const updated = await prisma.marketplaceItem.update({
+      where: { id: itemId },
+      data: updateData,
+      include: {
+        seller: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    const itemWithUrls = { ...updated, imageUrls: getImageUrlsFromItem(updated) };
+    res.status(200).json({ message: 'Item updated successfully', item: itemWithUrls });
+
+  } catch (error) {
+    console.error('Update marketplace item error:', error);
+    res.status(500).json({ message: 'An error occurred while updating the item' });
+  }
+});
+
 // ==================== LOST & FOUND ENDPOINTS ====================
 
 // Create a lost/found item
@@ -2462,10 +2803,14 @@ app.post('/api/lostfound/create', async (req, res) => {
 
     let urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
     urls = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
-    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
-    if (urls.length > 0) {
-      console.log('Lost/Found create: saving', urls.length, 'image(s)');
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    for (const url of urls) {
+      const dataUrlMatch = url.match(/^data:(image\/[a-zA-Z]+);base64,/);
+      if (!dataUrlMatch || !allowedImageTypes.includes(dataUrlMatch[1])) {
+        return res.status(400).json({ message: 'Only image files are accepted (JPEG, PNG, GIF, WebP)' });
+      }
     }
+    const imageUrlStorage = urls.length > 0 ? JSON.stringify(urls) : null;
 
     const item = await prisma.lostFoundItem.create({
       data: {
@@ -2518,7 +2863,12 @@ app.get('/api/lostfound', async (req, res) => {
           select: {
             id: true,
             firstName: true,
-            lastName: true
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
           }
         }
       }
@@ -2571,74 +2921,6 @@ app.get('/api/lostfound/:itemId', async (req, res) => {
   }
 });
 
-// Update a lost/found item (edit or mark resolved) – poster only
-app.put('/api/lostfound/:itemId', async (req, res) => {
-  try {
-    const { itemId } = req.params;
-    const {
-      title,
-      description,
-      category,
-      location,
-      date,
-      contactInfo,
-      imageUrl,
-      imageUrls,
-      resolved,
-      userId
-    } = req.body;
-
-    const item = await prisma.lostFoundItem.findUnique({
-      where: { id: itemId }
-    });
-
-    if (!item) {
-      return res.status(404).json({ message: 'Item not found' });
-    }
-
-    if (item.userId !== userId) {
-      return res.status(403).json({ message: 'Not authorized to update this item' });
-    }
-
-    const updateData = {};
-    if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
-    if (category !== undefined) updateData.category = category;
-    if (location !== undefined) updateData.location = location;
-    if (date !== undefined && date !== null && String(date).trim() !== '') {
-      const d = new Date(date);
-      if (!isNaN(d.getTime())) updateData.date = d;
-    }
-    if (contactInfo !== undefined) updateData.contactInfo = contactInfo;
-    if (resolved !== undefined) updateData.resolved = !!resolved;
-    if (imageUrls !== undefined || imageUrl !== undefined) {
-      const urls = Array.isArray(imageUrls) ? imageUrls : (imageUrl ? [imageUrl] : []);
-      const filtered = urls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
-      updateData.imageUrl = filtered.length > 0 ? JSON.stringify(filtered) : null;
-    }
-
-    const updated = await prisma.lostFoundItem.update({
-      where: { id: itemId },
-      data: updateData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
-    });
-
-    const itemWithUrls = { ...updated, imageUrls: getImageUrlsFromItem(updated), userName: `${updated.user.firstName} ${updated.user.lastName}` };
-    res.status(200).json({ message: 'Item updated successfully', item: itemWithUrls });
-  } catch (error) {
-    console.error('Update lost/found item error:', error);
-    res.status(500).json({ message: 'An error occurred while updating the item' });
-  }
-});
-
 // Delete a lost/found item
 app.delete('/api/lostfound/:itemId', async (req, res) => {
   try {
@@ -2669,6 +2951,64 @@ app.delete('/api/lostfound/:itemId', async (req, res) => {
   }
 });
 
+// Update a lost/found item (owner only)
+app.put('/api/lostfound/:itemId', async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { userId, title, description, category, location, date, contactInfo, imageUrl, imageUrls } = req.body;
+
+    const item = await prisma.lostFoundItem.findUnique({
+      where: { id: itemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.userId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to edit this item' });
+    }
+
+    let storedImageUrl = item.imageUrl;
+    if (Array.isArray(imageUrls)) {
+      const urls = imageUrls.filter(Boolean).slice(0, MAX_LISTING_IMAGES);
+      storedImageUrl = urls.length > 0 ? JSON.stringify(urls) : null;
+    } else if (imageUrl !== undefined) {
+      storedImageUrl = imageUrl || null;
+    }
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (category !== undefined) updateData.category = category;
+    if (location !== undefined) updateData.location = location;
+    if (date !== undefined) updateData.date = new Date(date);
+    if (contactInfo !== undefined) updateData.contactInfo = contactInfo;
+    if (storedImageUrl !== undefined) updateData.imageUrl = storedImageUrl;
+
+    const updated = await prisma.lostFoundItem.update({
+      where: { id: itemId },
+      data: updateData,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    const itemWithUrls = { ...updated, imageUrls: getImageUrlsFromItem(updated) };
+    res.status(200).json({ message: 'Item updated successfully', item: itemWithUrls });
+
+  } catch (error) {
+    console.error('Update lost/found item error:', error);
+    res.status(500).json({ message: 'An error occurred while updating the item' });
+  }
+});
+
 // ==================== GROUP ENDPOINTS ====================
 
 // Create a group
@@ -2685,6 +3025,14 @@ app.post('/api/groups/create', async (req, res) => {
 
     if (!name || !description || !category || !privacy || !creatorId) {
       return res.status(400).json({ message: 'All required fields must be filled' });
+    }
+
+    if (imageUrl) {
+      const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      const dataUrlMatch = imageUrl.match(/^data:(image\/[a-zA-Z]+);base64,/);
+      if (!dataUrlMatch || !allowedImageTypes.includes(dataUrlMatch[1])) {
+        return res.status(400).json({ message: 'Only image files are accepted (JPEG, PNG, GIF, WebP)' });
+      }
     }
 
     const group = await prisma.group.create({
@@ -2936,6 +3284,53 @@ app.delete('/api/groups/:groupId', async (req, res) => {
   } catch (error) {
     console.error('Delete group error:', error);
     res.status(500).json({ message: 'An error occurred while deleting the group' });
+  }
+});
+
+// Update a group (creator only)
+app.put('/api/groups/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { userId, name, description, category, privacy, imageUrl } = req.body;
+
+    const group = await prisma.group.findUnique({
+      where: { id: groupId }
+    });
+
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    if (group.creatorId !== userId) {
+      return res.status(403).json({ message: 'Only the group creator can edit this group' });
+    }
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (category !== undefined) updateData.category = category;
+    if (privacy !== undefined) updateData.privacy = privacy;
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
+
+    const updated = await prisma.group.update({
+      where: { id: groupId },
+      data: updateData,
+      include: {
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ message: 'Group updated successfully', group: updated });
+
+  } catch (error) {
+    console.error('Update group error:', error);
+    res.status(500).json({ message: 'An error occurred while updating the group' });
   }
 });
 
@@ -3680,6 +4075,15 @@ app.get('/api/health', (req, res) => {
 });
 
 // ==================== START SERVER ====================
+
+// Prevent crashes from unhandled errors
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
