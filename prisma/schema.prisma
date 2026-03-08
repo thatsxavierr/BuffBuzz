@@ -205,6 +205,7 @@ model Job {
   requirements    String
   salary          String?
   applicationLink String
+  applicationDeadline DateTime?
   posterId        String
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt

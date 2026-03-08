@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './PostCard.css';
 import CommentModel from './CommentModel';
+import LikesModal from './LikesModal';
 import ImageCarousel from './ImageCarousel';
 
 export default function PostCard({ post, currentUserId, onDelete, onUpdate, friendIds = new Set() }) {
   const navigate = useNavigate();
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [isLikesOpen, setIsLikesOpen] = useState(false);
   const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [isSaved, setIsSaved] = useState(false);
   const [likeCount, setLikeCount] = useState(post._count?.likes || 0);
@@ -303,9 +305,17 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
           </button>
         </div>
 
-        {/* Likes Count */}
+        {/* Likes Count - clickable to see who liked */}
         <div className="likes-section">
-          <span className="likes-count">{likeCount} {likeCount === 1 ? 'like' : 'likes'}</span>
+          <span
+            className={`likes-count ${likeCount > 0 ? 'likes-count-clickable' : ''}`}
+            onClick={() => likeCount > 0 && setIsLikesOpen(true)}
+            role={likeCount > 0 ? 'button' : undefined}
+            tabIndex={likeCount > 0 ? 0 : undefined}
+            onKeyDown={(e) => likeCount > 0 && e.key === 'Enter' && setIsLikesOpen(true)}
+          >
+            {likeCount} {likeCount === 1 ? 'like' : 'likes'}
+          </span>
         </div>
 
         {/* Post Content */}
@@ -398,6 +408,14 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
         isOpen={isCommentsOpen}
         onClose={() => setIsCommentsOpen(false)}
         onCommentAdded={handleCommentAdded}
+      />
+
+      {/* Likes Modal */}
+      <LikesModal
+        postId={post.id}
+        likeCount={likeCount}
+        isOpen={isLikesOpen}
+        onClose={() => setIsLikesOpen(false)}
       />
     </>
   );

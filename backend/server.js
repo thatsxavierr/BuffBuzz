@@ -1048,6 +1048,49 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
+// Get users who liked a post (must be before GET /api/posts/:postId so /likes is matched)
+app.get('/api/posts/:postId/likes', async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    if (!postId) {
+      return res.status(400).json({ message: 'Post ID is required', likers: [] });
+    }
+
+    const likes = await prisma.like.findMany({
+      where: { postId },
+      include: {
+        user: {
+          include: {
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const likers = likes
+      .map((like) => like.user)
+      .filter(Boolean)
+      .map((u) => ({
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        profile: u.profile ? { profilePictureUrl: u.profile.profilePictureUrl } : null
+      }));
+
+    res.status(200).json({ likers });
+
+  } catch (error) {
+    console.error('Get likers error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching likers', likers: [] });
+  }
+});
+
 // Get single post
 app.get('/api/posts/:postId', async (req, res) => {
   try {

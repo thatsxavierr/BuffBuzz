@@ -12,6 +12,7 @@ export default function Jobs() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState(''); // NEW
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingJobId, setEditingJobId] = useState(null);
   const [formData, setFormData] = useState({
@@ -39,6 +40,15 @@ export default function Jobs() {
     }
   }, [navigate]);
 
+  // NEW — debounced search: re-runs whenever searchTerm or filter changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(true);
+      fetchJobs(filter === 'all' ? null : filter, searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, filter]);
+
   const fetchProfilePicture = async (userId) => {
     try {
       const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
@@ -54,11 +64,14 @@ export default function Jobs() {
     }
   };
 
-  const fetchJobs = async (category = null) => {
+  // UPDATED — now accepts search param
+  const fetchJobs = async (category = null, search = '') => {
     try {
-      const url = category && category !== 'all' 
-        ? `http://localhost:5000/api/jobs?category=${category.toUpperCase()}`
-        : 'http://localhost:5000/api/jobs';
+      const params = new URLSearchParams();
+      if (category && category !== 'all') params.set('category', category.toUpperCase());
+      if (search && search.trim()) params.set('search', search.trim());
+      const query = params.toString();
+      const url = `http://localhost:5000/api/jobs${query ? `?${query}` : ''}`;
       
       const response = await fetch(url);
       
@@ -154,9 +167,7 @@ export default function Jobs() {
         let data = {};
         try {
           data = await response.json();
-        } catch (_) {
-          // Server may have returned non-JSON (e.g. HTML error page)
-        }
+        } catch (_) {}
 
         if (response.ok) {
           alert('Job updated successfully!');
@@ -174,7 +185,7 @@ export default function Jobs() {
             applicationLink: '',
             applicationDeadline: ''
           });
-          fetchJobs(filter === 'all' ? null : filter);
+          fetchJobs(filter === 'all' ? null : filter, searchTerm);
         } else {
           alert(data.message || `Failed to update job (${response.status})`);
         }
@@ -208,14 +219,14 @@ export default function Jobs() {
             applicationLink: '',
             applicationDeadline: ''
           });
-          fetchJobs();
+          fetchJobs(filter === 'all' ? null : filter, searchTerm);
         } else {
           alert(data.message || 'Failed to post job');
         }
       }
     } catch (error) {
       console.error('Error saving job:', error);
-      const msg = error.message || 'An error occurred while saving the job';
+      const msg = error.message || '';
       alert(msg.includes('fetch') || msg.includes('Network') ? 'Could not reach the server. Is the backend running on port 5000?' : 'An error occurred while saving the job');
     }
   };
@@ -233,39 +244,39 @@ export default function Jobs() {
   };
 
   const handleDeleteJob = async (jobId) => {
-  if (!window.confirm('Are you sure you want to delete this job posting?')) {
-    return;
-  }
-
-  try {
-    const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId: user.id
-      })
-    });
-
-    const data = await response.json();
-
-    if (response.ok) {
-      alert('Job deleted successfully!');
-      fetchJobs(filter === 'all' ? null : filter);
-    } else {
-      alert(data.message || 'Failed to delete job');
+    if (!window.confirm('Are you sure you want to delete this job posting?')) {
+      return;
     }
-  } catch (error) {
-    console.error('Error deleting job:', error);
-    alert('An error occurred while deleting the job');
-  }
-};
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('Job deleted successfully!');
+        fetchJobs(filter === 'all' ? null : filter, searchTerm);
+      } else {
+        alert(data.message || 'Failed to delete job');
+      }
+    } catch (error) {
+      console.error('Error deleting job:', error);
+      alert('An error occurred while deleting the job');
+    }
+  };
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
     setLoading(true);
-    fetchJobs(newFilter);
+    fetchJobs(newFilter === 'all' ? null : newFilter, searchTerm);
   };
 
   const getTypeIcon = (type) => {
@@ -346,13 +357,48 @@ export default function Jobs() {
           </div>
         </div>
 
+        {/* NEW — Search Bar */}
+        <div className="search-bar-wrapper" style={{ marginBottom: '24px' }}>
+          <div className="search-bar">
+            <span className="search-icon">🔍</span>
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by job title..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button className="search-clear-btn" onClick={() => setSearchTerm('')}>✕</button>
+            )}
+          </div>
+        </div>
+
+        {/* NEW — Results summary */}
+        {!loading && searchTerm.trim() && (
+          <p className="search-results-summary">
+            {jobs.length === 0
+              ? `No results for "${searchTerm}"`
+              : `${jobs.length} result${jobs.length !== 1 ? 's' : ''} for "${searchTerm}"`}
+          </p>
+        )}
+
         <div className="jobs-list">
           {loading ? (
             <div className="loading">Loading jobs...</div>
           ) : jobs.length === 0 ? (
             <div className="no-jobs">
-              <h3>No jobs available</h3>
-              <p>Check back later for new opportunities!</p>
+              {searchTerm.trim() ? (
+                <>
+                  <h3>No jobs found</h3>
+                  <p>Try a different keyword or clear the search.</p>
+                </>
+              ) : (
+                <>
+                  <h3>No jobs available</h3>
+                  <p>Check back later for new opportunities!</p>
+                </>
+              )}
             </div>
           ) : (
             jobs.map(job => (
@@ -429,7 +475,7 @@ export default function Jobs() {
         </div>
       </div>
 
-      {/* Create Job Modal */}
+      {/* Create/Edit Job Modal */}
       {showCreateModal && (
         <div className="modal-overlay" onClick={handleCloseCreateModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>

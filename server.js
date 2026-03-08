@@ -2346,6 +2346,7 @@ app.post('/api/jobs/create', async (req, res) => {
       requirements,
       salary,
       applicationLink,
+      applicationDeadline,
       posterId
     } = req.body;
 
@@ -2364,6 +2365,7 @@ app.post('/api/jobs/create', async (req, res) => {
         requirements,
         salary: salary || null,
         applicationLink,
+        applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
         posterId
       },
       include: {
@@ -2392,9 +2394,17 @@ app.post('/api/jobs/create', async (req, res) => {
 // Get all jobs with optional filtering
 app.get('/api/jobs', async (req, res) => {
   try {
-    const { category } = req.query;
+    const { category, search } = req.query;
 
     const whereClause = category && category !== 'ALL_JOBS' ? { category } : {};
+    if (search && search.trim()) {
+      whereClause.OR = [
+        { title: { contains: search.trim(), mode: 'insensitive' } },
+        { company: { contains: search.trim(), mode: 'insensitive' } },
+        { location: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } }
+      ];
+    }
 
     const jobs = await prisma.job.findMany({
       where: whereClause,
@@ -2486,7 +2496,7 @@ app.delete('/api/jobs/:jobId', async (req, res) => {
 app.put('/api/jobs/:jobId', async (req, res) => {
   try {
     const { jobId } = req.params;
-    const { userId, title, company, location, jobType, category, description, requirements, salary, applicationLink } = req.body;
+    const { userId, title, company, location, jobType, category, description, requirements, salary, applicationLink, applicationDeadline } = req.body;
 
     const job = await prisma.job.findUnique({
       where: { id: jobId }
@@ -2510,6 +2520,7 @@ app.put('/api/jobs/:jobId', async (req, res) => {
     if (requirements !== undefined) updateData.requirements = requirements;
     if (salary !== undefined) updateData.salary = salary || null;
     if (applicationLink !== undefined) updateData.applicationLink = applicationLink;
+    if (applicationDeadline !== undefined) updateData.applicationDeadline = applicationDeadline ? new Date(applicationDeadline) : null;
 
     const updated = await prisma.job.update({
       where: { id: jobId },
@@ -2621,9 +2632,15 @@ app.post('/api/marketplace/create', async (req, res) => {
 // Get all marketplace items with optional filtering
 app.get('/api/marketplace', async (req, res) => {
   try {
-    const { category } = req.query;
+    const { category, search } = req.query;
 
     const whereClause = category && category !== 'all' ? { category } : {};
+    if (search && search.trim()) {
+      whereClause.OR = [
+        { title: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } }
+      ];
+    }
 
     const items = await prisma.marketplaceItem.findMany({
       where: whereClause,
@@ -2849,9 +2866,16 @@ app.post('/api/lostfound/create', async (req, res) => {
 // Get all lost/found items with optional filtering
 app.get('/api/lostfound', async (req, res) => {
   try {
-    const { category } = req.query;
+    const { category, search } = req.query;
 
     const whereClause = category && category !== 'all' ? { category } : {};
+    if (search && search.trim()) {
+      whereClause.OR = [
+        { title: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } },
+        { location: { contains: search.trim(), mode: 'insensitive' } }
+      ];
+    }
 
     const items = await prisma.lostFoundItem.findMany({
       where: whereClause,
@@ -3078,7 +3102,17 @@ app.post('/api/groups/create', async (req, res) => {
 // Get all groups
 app.get('/api/groups', async (req, res) => {
   try {
+    const { search } = req.query;
+    const whereClause = {};
+    if (search && search.trim()) {
+      whereClause.OR = [
+        { name: { contains: search.trim(), mode: 'insensitive' } },
+        { description: { contains: search.trim(), mode: 'insensitive' } }
+      ];
+    }
+
     const groups = await prisma.group.findMany({
+      where: whereClause,
       orderBy: {
         createdAt: 'desc'
       },
@@ -3257,6 +3291,73 @@ app.delete('/api/groups/:groupId/leave', async (req, res) => {
   }
 });
 
+// Remove a member from a group (creator/admin only)
+app.delete('/api/groups/:groupId/members/:memberId', async (req, res) => {
+  try {
+    const { groupId, memberId } = req.params;
+    const { adminId } = req.body;
+
+    const group = await prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+
+    // Only the creator or an admin member can remove people
+    const requester = await prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId, userId: adminId } }
+    });
+    if (group.creatorId !== adminId && requester?.role !== 'ADMIN') {
+      return res.status(403).json({ message: 'Only admins can remove members' });
+    }
+
+    // Cannot remove the group creator
+    if (memberId === group.creatorId) {
+      return res.status(400).json({ message: 'Cannot remove the group owner' });
+    }
+
+    await prisma.groupMember.delete({
+      where: { groupId_userId: { groupId, userId: memberId } }
+    });
+
+    res.status(200).json({ message: 'Member removed successfully' });
+  } catch (error) {
+    console.error('Remove member error:', error);
+    res.status(500).json({ message: 'An error occurred while removing the member' });
+  }
+});
+
+// Change a member's role (creator only)
+app.put('/api/groups/:groupId/members/:memberId/role', async (req, res) => {
+  try {
+    const { groupId, memberId } = req.params;
+    const { adminId, role } = req.body;
+
+    if (!['ADMIN', 'MEMBER'].includes(role)) {
+      return res.status(400).json({ message: 'Role must be ADMIN or MEMBER' });
+    }
+
+    const group = await prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+
+    // Only the creator can promote/demote
+    if (group.creatorId !== adminId) {
+      return res.status(403).json({ message: 'Only the group owner can change roles' });
+    }
+
+    // Cannot change the creator's own role
+    if (memberId === group.creatorId) {
+      return res.status(400).json({ message: 'Cannot change the owner\'s role' });
+    }
+
+    const updated = await prisma.groupMember.update({
+      where: { groupId_userId: { groupId, userId: memberId } },
+      data: { role }
+    });
+
+    res.status(200).json({ message: 'Role updated successfully', member: updated });
+  } catch (error) {
+    console.error('Change role error:', error);
+    res.status(500).json({ message: 'An error occurred while updating the role' });
+  }
+});
 // Delete a group
 app.delete('/api/groups/:groupId', async (req, res) => {
   try {

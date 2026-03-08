@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './CommentModel.css';
 
 export default function CommentModel({ post, currentUserId, isOpen, onClose, onCommentAdded }) {
+  const navigate = useNavigate();
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,7 +82,13 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
 
         {/* Post Preview */}
         <div className="modal-post-preview">
-          <div className="preview-author">
+          <div
+            className="preview-author preview-author-clickable"
+            onClick={() => post?.author?.id && (onClose(), navigate('/profile', { state: { userId: post.author.id } }))}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && post?.author?.id && (onClose(), navigate('/profile', { state: { userId: post.author.id } }))}
+          >
             <div className="preview-avatar">
               {post?.author?.profile?.profilePictureUrl ? (
                 <img src={post.author.profile.profilePictureUrl} alt={post.author.firstName} />
@@ -112,7 +120,13 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
               .filter((comment) => comment && comment.id && comment.author)
               .map((comment) => (
               <div key={comment.id} className="modal-comment-item">
-                <div className="modal-comment-avatar">
+                <div
+                  className="modal-comment-avatar modal-comment-avatar-clickable"
+                  onClick={() => comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
+                >
                   {comment.author?.profile?.profilePictureUrl ? (
                     <img src={comment.author.profile.profilePictureUrl} alt={comment.author.firstName} />
                   ) : (
@@ -121,7 +135,13 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
                 </div>
                 <div className="modal-comment-content">
                   <div className="modal-comment-header">
-                    <span className="modal-comment-username">
+                    <span
+                      className="modal-comment-username modal-comment-username-clickable"
+                      onClick={() => comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
+                    >
                       {comment.author ? `${comment.author.firstName?.toLowerCase() ?? ''}${comment.author.lastName?.toLowerCase() ?? ''}` : 'Unknown'}
                     </span>
                     <span className="modal-comment-text">{comment.content}</span>
