@@ -5,6 +5,30 @@ import Header from './Header';
 import Footer from './Footer';
 import { getValidUser } from './sessionUtils';
 
+// Abbreviate a group name to 2-4 characters for the badge
+// e.g. "Black Student Union" → "BSU", "ASO" → "ASO", "Computer Science Club" → "CSC"
+function abbreviate(name) {
+  if (!name) return '';
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) return name.slice(0, 4).toUpperCase();
+  return words.map(w => w[0]).join('').toUpperCase().slice(0, 4);
+}
+
+// Pick a deterministic badge color from a small palette
+const BADGE_COLORS = [
+  { bg: '#800000', text: '#fff' },
+  { bg: '#1e40af', text: '#fff' },
+  { bg: '#065f46', text: '#fff' },
+  { bg: '#7c3aed', text: '#fff' },
+  { bg: '#b45309', text: '#fff' },
+  { bg: '#be185d', text: '#fff' },
+];
+function badgeColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i);
+  return BADGE_COLORS[hash % BADGE_COLORS.length];
+}
+
 export default function ProfileView() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -16,6 +40,7 @@ export default function ProfileView() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [viewingUserId, setViewingUserId] = useState(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
+  const [currentUserProfilePictureUrl, setCurrentUserProfilePictureUrl] = useState(null);
   
   // Friendship states
   const [friendshipStatus, setFriendshipStatus] = useState('NONE');
@@ -27,6 +52,14 @@ export default function ProfileView() {
   const [isBlocked, setIsBlocked] = useState(false);
   const [isBlockedBy, setIsBlockedBy] = useState(false);
   const [blockLoading, setBlockLoading] = useState(false);
+
+  // Organization badges
+  const [userGroups, setUserGroups] = useState([]);
+
+  // Scroll to top when navigating to this profile (e.g. from comment section or likes modal)
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname, location.state?.userId]);
 
   useEffect(() => {
     const userData = getValidUser();
@@ -62,13 +95,40 @@ export default function ProfileView() {
         setLoading(false);
       }
     };
+
+    const fetchUserGroups = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/groups');
+        if (response.ok) {
+          const data = await response.json();
+          // Keep groups this user is a member of
+          const membered = (data.groups || []).filter(g =>
+            g.members?.includes(targetUserId)
+          );
+          setUserGroups(membered);
+        }
+      } catch (error) {
+        console.error('Error fetching groups for badges:', error);
+      }
+    };
     
     fetchProfile();
+    fetchUserGroups();
 
-    // Fetch friendship and block status if viewing another user's profile
+    // When viewing someone else's profile, fetch current user's profile picture for the header
     if (targetUserId !== userData.id) {
       fetchFriendshipStatus(userData.id, targetUserId);
       fetchBlockStatus(userData.id, targetUserId);
+      fetch(`http://localhost:5000/api/profile/${userData.id}`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data?.profile?.profilePictureUrl) {
+            setCurrentUserProfilePictureUrl(data.profile.profilePictureUrl);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setCurrentUserProfilePictureUrl(null);
     }
   }, [location.state?.userId, location.state?.refresh, navigate]);
 
@@ -285,12 +345,10 @@ export default function ProfileView() {
   const renderFriendButton = () => {
     if (isOwnProfile) return null;
     
-    // If you're blocked by them, show nothing
     if (isBlockedBy) {
       return <p style={{ color: '#ccc', fontSize: '14px', margin: 0 }}>This user is unavailable</p>;
     }
 
-    // Show unblock button if you blocked them
     if (isBlocked) {
       return (
         <button 
@@ -303,10 +361,8 @@ export default function ProfileView() {
       );
     }
 
-    // Show friend buttons and block option
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {/* Friend button logic */}
         {friendButtonLoading ? (
           <button className="friend-button friend-loading" disabled>Loading...</button>
         ) : friendshipStatus === 'ACCEPTED' ? (
@@ -334,7 +390,6 @@ export default function ProfileView() {
           </button>
         )}
         
-        {/* Block button */}
         <button 
           className="block-button"
           onClick={handleBlock}
@@ -355,6 +410,7 @@ export default function ProfileView() {
       <div>
         <Header 
           onBackClick={() => navigate('/main')} 
+          profilePictureUrl={currentUserProfilePictureUrl}
           currentUserId={currentUserId}
         />
         <div className="profile-view-container">
@@ -369,6 +425,7 @@ export default function ProfileView() {
       <div>
         <Header 
           onBackClick={() => navigate('/main')} 
+          profilePictureUrl={currentUserProfilePictureUrl}
           currentUserId={currentUserId}
         />
         <div className="profile-view-container">
@@ -396,7 +453,7 @@ export default function ProfileView() {
     <div>
       <Header 
         onBackClick={() => navigate('/main')} 
-        profilePictureUrl={isOwnProfile ? profile.profilePictureUrl : null}
+        profilePictureUrl={isOwnProfile ? profile.profilePictureUrl : currentUserProfilePictureUrl}
         currentUserId={currentUserId}
       />
       
@@ -412,7 +469,30 @@ export default function ProfileView() {
               )}
             </div>
             <div className="profile-header-info">
-              <h1>{profile.name || `${profile.user?.firstName} ${profile.user?.lastName}`}</h1>
+              {/* Name + org badges */}
+              <div className="profile-name-row">
+                <h1>{profile.name || `${profile.user?.firstName} ${profile.user?.lastName}`}</h1>
+                {userGroups.length > 0 && (
+                  <div className="org-badges">
+                    {userGroups.map(group => {
+                      const abbr = abbreviate(group.name);
+                      const colors = badgeColor(group.name);
+                      return (
+                        <button
+                          key={group.id}
+                          className="org-badge"
+                          style={{ backgroundColor: colors.bg, color: colors.text }}
+                          title={group.name}
+                          onClick={() => navigate('/groups', { state: { highlightGroupId: group.id } })}
+                        >
+                          {abbr}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {profile.pronouns && (
                 <p className="pronouns">({profile.pronouns})</p>
               )}

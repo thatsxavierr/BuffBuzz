@@ -348,6 +348,14 @@
   color: #262626;
 }
 
+.likes-count-clickable {
+  cursor: pointer;
+}
+
+.likes-count-clickable:hover {
+  color: #800000;
+}
+
 /* Content */
 .post-content {
   padding: 0 16px 8px;

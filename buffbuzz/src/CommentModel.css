@@ -86,6 +86,14 @@
   margin-bottom: 8px;
 }
 
+.preview-author-clickable {
+  cursor: pointer;
+}
+
+.preview-author-clickable:hover .preview-username {
+  color: #800000;
+}
+
 .preview-avatar {
   width: 32px;
   height: 32px;
@@ -205,6 +213,20 @@
   font-size: 14px;
   font-weight: 600;
   color: #262626;
+}
+
+.modal-comment-username-clickable,
+.modal-comment-avatar-clickable {
+  cursor: pointer;
+}
+
+.modal-comment-username-clickable:hover,
+.modal-comment-avatar-clickable:hover + .modal-comment-content .modal-comment-username-clickable {
+  color: #800000;
+}
+
+.modal-comment-avatar-clickable:hover {
+  opacity: 0.85;
 }
 
 .modal-comment-text {
