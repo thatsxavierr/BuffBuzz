@@ -2389,7 +2389,8 @@ app.post('/api/jobs/create', async (req, res) => {
       requirements,
       salary,
       applicationLink,
-      posterId
+      posterId,
+      applicationDeadline
     } = req.body;
 
     if (!title || !company || !location || !jobType || !category || !description || !requirements || !applicationLink || !posterId) {
@@ -2407,6 +2408,7 @@ app.post('/api/jobs/create', async (req, res) => {
         requirements,
         salary: salary || null,
         applicationLink,
+        applicationDeadline: applicationDeadline ? new Date(applicationDeadline) : null,
         posterId
       },
       include: {
@@ -2529,7 +2531,7 @@ app.delete('/api/jobs/:jobId', async (req, res) => {
 app.put('/api/jobs/:jobId', async (req, res) => {
   try {
     const { jobId } = req.params;
-    const { userId, title, company, location, jobType, category, description, requirements, salary, applicationLink } = req.body;
+    const { userId, title, company, location, jobType, category, description, requirements, salary, applicationLink, applicationDeadline } = req.body;
 
     const job = await prisma.job.findUnique({
       where: { id: jobId }
@@ -2553,6 +2555,9 @@ app.put('/api/jobs/:jobId', async (req, res) => {
     if (requirements !== undefined) updateData.requirements = requirements;
     if (salary !== undefined) updateData.salary = salary || null;
     if (applicationLink !== undefined) updateData.applicationLink = applicationLink;
+    if (applicationDeadline !== undefined) {
+      updateData.applicationDeadline = applicationDeadline ? new Date(applicationDeadline) : null;
+    }
 
     const updated = await prisma.job.update({
       where: { id: jobId },
