@@ -119,12 +119,15 @@ export default function Notifications() {
     const icons = {
       like: '❤️',
       comment: '💬',
+      reply: '↩️',
       follow: '👤',
       mention: '📢',
       share: '🔄',
       group: '👥',
       event: '📅',
-      message: '✉️'
+      message: '✉️',
+      marketplace_listing: '🛒',
+      lostfound_listing: '🔍'
     };
     return icons[type] || '🔔';
   };
@@ -196,6 +199,30 @@ export default function Notifications() {
             onClick={() => setFilter('follow')}
           >
             Follows
+          </button>
+          <button 
+            className={`filter-btn ${filter === 'mention' ? 'active' : ''}`}
+            onClick={() => setFilter('mention')}
+          >
+            Mentions
+          </button>
+          <button 
+            className={`filter-btn ${filter === 'reply' ? 'active' : ''}`}
+            onClick={() => setFilter('reply')}
+          >
+            Replies
+          </button>
+          <button 
+            className={`filter-btn ${filter === 'marketplace_listing' ? 'active' : ''}`}
+            onClick={() => setFilter('marketplace_listing')}
+          >
+            Marketplace
+          </button>
+          <button 
+            className={`filter-btn ${filter === 'lostfound_listing' ? 'active' : ''}`}
+            onClick={() => setFilter('lostfound_listing')}
+          >
+            Lost & Found
           </button>
         </div>
 

@@ -1365,7 +1365,7 @@ app.get('/api/posts/:postId/is-liked/:userId', async (req, res) => {
 app.post('/api/posts/:postId/comment', async (req, res) => {
   try {
     const { postId } = req.params;
-    const { userId, content } = req.body;
+    const { userId, content, mentionedUserIds } = req.body;
 
     if (!userId || !content) {
       return res.status(400).json({ message: 'User ID and content are required' });
@@ -1415,6 +1415,21 @@ app.post('/api/posts/:postId/comment', async (req, res) => {
       });
     }
 
+    // Create mention notifications for each mentioned user
+    const mentionedIds = Array.isArray(mentionedUserIds) ? [...new Set(mentionedUserIds)].filter(Boolean) : [];
+    for (const mentionedId of mentionedIds) {
+      if (mentionedId === userId) continue; // Don't notify yourself
+      if (mentionedId === post.authorId) continue; // Post author already gets "comment" notification
+      await prisma.notification.create({
+        data: {
+          recipientId: mentionedId,
+          actorId: userId,
+          type: 'mention',
+          postId
+        }
+      });
+    }
+
     // Get updated comment count
     const commentCount = await prisma.comment.count({
       where: { postId }
@@ -1432,13 +1447,99 @@ app.post('/api/posts/:postId/comment', async (req, res) => {
   }
 });
 
-// Get comments for a post
+// Get comments for a post (top-level only, with nested replies)
 app.get('/api/posts/:postId/comments', async (req, res) => {
   try {
     const { postId } = req.params;
 
     const comments = await prisma.comment.findMany({
-      where: { postId },
+      where: { postId, parentId: null },
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        },
+        replies: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: {
+                  select: {
+                    profilePictureUrl: true
+                  }
+                }
+              }
+            },
+            replies: {
+              include: {
+                author: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    profile: {
+                      select: {
+                        profilePictureUrl: true
+                      }
+                    }
+                  }
+                }
+              },
+              orderBy: { createdAt: 'asc' }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.status(200).json({ comments });
+
+  } catch (error) {
+    console.error('Get comments error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching comments' });
+  }
+});
+
+// Reply to a comment
+app.post('/api/comments/:commentId/reply', async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { userId, content, mentionedUserIds } = req.body;
+
+    if (!userId || !content) {
+      return res.status(400).json({ message: 'User ID and content are required' });
+    }
+
+    const parentComment = await prisma.comment.findUnique({
+      where: { id: commentId }
+    });
+
+    if (!parentComment) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+
+    const reply = await prisma.comment.create({
+      data: {
+        content,
+        postId: parentComment.postId,
+        authorId: userId,
+        parentId: commentId
+      },
       include: {
         author: {
           select: {
@@ -1452,17 +1553,46 @@ app.get('/api/posts/:postId/comments', async (req, res) => {
             }
           }
         }
-      },
-      orderBy: {
-        createdAt: 'desc'
       }
     });
 
-    res.status(200).json({ comments });
+    // Create notification for comment owner (don't notify if replying to your own comment)
+    if (parentComment.authorId !== userId) {
+      await prisma.notification.create({
+        data: {
+          recipientId: parentComment.authorId,
+          actorId: userId,
+          type: 'reply',
+          postId: parentComment.postId,
+          commentId
+        }
+      });
+    }
+
+    // Create mention notifications for each mentioned user
+    const mentionedIds = Array.isArray(mentionedUserIds) ? [...new Set(mentionedUserIds)].filter(Boolean) : [];
+    for (const mentionedId of mentionedIds) {
+      if (mentionedId === userId) continue;
+      if (mentionedId === parentComment.authorId) continue;
+      await prisma.notification.create({
+        data: {
+          recipientId: mentionedId,
+          actorId: userId,
+          type: 'mention',
+          postId: parentComment.postId,
+          commentId
+        }
+      });
+    }
+
+    res.status(201).json({
+      message: 'Reply added successfully',
+      reply
+    });
 
   } catch (error) {
-    console.error('Get comments error:', error);
-    res.status(500).json({ message: 'An error occurred while fetching comments' });
+    console.error('Reply to comment error:', error);
+    res.status(500).json({ message: 'An error occurred while adding the reply' });
   }
 });
 
@@ -2227,9 +2357,12 @@ app.get('/api/notifications/:userId', async (req, res) => {
       type: n.type,
       read: n.read,
       postId: n.postId,
+      commentId: n.commentId,
+      marketplaceItemId: n.marketplaceItemId,
+      lostFoundItemId: n.lostFoundItemId,
       createdAt: n.createdAt,
       userName: `${n.actor.firstName} ${n.actor.lastName}`,
-      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type
+      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type
     }));
 
     res.status(200).json({ notifications: formatted });
@@ -2606,6 +2739,22 @@ app.post('/api/marketplace/create', async (req, res) => {
       }
     });
 
+    // Notify all users except the seller about the new listing
+    const otherUsers = await prisma.user.findMany({
+      where: { id: { not: sellerId } },
+      select: { id: true }
+    });
+    if (otherUsers.length > 0) {
+      await prisma.notification.createMany({
+        data: otherUsers.map(u => ({
+          recipientId: u.id,
+          actorId: sellerId,
+          type: 'marketplace_listing',
+          marketplaceItemId: item.id
+        }))
+      });
+    }
+
     const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
     res.status(201).json({
       message: 'Item listed successfully',
@@ -2833,6 +2982,22 @@ app.post('/api/lostfound/create', async (req, res) => {
         }
       }
     });
+
+    // Notify all users except the poster about the new lost & found listing
+    const otherUsers = await prisma.user.findMany({
+      where: { id: { not: userId } },
+      select: { id: true }
+    });
+    if (otherUsers.length > 0) {
+      await prisma.notification.createMany({
+        data: otherUsers.map(u => ({
+          recipientId: u.id,
+          actorId: userId,
+          type: 'lostfound_listing',
+          lostFoundItemId: item.id
+        }))
+      });
+    }
 
     const itemWithUrls = { ...item, imageUrls: getImageUrlsFromItem(item) };
     res.status(201).json({

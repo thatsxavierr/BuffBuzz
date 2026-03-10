@@ -224,9 +224,60 @@
   color: #8e8e8e;
 }
 
+.modal-comment-reply-btn {
+  background: none;
+  border: none;
+  color: #800000;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.modal-comment-reply-btn:hover {
+  color: #600000;
+  text-decoration: underline;
+}
+
+.modal-comment-block {
+  margin-bottom: 20px;
+}
+
+.modal-comment-reply {
+  margin-left: 44px;
+  margin-top: 12px;
+}
+
+.modal-comment-nested {
+  margin-left: 44px;
+}
+
+.modal-reply-thread {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-cancel-reply-btn {
+  background: none;
+  border: none;
+  color: #8e8e8e;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.modal-cancel-reply-btn:hover {
+  color: #262626;
+}
+
 /* Add Comment */
-.modal-add-comment {
+.modal-add-comment-wrapper {
+  position: relative;
   border-top: 1px solid #efefef;
+}
+
+.modal-add-comment {
   padding: 16px 20px;
   display: flex;
   gap: 12px;
@@ -264,6 +315,63 @@
   color: #b3d4ff;
   cursor: default;
   opacity: 0.5;
+}
+
+/* Mention dropdown */
+.mention-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 20px;
+  right: 20px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #dbdbdb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-bottom: 4px;
+  z-index: 10;
+}
+
+.mention-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  color: #262626;
+  transition: background-color 0.15s;
+}
+
+.mention-dropdown-item:hover {
+  background-color: #f0f0f0;
+}
+
+.mention-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.mention-avatar-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.mention-name {
+  font-weight: 500;
 }
 
 /* Scrollbar styling */
