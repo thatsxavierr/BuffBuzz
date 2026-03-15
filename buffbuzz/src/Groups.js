@@ -27,6 +27,8 @@ export default function Groups() {
   const [groupMembers, setGroupMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [manageTab, setManageTab] = useState('members'); // 'members' | 'settings'
+  const [joinRequests, setJoinRequests] = useState([]);
+  const [joinRequestsLoading, setJoinRequestsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -109,13 +111,81 @@ export default function Groups() {
     setManagingGroup(group);
     setManageTab('members');
     setShowMembersModal(true);
+    setJoinRequests([]);
     fetchGroupMembers(group.id);
+    if (group.creatorId === user.id && group.privacy === 'PRIVATE') {
+      fetchJoinRequests(group.id);
+    }
+  };
+
+  const fetchJoinRequests = async (groupId) => {
+    setJoinRequestsLoading(true);
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/groups/${groupId}/join-requests?userId=${encodeURIComponent(user.id)}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setJoinRequests(data.requests || []);
+      }
+    } catch (err) {
+      console.error('Error fetching join requests:', err);
+    } finally {
+      setJoinRequestsLoading(false);
+    }
+  };
+
+  const handleApproveJoinRequest = async (requestId) => {
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/groups/${managingGroup.id}/join-requests/${requestId}/approve`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id })
+        }
+      );
+      const data = await response.json();
+      if (response.ok) {
+        setJoinRequests(prev => prev.filter(r => r.id !== requestId));
+        fetchGroupMembers(managingGroup.id);
+        fetchGroups(searchTerm);
+      } else {
+        alert(data.message || 'Failed to approve');
+      }
+    } catch (err) {
+      console.error('Error approving request:', err);
+      alert('An error occurred');
+    }
+  };
+
+  const handleDenyJoinRequest = async (requestId) => {
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/groups/${managingGroup.id}/join-requests/${requestId}/deny`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id })
+        }
+      );
+      const data = await response.json();
+      if (response.ok) {
+        setJoinRequests(prev => prev.filter(r => r.id !== requestId));
+      } else {
+        alert(data.message || 'Failed to deny');
+      }
+    } catch (err) {
+      console.error('Error denying request:', err);
+      alert('An error occurred');
+    }
   };
 
   const handleCloseMembersModal = () => {
     setShowMembersModal(false);
     setManagingGroup(null);
     setGroupMembers([]);
+    setJoinRequests([]);
   };
 
   const handleRemoveMember = async (memberId, memberName) => {
@@ -256,23 +326,32 @@ export default function Groups() {
     }
   };
 
-  const handleJoinGroup = async (groupId) => {
+  const handleJoinGroup = async (group) => {
+    const groupId = group?.id ?? group;
+    const isPrivate = group?.privacy === 'PRIVATE';
+    const url = isPrivate
+      ? `http://localhost:5000/api/groups/${groupId}/request-join`
+      : `http://localhost:5000/api/groups/${groupId}/join`;
     try {
-      const response = await fetch(`http://localhost:5000/api/groups/${groupId}/join`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
       });
       const data = await response.json();
       if (response.ok) {
-        alert('Successfully joined the group!');
+        if (isPrivate) {
+          alert('Join request sent! The group owner will be notified and can approve or deny.');
+        } else {
+          alert('Successfully joined the group!');
+        }
         fetchGroups(searchTerm);
       } else {
-        alert(data.message || 'Failed to join group');
+        alert(data.message || (isPrivate ? 'Failed to send join request' : 'Failed to join group'));
       }
     } catch (error) {
       console.error('Error joining group:', error);
-      alert('An error occurred while joining the group');
+      alert(error.message || (isPrivate ? 'An error occurred while sending the join request.' : 'An error occurred while joining the group.'));
     }
   };
 
@@ -469,7 +548,7 @@ export default function Groups() {
                         )}
                       </>
                     ) : (
-                      <button className="join-button" onClick={() => handleJoinGroup(group.id)}>
+                      <button className="join-button" onClick={() => handleJoinGroup(group)}>
                         {group.privacy === 'PRIVATE' ? 'Request to Join' : 'Join Group'}
                       </button>
                     )}
@@ -604,7 +683,7 @@ export default function Groups() {
                     )}
                   </>
                 ) : (
-                  <button className="join-button" onClick={() => { handleJoinGroup(detailGroup.id); setDetailGroup(null); }}>
+                  <button className="join-button" onClick={() => { handleJoinGroup(detailGroup); setDetailGroup(null); }}>
                     {detailGroup.privacy === 'PRIVATE' ? 'Request to Join' : 'Join Group'}
                   </button>
                 )}
@@ -645,6 +724,42 @@ export default function Groups() {
             {/* Members Tab */}
             {manageTab === 'members' && (
               <div className="manage-members-body">
+                {managingGroup.creatorId === user.id && managingGroup.privacy === 'PRIVATE' && (
+                  <div className="join-requests-section">
+                    <h3 className="join-requests-title">Pending join requests</h3>
+                    {joinRequestsLoading ? (
+                      <div className="members-loading">Loading requests...</div>
+                    ) : joinRequests.length === 0 ? (
+                      <p className="no-join-requests">No pending requests.</p>
+                    ) : (
+                      <ul className="join-requests-list">
+                        {joinRequests.map((req) => (
+                          <li key={req.id} className="join-request-item">
+                            <span className="join-request-name">
+                              {req.user?.firstName} {req.user?.lastName}
+                            </span>
+                            <div className="join-request-actions">
+                              <button
+                                type="button"
+                                className="join-request-btn approve"
+                                onClick={() => handleApproveJoinRequest(req.id)}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="join-request-btn deny"
+                                onClick={() => handleDenyJoinRequest(req.id)}
+                              >
+                                Deny
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 {membersLoading ? (
                   <div className="members-loading">Loading members...</div>
                 ) : groupMembers.length === 0 ? (

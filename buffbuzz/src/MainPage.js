@@ -94,7 +94,7 @@ export default function MainPage() {
           </div>
         </div>
         
-        <RightSidebar initialOpenChat={location.state?.openChatWithUser} />
+        <RightSidebar initialOpenChat={location.state?.openChatWithUser} initialOpenConversationId={location.state?.openConversationId} />
       </div>
       <Footer />
     </div>

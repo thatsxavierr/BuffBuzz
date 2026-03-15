@@ -213,6 +213,42 @@
   margin-top: 6px;
 }
 
+.notification-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.notification-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.notification-btn.approve {
+  background-color: #16a34a;
+  color: white;
+}
+
+.notification-btn.approve:hover {
+  background-color: #15803d;
+}
+
+.notification-btn.deny {
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+.notification-btn.deny:hover {
+  background-color: #dc2626;
+  color: white;
+}
+
 .delete-notification {
   background: none;
   border: none;

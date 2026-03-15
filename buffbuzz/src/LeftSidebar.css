@@ -41,8 +41,12 @@
 }
 
 .nav-icon {
+  position: relative;
   font-size: 20px;
   min-width: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .nav-text {
@@ -52,4 +56,25 @@
 
 .left-sidebar:hover .nav-text {
   opacity: 1;
+}
+
+.nav-badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  background-color: #dc2626;
+  color: #ffffff;
+  border-radius: 9999px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: 0 0 0 2px #ffffff;
+  z-index: 10;
 }

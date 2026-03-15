@@ -1048,49 +1048,6 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
-// Get users who liked a post (must be before GET /api/posts/:postId so /likes is matched)
-app.get('/api/posts/:postId/likes', async (req, res) => {
-  try {
-    const { postId } = req.params;
-
-    if (!postId) {
-      return res.status(400).json({ message: 'Post ID is required', likers: [] });
-    }
-
-    const likes = await prisma.like.findMany({
-      where: { postId },
-      include: {
-        user: {
-          include: {
-            profile: {
-              select: {
-                profilePictureUrl: true
-              }
-            }
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    const likers = likes
-      .map((like) => like.user)
-      .filter(Boolean)
-      .map((u) => ({
-        id: u.id,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        profile: u.profile ? { profilePictureUrl: u.profile.profilePictureUrl } : null
-      }));
-
-    res.status(200).json({ likers });
-
-  } catch (error) {
-    console.error('Get likers error:', error);
-    res.status(500).json({ message: 'An error occurred while fetching likers', likers: [] });
-  }
-});
-
 // Get single post
 app.get('/api/posts/:postId', async (req, res) => {
   try {
@@ -1377,6 +1334,44 @@ app.delete('/api/posts/:postId/unlike', async (req, res) => {
   } catch (error) {
     console.error('Unlike post error:', error);
     res.status(500).json({ message: 'An error occurred while unliking the post' });
+  }
+});
+
+// Get list of users who liked a post
+app.get('/api/posts/:postId/likes', async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    const likes = await prisma.like.findMany({
+      where: { postId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: {
+                profilePictureUrl: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const likers = likes.map((like) => ({
+      id: like.user.id,
+      firstName: like.user.firstName,
+      lastName: like.user.lastName,
+      profile: like.user.profile ? { profilePictureUrl: like.user.profile.profilePictureUrl } : null
+    }));
+
+    res.status(200).json({ likers });
+  } catch (error) {
+    console.error('Get likes error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching likes' });
   }
 });
 
@@ -2376,23 +2371,20 @@ app.put('/api/settings/notifications', async (req, res) => {
 
 // ==================== NOTIFICATIONS ====================
 
-// Get unread notifications count for a user (must be before /:userId so path is matched correctly)
+// Get unread notification count for a user
 app.get('/api/notifications/:userId/unread-count', async (req, res) => {
   try {
     const { userId } = req.params;
-    const unreadCount = await prisma.notification.count({
+    const count = await prisma.notification.count({
       where: {
         recipientId: userId,
-        OR: [
-          { read: false },
-          { read: null }
-        ]
+        OR: [{ read: false }, { read: null }]
       }
     });
-    res.status(200).json({ unreadCount });
+    res.status(200).json({ unreadCount: count });
   } catch (error) {
-    console.error('Get unread notifications count error:', error);
-    res.status(500).json({ message: 'An error occurred while fetching unread notifications count' });
+    console.error('Unread count error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching unread count' });
   }
 });
 
@@ -4168,6 +4160,7 @@ app.post('/api/messages/send', async (req, res) => {
       }
     });
 
+    // Notify each recipient (other participants) about the new message
     const recipientIds = conversation.participants
       .map(p => p.userId)
       .filter(id => id !== senderId);

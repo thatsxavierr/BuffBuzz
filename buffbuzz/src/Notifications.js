@@ -112,6 +112,12 @@ export default function Notifications() {
   const filteredNotifications = notifications.filter(notification => {
     if (filter === 'all') return true;
     if (filter === 'unread') return !notification.read;
+    if (filter === 'group_join_request') {
+      return ['group_join_request', 'group_join_approved', 'group_join_denied'].includes(notification.type);
+    }
+    if (filter === 'mention') {
+      return notification.type === 'mention' || notification.type === 'group_chat_mention';
+    }
     return notification.type === filter;
   });
 
@@ -124,12 +130,71 @@ export default function Notifications() {
       mention: '📢',
       share: '🔄',
       group: '👥',
+      group_join_request: '👥',
+      group_join_approved: '✅',
+      group_join_denied: '❌',
+      direct_message: '✉️',
+      group_message: '👥',
+      group_chat_mention: '💬',
       event: '📅',
       message: '✉️',
       marketplace_listing: '🛒',
       lostfound_listing: '🔍'
     };
     return icons[type] || '🔔';
+  };
+
+  const handleApproveGroupRequest = async (e, notification) => {
+    e.stopPropagation();
+    const { groupId, groupJoinRequestId } = notification;
+    if (!groupId || !groupJoinRequestId) return;
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/groups/${groupId}/join-requests/${groupJoinRequestId}/approve`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id })
+        }
+      );
+      const data = await response.json();
+      if (response.ok) {
+        setNotifications(notifications.filter(n => n.id !== notification.id));
+        window.dispatchEvent(new Event('notificationsUpdated'));
+      } else {
+        alert(data.message || 'Failed to approve');
+      }
+    } catch (err) {
+      console.error('Approve request error:', err);
+      alert('An error occurred');
+    }
+  };
+
+  const handleDenyGroupRequest = async (e, notification) => {
+    e.stopPropagation();
+    const { groupId, groupJoinRequestId } = notification;
+    if (!groupId || !groupJoinRequestId) return;
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/groups/${groupId}/join-requests/${groupJoinRequestId}/deny`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id })
+        }
+      );
+      const data = await response.json();
+      if (response.ok) {
+        setNotifications(notifications.filter(n => n.id !== notification.id));
+        markAsRead(notification.id);
+        window.dispatchEvent(new Event('notificationsUpdated'));
+      } else {
+        alert(data.message || 'Failed to deny');
+      }
+    } catch (err) {
+      console.error('Deny request error:', err);
+      alert('An error occurred');
+    }
   };
 
   const getTimeAgo = (timestamp) => {
@@ -224,6 +289,12 @@ export default function Notifications() {
           >
             Lost & Found
           </button>
+          <button 
+            className={`filter-btn ${filter === 'group_join_request' ? 'active' : ''}`}
+            onClick={() => setFilter('group_join_request')}
+          >
+            Group requests
+          </button>
         </div>
 
         <div className="notifications-list">
@@ -240,7 +311,14 @@ export default function Notifications() {
               <div 
                 key={notification.id} 
                 className={`notification-item ${!notification.read ? 'unread' : ''}`}
-                onClick={() => !notification.read && markAsRead(notification.id)}
+                onClick={() => {
+                  if (notification.type === 'group_chat_mention' && notification.conversationId) {
+                    if (!notification.read) markAsRead(notification.id);
+                    navigate('/main', { state: { openConversationId: notification.conversationId } });
+                  } else if (!notification.read) {
+                    markAsRead(notification.id);
+                  }
+                }}
               >
                 <div className="notification-icon">
                   {getNotificationIcon(notification.type)}
@@ -256,6 +334,25 @@ export default function Notifications() {
 
                 {!notification.read && (
                   <div className="unread-dot"></div>
+                )}
+
+                {notification.type === 'group_join_request' && notification.groupId && notification.groupJoinRequestId && (
+                  <div className="notification-actions" onClick={e => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="notification-btn approve"
+                      onClick={(e) => handleApproveGroupRequest(e, notification)}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="notification-btn deny"
+                      onClick={(e) => handleDenyGroupRequest(e, notification)}
+                    >
+                      Deny
+                    </button>
+                  </div>
                 )}
 
                 <button 

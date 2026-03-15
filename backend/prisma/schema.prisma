@@ -1,4 +1,4 @@
-generator client {
+﻿generator client {
   provider = "prisma-client-js"
 }
 
@@ -38,41 +38,34 @@ model User {
   resetTokenExpiry            DateTime?
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
-  
-  // Relations
-  profile                     Profile?
   posts                       Post[]
   comments                    Comment[]
   likes                       Like[]
   shares                      Share[]
-  notificationPreferences     NotificationPreferences?
-  notificationsReceived       Notification[] @relation("NotificationRecipient")
-  notificationsSent          Notification[] @relation("NotificationActor")
+  profile                     Profile?
   jobs                        Job[]
   marketplaceItems            MarketplaceItem[]
   lostFoundItems              LostFoundItem[]
-  createdGroups               Group[]                      @relation("GroupCreator")
+  blocksReceived              Block[]                      @relation("BlockedRelation")
+  blocksMade                  Block[]                      @relation("BlockerRelation")
+  sentFriendships             Friendship[]                 @relation("FriendshipSender")
+  receivedFriendships         Friendship[]                 @relation("FriendshipReceiver")
+  notificationsReceived       Notification[]               @relation("NotificationRecipient")
+  notificationsSent           Notification[]               @relation("NotificationActor")
+  notificationPreferences     NotificationPreferences?
   groupMemberships            GroupMember[]
+  groupJoinRequests           GroupJoinRequest[]
+  createdGroups               Group[]                      @relation("GroupCreator")
   conversations               ConversationParticipant[]
   messages                    Message[]                    @relation("MessageSender")
   messageReactions            MessageReaction[]
-  
-  // Friendships
-  sentFriendships             Friendship[]                 @relation("FriendshipSender")
-  receivedFriendships         Friendship[]                 @relation("FriendshipReceiver")
-  
-  // Blocks
-  blocksMade                  Block[]                      @relation("BlockerRelation")
-  blocksReceived              Block[]                      @relation("BlockedRelation")
 
   @@map("users")
 }
 
 model Profile {
-  id                String        @id @default(uuid())
-  userId            String        @unique
-  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id                String       @id @default(uuid())
+  userId            String       @unique
   name              String?
   pronouns          String?
   bio               String?
@@ -81,163 +74,335 @@ model Profile {
   graduationYear    String?
   classification    String?
   clubs             String?
-  
-  // Social Media
   instagramHandle   String?
   linkedinUrl       String?
   facebookHandle    String?
-  
-  // Profile Picture
   profilePictureUrl String?
-  
-  // Privacy Settings
-  privacy           PrivacyLevel  @default(PUBLIC)
-
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  privacy           PrivacyLevel @default(PUBLIC)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("profiles")
 }
 
 model NotificationPreferences {
-  id                    String   @id @default(uuid())
-  userId                String   @unique
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  emailNotifications    Boolean  @default(true)
-  pushNotifications     Boolean  @default(true)
-  postLikes             Boolean  @default(true)
-  comments              Boolean  @default(true)
-  newFollowers          Boolean  @default(true)
-  
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  emailNotifications Boolean  @default(true)
+  pushNotifications  Boolean  @default(true)
+  postLikes          Boolean  @default(true)
+  comments           Boolean  @default(true)
+  newFollowers       Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_preferences")
 }
 
 model Notification {
-  id          String   @id @default(uuid())
-  recipientId String
-  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  actorId     String
-  actor       User     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
-  type        String   // 'like', 'comment', etc.
-  postId     String?
-  read       Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id                    String   @id @default(uuid())
+  recipientId           String
+  actorId               String
+  type                  String   // 'like', 'comment', 'mention', 'reply', 'marketplace_listing', 'lostfound_listing', 'group_join_request', 'direct_message', etc.
+  postId                String?
+  commentId             String?
+  marketplaceItemId     String?
+  lostFoundItemId       String?
+  groupId               String?
+  groupJoinRequestId    String?
+  conversationId        String?
+  read                  Boolean  @default(false)
+  createdAt             DateTime @default(now())
 
-  @@map("notifications")
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor       User     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+
   @@index([recipientId])
   @@index([createdAt])
+  @@map("notifications")
 }
 
 model Post {
-  id          String    @id @default(uuid())
-  title       String
-  content     String
-  imageUrl    String?
-  
-  authorId    String
-  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  // Relations
-  comments    Comment[]
-  likes       Like[]
-  shares      Share[]
+  id        String    @id @default(uuid())
+  title     String
+  content   String
+  imageUrl  String?
+  authorId  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  comments  Comment[]
+  likes     Like[]
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  shares    Share[]
 
-  @@map("posts")
   @@index([authorId])
   @@index([createdAt])
+  @@map("posts")
 }
 
 model Comment {
-  id          String   @id @default(uuid())
-  content     String
-  
-  postId      String
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  
-  authorId    String
-  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String    @id @default(uuid())
+  content   String
+  postId    String
+  authorId  String
+  parentId  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
 
-  @@map("comments")
   @@index([postId])
   @@index([authorId])
+  @@index([parentId])
+  @@map("comments")
 }
 
 model Like {
-  id          String   @id @default(uuid())
-  
-  postId      String
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
-  @@map("likes")
   @@index([postId])
   @@index([userId])
+  @@map("likes")
 }
 
 model Share {
-  id          String   @id @default(uuid())
-  
-  postId      String
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("shares")
   @@index([postId])
   @@index([userId])
+  @@map("shares")
 }
 
 model Friendship {
-  id              String   @id @default(uuid())
-  
-  senderId        String
-  sender          User     @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
-  
-  receiverId      String
-  receiver        User     @relation("FriendshipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  
-  status          String   @default("PENDING") // PENDING, ACCEPTED
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  receiver   User     @relation("FriendshipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User     @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@unique([senderId, receiverId])
-  @@map("friendships")
   @@index([senderId])
   @@index([receiverId])
   @@index([status])
+  @@map("friendships")
 }
 
 model Block {
   id        String   @id @default(uuid())
-  blockerId String   // User who is blocking
-  blockedId String   // User being blocked
+  blockerId String
+  blockedId String
   createdAt DateTime @default(now())
-
-  blocker User @relation("BlockerRelation", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked User @relation("BlockedRelation", fields: [blockedId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("BlockedRelation", fields: [blockedId], references: [id], onDelete: Cascade)
+  blocker   User     @relation("BlockerRelation", fields: [blockerId], references: [id], onDelete: Cascade)
 
   @@unique([blockerId, blockedId])
-  @@map("blocks")
   @@index([blockerId])
   @@index([blockedId])
+  @@map("blocks")
+}
+
+model Job {
+  id              String      @id @default(uuid())
+  title           String
+  company         String
+  location        String
+  jobType         JobType
+  category        JobCategory
+  description     String
+  requirements    String
+  salary          String?
+  applicationLink String
+  applicationDeadline DateTime?
+  posterId        String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  poster          User        @relation(fields: [posterId], references: [id], onDelete: Cascade)
+
+  @@index([posterId])
+  @@index([category])
+  @@index([jobType])
+  @@index([createdAt])
+  @@map("jobs")
+}
+
+model MarketplaceItem {
+  id          String              @id @default(uuid())
+  title       String
+  description String
+  price       Decimal             @db.Decimal(10, 2)
+  category    MarketplaceCategory
+  condition   ItemCondition
+  imageUrl    String?
+  sellerId    String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  seller      User                @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+  @@index([category])
+  @@index([createdAt])
+  @@map("marketplace_items")
+}
+
+model LostFoundItem {
+  id          String            @id @default(uuid())
+  title       String
+  description String
+  category    LostFoundCategory
+  location    String
+  date        DateTime
+  contactInfo String
+  imageUrl    String?
+  userId      String
+  resolved    Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([createdAt])
+  @@map("lostfound_items")
+}
+
+model Group {
+  id            String             @id @default(uuid())
+  name          String
+  description   String
+  category      GroupCategory
+  privacy       GroupPrivacy       @default(PUBLIC)
+  imageUrl      String?
+  creatorId     String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  members       GroupMember[]
+  joinRequests  GroupJoinRequest[]
+  creator       User               @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([category])
+  @@index([createdAt])
+  @@map("groups")
+}
+
+model GroupJoinRequest {
+  id        String   @id @default(uuid())
+  groupId   String
+  userId    String
+  status    String   @default("PENDING") // PENDING, APPROVED, DENIED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@index([status])
+  @@map("group_join_requests")
+}
+
+model GroupMember {
+  id       String   @id @default(uuid())
+  groupId  String
+  userId   String
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+model Conversation {
+  id           String                    @id @default(uuid())
+  isGroupChat  Boolean                   @default(false)
+  name         String?
+  imageUrl     String?
+  creatorId    String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([createdAt])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime?
+  joinedAt       DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String            @id @default(uuid())
+  content        String
+  type           MessageType       @default(TEXT)
+  imageUrl       String?
+  conversationId String
+  senderId       String
+  replyToId      String?
+  deletedAt      DateTime?
+  editedAt       DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  reactions      MessageReaction[]
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  replyTo        Message?          @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies        Message[]         @relation("MessageReplies")
+  sender         User              @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+  @@map("message_reactions")
 }
 
 enum JobType {
@@ -252,32 +417,6 @@ enum JobCategory {
   ON_CAMPUS
   REMOTE
   LOCAL
-}
-
-model Job {
-  id                   String      @id @default(uuid())
-  title                String
-  company              String
-  location             String
-  jobType              JobType
-  category             JobCategory
-  description          String      @db.Text
-  requirements         String      @db.Text
-  salary               String?
-  applicationLink      String
-  applicationDeadline  DateTime?   // After this date, job is considered expired; no new applications
-
-  posterId             String
-  poster               User        @relation(fields: [posterId], references: [id], onDelete: Cascade)
-
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
-
-  @@map("jobs")
-  @@index([posterId])
-  @@index([category])
-  @@index([jobType])
-  @@index([createdAt])
 }
 
 enum MarketplaceCategory {
@@ -296,53 +435,9 @@ enum ItemCondition {
   FAIR
 }
 
-model MarketplaceItem {
-  id          String              @id @default(uuid())
-  title       String
-  description String              @db.Text
-  price       Decimal             @db.Decimal(10, 2)
-  category    MarketplaceCategory
-  condition   ItemCondition
-  imageUrl    String?             @db.Text
-  
-  sellerId    String
-  seller      User                @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-
-  @@map("marketplace_items")
-  @@index([sellerId])
-  @@index([category])
-  @@index([createdAt])
-}
-
 enum LostFoundCategory {
   LOST
   FOUND
-}
-
-model LostFoundItem {
-  id          String              @id @default(uuid())
-  title       String
-  description String              @db.Text
-  category    LostFoundCategory
-  location    String
-  date        DateTime
-  contactInfo String
-  imageUrl    String?             @db.Text
-  resolved    Boolean             @default(false)  // Poster can mark as resolved so others know item is recovered
-
-  userId      String
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-
-  @@map("lostfound_items")
-  @@index([userId])
-  @@index([category])
-  @@index([createdAt])
 }
 
 enum GroupCategory {
@@ -360,131 +455,7 @@ enum GroupPrivacy {
   PRIVATE
 }
 
-model Group {
-  id          String        @id @default(uuid())
-  name        String
-  description String        @db.Text
-  category    GroupCategory
-  privacy     GroupPrivacy  @default(PUBLIC)
-  imageUrl    String?       @db.Text
-  
-  creatorId   String
-  creator     User          @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  members     GroupMember[]
-  
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  @@map("groups")
-  @@index([creatorId])
-  @@index([category])
-  @@index([createdAt])
-}
-
-model GroupMember {
-  id        String   @id @default(uuid())
-  
-  groupId   String
-  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  role      String   @default("MEMBER") // ADMIN, MEMBER
-  joinedAt  DateTime @default(now())
-
-  @@unique([groupId, userId])
-  @@map("group_members")
-  @@index([groupId])
-  @@index([userId])
-}
-
 enum MessageType {
   TEXT
   IMAGE
-}
-
-model Conversation {
-  id            String    @id @default(uuid())
-  isGroupChat   Boolean   @default(false)
-  name          String?   // For group chats
-  imageUrl      String?   @db.Text // For group chat image
-  creatorId     String?
-  
-  participants  ConversationParticipant[]
-  messages      Message[]
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@map("conversations")
-  @@index([createdAt])
-}
-
-model ConversationParticipant {
-  id              String       @id @default(uuid())
-  
-  conversationId  String
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  
-  userId          String
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  lastReadAt      DateTime?    // When user last read messages
-  joinedAt        DateTime     @default(now())
-
-  @@unique([conversationId, userId])
-  @@map("conversation_participants")
-  @@index([conversationId])
-  @@index([userId])
-}
-
-model Message {
-  id              String            @id @default(uuid())
-  content         String            @db.Text
-  type            MessageType       @default(TEXT)
-  imageUrl        String?           @db.Text
-  
-  conversationId  String
-  conversation    Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  
-  senderId        String
-  sender          User              @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  
-  replyToId       String?
-  replyTo         Message?          @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies         Message[]         @relation("MessageReplies")
-  
-  reactions       MessageReaction[]
-  
-  deletedAt       DateTime?
-  editedAt        DateTime?
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-
-  @@map("messages")
-  @@index([conversationId])
-  @@index([senderId])
-  @@index([createdAt])
-}
-
-model MessageReaction {
-  id        String   @id @default(uuid())
-  
-  messageId String
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  emoji     String   // The emoji used for reaction
-  
-  createdAt DateTime @default(now())
-
-  @@unique([messageId, userId]) // One reaction per user per message
-  @@map("message_reactions")
-  @@index([messageId])
-  @@index([userId])
 }

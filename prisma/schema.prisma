@@ -31,6 +31,7 @@ model User {
   receivedFriendships     Friendship[]              @relation("FriendshipReceiver")
   sentFriendships         Friendship[]              @relation("FriendshipSender")
   groupMemberships        GroupMember[]
+  groupJoinRequests       GroupJoinRequest[]
   createdGroups           Group[]                   @relation("GroupCreator")
   jobs                    Job[]
   likes                   Like[]
@@ -87,16 +88,19 @@ model NotificationPreferences {
 }
 
 model Notification {
-  id                  String   @id @default(uuid())
-  recipientId         String
-  actorId             String
-  type                String   // 'like', 'comment', 'mention', 'reply', 'marketplace_listing', 'lostfound_listing', etc.
-  postId              String?
-  commentId           String?
-  marketplaceItemId   String?
-  lostFoundItemId     String?
-  read                Boolean  @default(false)
-  createdAt           DateTime @default(now())
+  id                    String   @id @default(uuid())
+  recipientId           String
+  actorId               String
+  type                  String   // 'like', 'comment', 'mention', 'reply', 'marketplace_listing', 'lostfound_listing', 'group_join_request', 'direct_message', etc.
+  postId                String?
+  commentId             String?
+  marketplaceItemId     String?
+  lostFoundItemId       String?
+  groupId               String?
+  groupJoinRequestId    String?
+  conversationId        String?
+  read                  Boolean  @default(false)
+  createdAt             DateTime @default(now())
 
   recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
   actor       User     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
@@ -265,22 +269,41 @@ model LostFoundItem {
 }
 
 model Group {
-  id          String        @id @default(uuid())
-  name        String
-  description String
-  category    GroupCategory
-  privacy     GroupPrivacy  @default(PUBLIC)
-  imageUrl    String?
-  creatorId   String
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  members     GroupMember[]
-  creator     User          @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  id            String             @id @default(uuid())
+  name          String
+  description   String
+  category      GroupCategory
+  privacy       GroupPrivacy       @default(PUBLIC)
+  imageUrl      String?
+  creatorId     String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  members       GroupMember[]
+  joinRequests  GroupJoinRequest[]
+  creator       User               @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
 
   @@index([creatorId])
   @@index([category])
   @@index([createdAt])
   @@map("groups")
+}
+
+model GroupJoinRequest {
+  id        String   @id @default(uuid())
+  groupId   String
+  userId    String
+  status    String   @default("PENDING") // PENDING, APPROVED, DENIED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@index([status])
+  @@map("group_join_requests")
 }
 
 model GroupMember {

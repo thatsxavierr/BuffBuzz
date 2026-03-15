@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './RightSidebar.css';
 import { getValidUser } from './sessionUtils';
 
-export default function RightSidebar({ initialOpenChat }) {
+export default function RightSidebar({ initialOpenChat, initialOpenConversationId }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [chatExpanded, setChatExpanded] = useState(false);
   const [openChats, setOpenChats] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -13,6 +14,7 @@ export default function RightSidebar({ initialOpenChat }) {
   const [allConversations, setAllConversations] = useState([]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [messageNotifications, setMessageNotifications] = useState([]);
 
   useEffect(() => {
     setUser(getValidUser());
@@ -25,6 +27,29 @@ export default function RightSidebar({ initialOpenChat }) {
     }
   }, [user?.id]);
 
+  const fetchMessageNotifications = async () => {
+    if (!user?.id) return;
+    try {
+      const response = await fetch(`http://localhost:5000/api/notifications/${user.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        const unreadDms = (data.notifications || []).filter(
+          n => (n.type === 'direct_message' || n.type === 'group_message' || n.type === 'group_chat_mention') && !n.read
+        );
+        setMessageNotifications(unreadDms);
+      }
+    } catch (err) {
+      console.error('Error fetching message notifications:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchMessageNotifications();
+    const interval = setInterval(fetchMessageNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
   useEffect(() => {
     if (initialOpenChat && user?.id && initialOpenChat.id !== user.id) {
       setChatExpanded(true);
@@ -32,6 +57,30 @@ export default function RightSidebar({ initialOpenChat }) {
       navigate('/main', { replace: true, state: {} });
     }
   }, [initialOpenChat?.id, user?.id]);
+
+  // Open a specific conversation by ID (e.g. from Notifications page when clicking a group_chat_mention)
+  const openConversationId = initialOpenConversationId ?? location.state?.openConversationId;
+  useEffect(() => {
+    if (!openConversationId || !user?.id) return;
+    const openByConvId = async () => {
+      let conv = allConversations.find(c => c.id === openConversationId);
+      if (!conv) {
+        try {
+          const res = await fetch(`http://localhost:5000/api/conversations/${user.id}`);
+          const data = await res.json();
+          const list = data.conversations || [];
+          setAllConversations(list);
+          conv = list.find(c => c.id === openConversationId);
+        } catch (_) {}
+      }
+      if (conv) {
+        setChatExpanded(true);
+        await openConversation(conv);
+      }
+      navigate('/main', { replace: true, state: {} });
+    };
+    openByConvId();
+  }, [openConversationId, user?.id]);
 
   const fetchFriends = async () => {
     if (!user?.id) return;
@@ -132,6 +181,27 @@ const openConversation = async (conversation) => {
   }
 };
 
+  const openConversationByIdAndMarkRead = async (conversationId, notificationIds) => {
+    let conv = allConversations.find(c => c.id === conversationId);
+    if (!conv) {
+      const res = await fetch(`http://localhost:5000/api/conversations/${user.id}`);
+      const data = await res.json();
+      conv = (data.conversations || []).find(c => c.id === conversationId);
+    }
+    if (conv) {
+      await openConversation(conv);
+    }
+    setMessageNotifications(prev => prev.filter(n => n.conversationId !== conversationId));
+    for (const nid of notificationIds) {
+      try {
+        await fetch(`http://localhost:5000/api/notifications/${nid}/read`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (_) {}
+    }
+  };
+
   const fetchMessages = async (conversationId, friendId) => {
   try {
     const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}/messages`);
@@ -162,11 +232,12 @@ const openConversation = async (conversation) => {
 
   const markAsRead = async (conversationId) => {
     try {
-      await fetch(`http://localhost:5000/api/conversations/${conversationId}/read`, {
+      const res = await fetch(`http://localhost:5000/api/conversations/${conversationId}/read`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
       });
+      if (res.ok) fetchMessageNotifications();
     } catch (error) {
       console.error('Error marking as read:', error);
     }
@@ -393,6 +464,15 @@ const openConversation = async (conversation) => {
 
 
 
+  const unreadMessageCount = messageNotifications.length > 0
+    ? Object.keys(
+        messageNotifications.reduce((acc, n) => {
+          if (n.conversationId) acc[n.conversationId] = true;
+          return acc;
+        }, {})
+      ).length
+    : 0;
+
   if (!user) return null;
 
   return (
@@ -403,7 +483,12 @@ const openConversation = async (conversation) => {
           className="chat-toggle-button"
         >
           <span>Messages</span>
-          <span className="chat-icon">💬</span>
+          <span className="chat-icon-wrap">
+            💬
+            {unreadMessageCount > 0 && (
+              <span className="chat-unread-badge">{unreadMessageCount}</span>
+            )}
+          </span>
         </button>
 
         {chatExpanded && (
@@ -418,6 +503,55 @@ const openConversation = async (conversation) => {
         👥+
       </button>
     </div>
+
+    {/* New message notifications - grouped by conversation */}
+    {messageNotifications.length > 0 && (
+      <div className="new-messages-section">
+        <h4 className="new-messages-title">New messages</h4>
+        {Object.entries(
+          messageNotifications.reduce((acc, n) => {
+            if (!acc[n.conversationId]) acc[n.conversationId] = [];
+            acc[n.conversationId].push(n);
+            return acc;
+          }, {})
+        ).map(([convId, notifs]) => {
+          const conv = allConversations.find(c => c.id === convId);
+          const isGroup = conv?.isGroupChat;
+          const displayName = isGroup ? (conv?.name || 'Group') : notifs[0].userName;
+          const hasMention = notifs.some(n => n.type === 'group_chat_mention');
+          const statusText = hasMention ? 'Tagged you in the group' : (isGroup ? 'Sent a message in the group' : 'Sent you a message');
+          return (
+            <button
+              key={convId}
+              type="button"
+              className="friend-item new-message-item"
+              onClick={() => openConversationByIdAndMarkRead(convId, notifs.map(n => n.id))}
+            >
+              <div className="friend-avatar-container">
+                <div
+                  className="friend-avatar"
+                  style={{
+                    background: isGroup ? '#4f46e5' : '#800000',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px'
+                  }}
+                >
+                  {isGroup ? '👥' : '✉️'}
+                </div>
+                <div className="unread-badge">{notifs.length}</div>
+              </div>
+              <div className="friend-info">
+                <p className="friend-name">{displayName}</p>
+                <p className="friend-status">{statusText}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    )}
 
     {/* Combined list of friends and groups */}
     {loading ? (
