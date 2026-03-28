@@ -66,6 +66,8 @@ const SettingsPage = () => {
   });
 
   const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS);
+  const [muteUntil, setMuteUntil] = useState(null);
+  const [muteLoading, setMuteLoading] = useState(false);
   const [deleteAccountData, setDeleteAccountData] = useState({ password: '', confirmText: '' });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -77,7 +79,10 @@ const SettingsPage = () => {
     fetch(`http://localhost:5000/api/settings/notifications/${user.id}`)
       .then(res => res.json())
       .then(data => {
-        if (data.preferences) setNotifications(prev => ({ ...prev, ...data.preferences }));
+        if (data.preferences) {
+          setNotifications(prev => ({ ...prev, ...data.preferences }));
+          setMuteUntil(data.preferences.muteUntil ? new Date(data.preferences.muteUntil) : null);
+        }
       })
       .catch(err => console.error('Error:', err));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -87,15 +92,7 @@ const SettingsPage = () => {
 
   const handleNotificationChange = (e) => {
     const { name, checked } = e.target;
-    if (name === 'muteAll') {
-      setNotifications(prev => {
-        const next = { ...prev, muteAll: checked };
-        if (checked) Object.keys(next).forEach(k => { if (k !== 'muteAll') next[k] = false; });
-        return next;
-      });
-    } else {
-      setNotifications(prev => ({ ...prev, [name]: checked, muteAll: false }));
-    }
+    setNotifications(prev => ({ ...prev, [name]: checked }));
   };
 
   const handleDeleteAccountChange = (e) =>
@@ -152,6 +149,28 @@ const SettingsPage = () => {
     finally { setLoading(false); }
   };
 
+  const handleTemporaryMute = async (hours) => {
+    setMuteLoading(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/settings/notifications/mute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, hours })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setMuteUntil(hours > 0 ? new Date(data.muteUntil) : null);
+        setMessage({ type: 'success', text: data.message });
+      } else {
+        setMessage({ type: 'error', text: data.message });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'An error occurred. Please try again.' });
+    } finally {
+      setMuteLoading(false);
+    }
+  };
+
   const handleDeleteAccount = async (e) => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
@@ -181,6 +200,8 @@ const SettingsPage = () => {
     } catch { setMessage({ type: 'error', text: 'An error occurred. Please try again.' }); }
     finally { setLoading(false); }
   };
+
+  const isMutedTemporarily = muteUntil && muteUntil > new Date();
 
   const allItems = NOTIFICATION_ITEMS.flatMap(g => g.items);
   const enabledCount = allItems.filter(i => notifications[i.name]).length;
@@ -236,8 +257,8 @@ const SettingsPage = () => {
           <div className="notif-toggle-left">
             <h2>Notification Preferences</h2>
             <span className="notif-summary">
-              {notifications.muteAll
-                ? '🔕 All notifications muted'
+              {isMutedTemporarily
+                ? `⏰ Muted until ${muteUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                 : `${enabledCount} of ${totalCount} enabled`}
             </span>
           </div>
@@ -247,24 +268,46 @@ const SettingsPage = () => {
         {notifOpen && (
           <form onSubmit={handleNotificationSubmit} className="notif-form">
 
-            {/* Mute All master toggle */}
-            <div className="notif-mute-row">
-              <div className="notif-mute-info">
-                <span className="notif-mute-icon">🔕</span>
+            {/* Temporary Mute Block */}
+            <div className="temp-mute-block">
+              <div className="temp-mute-header">
+                <span className="temp-mute-icon">⏰</span>
                 <div>
-                  <strong>Mute All Notifications</strong>
-                  <span>Temporarily silence all alerts</span>
+                  <strong>Mute Temporarily</strong>
+                  {isMutedTemporarily ? (
+                    <span className="mute-active-text">
+                      Muted until {muteUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {' '}({muteUntil.toLocaleDateString()})
+                    </span>
+                  ) : (
+                    <span className="mute-inactive-text">Not currently muted</span>
+                  )}
                 </div>
               </div>
-              <button
-                type="button"
-                className={`toggle-switch ${notifications.muteAll ? 'on' : ''}`}
-                onClick={() => handleNotificationChange({ target: { name: 'muteAll', checked: !notifications.muteAll } })}
-                role="switch"
-                aria-checked={notifications.muteAll}
-              >
-                <span className="toggle-thumb" />
-              </button>
+              <div className="temp-mute-buttons">
+                <button type="button" className="mute-duration-btn"
+                  onClick={() => handleTemporaryMute(1)} disabled={muteLoading}>
+                  1 hour
+                </button>
+                <button type="button" className="mute-duration-btn"
+                  onClick={() => handleTemporaryMute(4)} disabled={muteLoading}>
+                  4 hours
+                </button>
+                <button type="button" className="mute-duration-btn"
+                  onClick={() => handleTemporaryMute(8)} disabled={muteLoading}>
+                  8 hours
+                </button>
+                <button type="button" className="mute-duration-btn"
+                  onClick={() => handleTemporaryMute(24)} disabled={muteLoading}>
+                  24 hours
+                </button>
+                {isMutedTemporarily && (
+                  <button type="button" className="mute-cancel-btn"
+                    onClick={() => handleTemporaryMute(0)} disabled={muteLoading}>
+                    Unmute now
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Grouped checkboxes */}
@@ -280,7 +323,7 @@ const SettingsPage = () => {
                         name={name}
                         checked={notifications[name]}
                         onChange={handleNotificationChange}
-                        disabled={notifications.muteAll}
+                        disabled={isMutedTemporarily}
                       />
                       <label htmlFor={name}>
                         <strong>{label}</strong>

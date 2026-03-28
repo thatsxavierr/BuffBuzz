@@ -66,6 +66,50 @@ function parsePostImages(imageUrl) {
   return [imageUrl];
 }
 
+async function shouldNotify(userId, type) {
+  try {
+    const prefs = await prisma.notificationPreferences.findUnique({
+      where: { userId }
+    });
+    if (!prefs) return true;
+
+    // Check permanent mute
+    if (prefs.muteAll) return false;
+
+    // Check temporary mute — if muteUntil is in the future, silence everything
+    if (prefs.muteUntil && prefs.muteUntil > new Date()) return false;
+
+    // If muteUntil has expired, clear it automatically
+    if (prefs.muteUntil && prefs.muteUntil <= new Date()) {
+      await prisma.notificationPreferences.update({
+        where: { userId },
+        data: { muteUntil: null }
+      });
+    }
+
+    switch (type) {
+      case 'like':                return prefs.postLikes;
+      case 'comment':             return prefs.comments;
+      case 'reply':               return prefs.commentReplies;
+      case 'mention':             return prefs.mentions;
+      case 'group_chat_mention':  return prefs.mentions;
+      case 'lostfound_listing':   return prefs.lostFoundNew;
+      case 'group_join_request':  return prefs.groupJoinRequests;
+      case 'group_join_approved': return prefs.groupJoinResponse;
+      case 'group_join_denied':   return prefs.groupJoinResponse;
+      case 'direct_message':      return prefs.pushNotifications;
+      case 'group_message':       return prefs.groupNewPost;
+      case 'group_new_post':      return prefs.groupNewPost;
+      case 'group_announcement':  return prefs.groupNewPost;
+      case 'group_event':         return prefs.groupNewPost;
+      case 'marketplace_listing': return true;
+      default:                    return true;
+    }
+  } catch {
+    return true;
+  }
+}
+
 // Send verification email
 async function sendVerificationEmail(email, verificationCode, firstName) {
   const mailOptions = {
@@ -946,13 +990,22 @@ app.put('/api/profile/update', async (req, res) => {
 // Create a post
 app.post('/api/posts/create', async (req, res) => {
   try {
-    const { title, content, imageUrl, imageUrls, authorId } = req.body;
+    const { title, content, imageUrl, imageUrls, authorId, groupId, postType} = req.body;
 
     if (!title || !content || !authorId) {
       return res.status(400).json({ message: 'Title, content, and author are required' });
     }
 
-    // Support both single imageUrl (legacy) and imageUrls array
+    // If posting to a group, verify the author is a member
+    if (groupId) {
+      const membership = await prisma.groupMember.findUnique({
+        where: { groupId_userId: { groupId, userId: authorId } }
+      });
+      if (!membership) {
+        return res.status(403).json({ message: 'You must be a group member to post here' });
+      }
+    }
+
     let storedImageUrl = imageUrl;
     if (Array.isArray(imageUrls) && imageUrls.length > 0) {
       storedImageUrl = JSON.stringify(imageUrls);
@@ -963,24 +1016,46 @@ app.post('/api/posts/create', async (req, res) => {
         title,
         content,
         imageUrl: storedImageUrl,
-        authorId
+        authorId,
+        groupId: groupId || null,
+        postType: postType || 'POST'
       },
       include: {
         author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
+          select: { id: true, firstName: true, lastName: true, email: true }
         }
       }
     });
 
-    res.status(201).json({
-      message: 'Post created successfully',
-      post
-    });
+    // If this is a group post, notify all other group members
+    if (groupId) {
+  const groupMembers = await prisma.groupMember.findMany({
+    where: { groupId, userId: { not: authorId } },
+    select: { userId: true }
+  });
+
+  const notifType = postType === 'ANNOUNCEMENT'
+    ? 'group_announcement'
+    : postType === 'EVENT'
+    ? 'group_event'
+    : 'group_new_post';
+
+  for (const member of groupMembers) {
+    if (await shouldNotify(member.userId, 'group_message')) {
+      await prisma.notification.create({
+        data: {
+          recipientId: member.userId,
+          actorId: authorId,
+          type: notifType,
+          postId: post.id,
+          groupId
+        }
+      });
+    }
+  }
+}
+
+    res.status(201).json({ message: 'Post created successfully', post });
 
   } catch (error) {
     console.error('Create post error:', error);
@@ -994,9 +1069,12 @@ app.get('/api/posts', async (req, res) => {
     const { userId } = req.query; // Optional: to check if current user liked posts
 
     const posts = await prisma.post.findMany({
-      orderBy: {
-        createdAt: 'desc'
-      },
+  where: {
+    groupId: null  // Only show posts that don't belong to a group
+  },
+  orderBy: {
+    createdAt: 'desc'
+  },
       include: {
         author: {
           select: {
@@ -1302,7 +1380,7 @@ app.post('/api/posts/:postId/like', async (req, res) => {
     });
 
     // Create notification for post author (don't notify if they liked their own post)
-    if (post.authorId !== userId) {
+    if (post.authorId !== userId && await shouldNotify(post.authorId, 'like')) {
       await prisma.notification.create({
         data: {
           recipientId: post.authorId,
@@ -1446,32 +1524,32 @@ app.post('/api/posts/:postId/comment', async (req, res) => {
       }
     });
 
-    // Create notification for post author (don't notify if they commented on their own post)
-    if (post.authorId !== userId) {
-      await prisma.notification.create({
-        data: {
-          recipientId: post.authorId,
-          actorId: userId,
-          type: 'comment',
-          postId
-        }
-      });
+    if (post.authorId !== userId && await shouldNotify(post.authorId, 'comment')) {
+  await prisma.notification.create({
+    data: {
+      recipientId: post.authorId,
+      actorId: userId,
+      type: 'comment',
+      postId
     }
+  });
+}
 
-    // Create mention notifications for each mentioned user
-    const mentionedIds = Array.isArray(mentionedUserIds) ? [...new Set(mentionedUserIds)].filter(Boolean) : [];
-    for (const mentionedId of mentionedIds) {
-      if (mentionedId === userId) continue; // Don't notify yourself
-      if (mentionedId === post.authorId) continue; // Post author already gets "comment" notification
-      await prisma.notification.create({
-        data: {
-          recipientId: mentionedId,
-          actorId: userId,
-          type: 'mention',
-          postId
-        }
-      });
-    }
+const mentionedIds = Array.isArray(mentionedUserIds) ? [...new Set(mentionedUserIds)].filter(Boolean) : [];
+for (const mentionedId of mentionedIds) {
+  if (mentionedId === userId) continue;
+  if (mentionedId === post.authorId) continue;
+  if (await shouldNotify(mentionedId, 'mention')) {
+    await prisma.notification.create({
+      data: {
+        recipientId: mentionedId,
+        actorId: userId,
+        type: 'mention',
+        postId
+      }
+    });
+  }
+}
 
     // Get updated comment count
     const commentCount = await prisma.comment.count({
@@ -1599,34 +1677,34 @@ app.post('/api/comments/:commentId/reply', async (req, res) => {
       }
     });
 
-    // Create notification for comment owner (don't notify if replying to your own comment)
-    if (parentComment.authorId !== userId) {
-      await prisma.notification.create({
-        data: {
-          recipientId: parentComment.authorId,
-          actorId: userId,
-          type: 'reply',
-          postId: parentComment.postId,
-          commentId
-        }
-      });
+    if (parentComment.authorId !== userId && await shouldNotify(parentComment.authorId, 'reply')) {
+  await prisma.notification.create({
+    data: {
+      recipientId: parentComment.authorId,
+      actorId: userId,
+      type: 'reply',
+      postId: parentComment.postId,
+      commentId
     }
+  });
+}
 
-    // Create mention notifications for each mentioned user
-    const mentionedIds = Array.isArray(mentionedUserIds) ? [...new Set(mentionedUserIds)].filter(Boolean) : [];
-    for (const mentionedId of mentionedIds) {
-      if (mentionedId === userId) continue;
-      if (mentionedId === parentComment.authorId) continue;
-      await prisma.notification.create({
-        data: {
-          recipientId: mentionedId,
-          actorId: userId,
-          type: 'mention',
-          postId: parentComment.postId,
-          commentId
-        }
-      });
-    }
+const mentionedIds = Array.isArray(mentionedUserIds) ? [...new Set(mentionedUserIds)].filter(Boolean) : [];
+for (const mentionedId of mentionedIds) {
+  if (mentionedId === userId) continue;
+  if (mentionedId === parentComment.authorId) continue;
+  if (await shouldNotify(mentionedId, 'mention')) {
+    await prisma.notification.create({
+      data: {
+        recipientId: mentionedId,
+        actorId: userId,
+        type: 'mention',
+        postId: parentComment.postId,
+        commentId
+      }
+    });
+  }
+}
 
     res.status(201).json({
       message: 'Reply added successfully',
@@ -2293,87 +2371,123 @@ app.put('/api/settings/password', async (req, res) => {
   }
 });
 
-// Get Notification Preferences
 app.get('/api/settings/notifications/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-
-    if (!userId) {
-      return res.status(400).json({ message: 'User ID is required' });
-    }
+    if (!userId) return res.status(400).json({ message: 'User ID is required' });
 
     let preferences = await prisma.notificationPreferences.findUnique({
       where: { userId }
     });
 
-    // If no preferences exist, return defaults
     if (!preferences) {
       return res.status(200).json({
         preferences: {
+          muteAll:            false,
           emailNotifications: true,
-          pushNotifications: true,
-          postLikes: true,
-          comments: true,
-          newFollowers: true
+          pushNotifications:  true,
+          postLikes:          true,
+          comments:           true,
+          mentions:           true,
+          commentReplies:     true,
+          groupJoinRequests:  true,
+          groupJoinResponse:  true,
+          groupNewPost:       true,
+          lostFoundNew:       false,
+          lostFoundContact:   true,
+          newFollowers:       true,
         }
       });
     }
 
     res.status(200).json({ preferences });
-
   } catch (error) {
     console.error('Get preferences error:', error);
     res.status(500).json({ message: 'An error occurred while fetching preferences' });
   }
 });
 
-// Update Notification Preferences
 app.put('/api/settings/notifications', async (req, res) => {
   try {
     const {
       userId,
+      muteAll,
       emailNotifications,
       pushNotifications,
       postLikes,
       comments,
+      mentions,
+      commentReplies,
+      groupJoinRequests,
+      groupJoinResponse,
+      groupNewPost,
+      lostFoundNew,
+      lostFoundContact,
       newFollowers
     } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ message: 'User ID is required' });
-    }
+    if (!userId) return res.status(400).json({ message: 'User ID is required' });
 
-    // Upsert preferences
+    const data = {
+      muteAll:            muteAll            ?? false,
+      emailNotifications: emailNotifications ?? true,
+      pushNotifications:  pushNotifications  ?? true,
+      postLikes:          postLikes          ?? true,
+      comments:           comments           ?? true,
+      mentions:           mentions           ?? true,
+      commentReplies:     commentReplies     ?? true,
+      groupJoinRequests:  groupJoinRequests  ?? true,
+      groupJoinResponse:  groupJoinResponse  ?? true,
+      groupNewPost:       groupNewPost       ?? true,
+      lostFoundNew:       lostFoundNew       ?? false,
+      lostFoundContact:   lostFoundContact   ?? true,
+      newFollowers:       newFollowers       ?? true,
+    };
+
     const preferences = await prisma.notificationPreferences.upsert({
       where: { userId },
-      update: {
-        emailNotifications,
-        pushNotifications,
-        postLikes,
-        comments,
-        newFollowers
-      },
-      create: {
-        userId,
-        emailNotifications,
-        pushNotifications,
-        postLikes,
-        comments,
-        newFollowers
-      }
+      update: data,
+      create: { userId, ...data }
     });
 
     res.status(200).json({
       message: 'Notification preferences updated successfully',
       preferences
     });
-
   } catch (error) {
     console.error('Update preferences error:', error);
     res.status(500).json({ message: 'An error occurred while updating preferences' });
   }
 });
 
+// Temporarily mute notifications
+app.post('/api/settings/notifications/mute', async (req, res) => {
+  try {
+    const { userId, hours } = req.body;
+
+    if (!userId) return res.status(400).json({ message: 'User ID is required' });
+
+    // hours = 0 means unmute immediately
+    const muteUntil = hours > 0
+      ? new Date(Date.now() + hours * 60 * 60 * 1000)
+      : null;
+
+    await prisma.notificationPreferences.upsert({
+      where: { userId },
+      update: { muteUntil },
+      create: { userId, muteUntil }
+    });
+
+    const message = hours > 0
+      ? `Notifications muted for ${hours} hour${hours === 1 ? '' : 's'}`
+      : 'Notifications unmuted';
+
+    res.status(200).json({ message, muteUntil });
+  } catch (error) {
+    console.error('Mute notifications error:', error);
+    res.status(500).json({ message: 'An error occurred while updating mute settings' });
+  }
+});
 // ==================== NOTIFICATIONS ====================
 
 // Get unread notifications count for a user (must be before /:userId so path is matched correctly)
@@ -2428,7 +2542,7 @@ app.get('/api/notifications/:userId', async (req, res) => {
       conversationId: n.conversationId,
       createdAt: n.createdAt,
       userName: `${n.actor.firstName} ${n.actor.lastName}`,
-      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type === 'group_join_request' ? 'requested to join your group' : n.type === 'group_join_approved' ? 'approved your request to join the group' : n.type === 'group_join_denied' ? 'denied your request to join the group' : n.type === 'group_member_removed' ? 'removed you from the group' : n.type === 'direct_message' ? 'sent you a message' : n.type === 'group_message' ? 'sent a message in the group' : n.type === 'group_chat_mention' ? 'tagged you in a group chat' : n.type
+      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type === 'group_join_request' ? 'requested to join your group' : n.type === 'group_join_approved' ? 'approved your request to join the group' : n.type === 'group_join_denied' ? 'denied your request to join the group' : n.type === 'direct_message' ? 'sent you a message' : n.type === 'group_message' ? 'sent a message in the group' : n.type === 'group_chat_mention' ? 'tagged you in a group chat' : n.type === 'group_new_post' ? 'posted in a group you belong to' : n.type === 'group_new_post' ? 'posted in a group you belong to': n.type === 'group_announcement' ? 'posted an announcement in your group': n.type === 'group_event' ? 'posted an event in your group': n.type
     }));
 
     res.status(200).json({ notifications: formatted });
@@ -3424,6 +3538,38 @@ app.get('/api/groups/:groupId', async (req, res) => {
   }
 });
 
+// Get posts for a specific group
+app.get('/api/groups/:groupId/posts', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    const posts = await prisma.post.findMany({
+      where: { groupId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: {
+              select: { profilePictureUrl: true }
+            }
+          }
+        },
+        _count: {
+          select: { comments: true, likes: true }
+        }
+      }
+    });
+
+    res.status(200).json({ posts });
+  } catch (error) {
+    console.error('Get group posts error:', error);
+    res.status(500).json({ message: 'An error occurred while fetching group posts' });
+  }
+});
+
 // Join a group
 app.post('/api/groups/:groupId/join', async (req, res) => {
   try {
@@ -3593,15 +3739,17 @@ app.post('/api/groups/:groupId/request-join', async (req, res) => {
       });
     }
 
-    await prisma.notification.create({
-      data: {
-        recipientId: group.creatorId,
-        actorId: userId,
-        type: 'group_join_request',
-        groupId,
-        groupJoinRequestId: request.id
-      }
-    });
+    if (await shouldNotify(group.creatorId, 'group_join_request')) {
+  await prisma.notification.create({
+    data: {
+      recipientId: group.creatorId,
+      actorId: userId,
+      type: 'group_join_request',
+      groupId,
+      groupJoinRequestId: request.id
+    }
+  });
+}
 
     res.status(201).json({
       message: 'Join request sent. The group owner will be notified.',
@@ -3672,14 +3820,16 @@ app.post('/api/groups/:groupId/join-requests/:requestId/approve', async (req, re
       })
     ]);
 
-    await prisma.notification.create({
-      data: {
-        recipientId: joinRequest.userId,
-        actorId: ownerId,
-        type: 'group_join_approved',
-        groupId
-      }
-    });
+    if (await shouldNotify(joinRequest.userId, 'group_join_approved')) {
+  await prisma.notification.create({
+    data: {
+      recipientId: joinRequest.userId,
+      actorId: ownerId,
+      type: 'group_join_approved',
+      groupId
+    }
+  });
+}
 
     // Remove the owner's actionable request notification after processing
     await prisma.notification.deleteMany({
@@ -3722,14 +3872,16 @@ app.post('/api/groups/:groupId/join-requests/:requestId/deny', async (req, res) 
       data: { status: 'DENIED' }
     });
 
-    await prisma.notification.create({
-      data: {
-        recipientId: joinRequest.userId,
-        actorId: ownerId,
-        type: 'group_join_denied',
-        groupId
-      }
-    });
+    if (await shouldNotify(joinRequest.userId, 'group_join_denied')) {
+  await prisma.notification.create({
+    data: {
+      recipientId: joinRequest.userId,
+      actorId: ownerId,
+      type: 'group_join_denied',
+      groupId
+    }
+  });
+}
 
     // Remove the owner's actionable request notification after processing
     await prisma.notification.deleteMany({
@@ -4221,19 +4373,21 @@ app.post('/api/messages/send', async (req, res) => {
     });
 
     const recipientIds = conversation.participants
-      .map(p => p.userId)
-      .filter(id => id !== senderId);
-    const notificationType = conversation.isGroupChat ? 'group_message' : 'direct_message';
-    for (const recipientId of recipientIds) {
-      await prisma.notification.create({
-        data: {
-          recipientId,
-          actorId: senderId,
-          type: notificationType,
-          conversationId
-        }
-      });
-    }
+  .map(p => p.userId)
+  .filter(id => id !== senderId);
+const notificationType = conversation.isGroupChat ? 'group_message' : 'direct_message';
+for (const recipientId of recipientIds) {
+  if (await shouldNotify(recipientId, notificationType)) {
+    await prisma.notification.create({
+      data: {
+        recipientId,
+        actorId: senderId,
+        type: notificationType,
+        conversationId
+      }
+    });
+  }
+}
 
     // If group chat: parse @mentions and create group_chat_mention notifications
     if (conversation.isGroupChat && content && typeof content === 'string') {
@@ -4251,16 +4405,16 @@ app.post('/api/messages/send', async (req, res) => {
             return fullName === n || firstOnly === n || lastOnly === n ||
               fullName.includes(n) || (n.includes(' ') && fullName.includes(n));
           });
-          if (matched) {
-            await prisma.notification.create({
-              data: {
-                recipientId: p.userId,
-                actorId: senderId,
-                type: 'group_chat_mention',
-                conversationId
-              }
-            });
-          }
+          if (matched && await shouldNotify(p.userId, 'group_chat_mention')) {
+  await prisma.notification.create({
+    data: {
+      recipientId: p.userId,
+      actorId: senderId,
+      type: 'group_chat_mention',
+      conversationId
+    }
+  });
+}
         }
       }
     }

@@ -75,10 +75,19 @@ model Profile {
 model NotificationPreferences {
   id                 String   @id @default(uuid())
   userId             String   @unique
+  muteAll            Boolean  @default(false)
+  muteUntil          DateTime?
   emailNotifications Boolean  @default(true)
   pushNotifications  Boolean  @default(true)
   postLikes          Boolean  @default(true)
   comments           Boolean  @default(true)
+  mentions           Boolean  @default(true)
+  commentReplies     Boolean  @default(true)
+  groupJoinRequests  Boolean  @default(true)
+  groupJoinResponse  Boolean  @default(true)
+  groupNewPost       Boolean  @default(true)
+  lostFoundNew       Boolean  @default(false)
+  lostFoundContact   Boolean  @default(true)
   newFollowers       Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -116,14 +125,18 @@ model Post {
   content   String
   imageUrl  String?
   authorId  String
+  groupId   String?                          // ADD THIS
+  postType  String    @default("POST")   // ADD THIS: "POST" | "ANNOUNCEMENT" | "EVENT"
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   comments  Comment[]
   likes     Like[]
   author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  group     Group?    @relation(fields: [groupId], references: [id], onDelete: Cascade) // ADD THIS
   shares    Share[]
 
   @@index([authorId])
+  @@index([groupId])                         // ADD THIS
   @@index([createdAt])
   @@map("posts")
 }
@@ -280,6 +293,7 @@ model Group {
   updatedAt     DateTime           @updatedAt
   members       GroupMember[]
   joinRequests  GroupJoinRequest[]
+  posts         Post[]                        // ADD THIS
   creator       User               @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
 
   @@index([creatorId])
