@@ -336,7 +336,7 @@ export default function Notifications() {
                   <div className="unread-dot"></div>
                 )}
 
-                {notification.type === 'group_join_request' && notification.groupId && notification.groupJoinRequestId && (
+                {notification.type === 'group_join_request' && !notification.read && notification.groupId && notification.groupJoinRequestId && (
                   <div className="notification-actions" onClick={e => e.stopPropagation()}>
                     <button
                       type="button"

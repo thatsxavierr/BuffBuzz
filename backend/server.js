@@ -2420,7 +2420,7 @@ app.get('/api/notifications/:userId', async (req, res) => {
       conversationId: n.conversationId,
       createdAt: n.createdAt,
       userName: `${n.actor.firstName} ${n.actor.lastName}`,
-      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type === 'group_join_request' ? 'requested to join your group' : n.type === 'group_join_approved' ? 'approved your request to join the group' : n.type === 'group_join_denied' ? 'denied your request to join the group' : n.type === 'direct_message' ? 'sent you a message' : n.type === 'group_message' ? 'sent a message in the group' : n.type === 'group_chat_mention' ? 'tagged you in a group chat' : n.type
+      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type === 'group_join_request' ? 'requested to join your group' : n.type === 'group_join_approved' ? 'approved your request to join the group' : n.type === 'group_join_denied' ? 'denied your request to join the group' : n.type === 'group_member_removed' ? 'removed you from the group' : n.type === 'direct_message' ? 'sent you a message' : n.type === 'group_message' ? 'sent a message in the group' : n.type === 'group_chat_mention' ? 'tagged you in a group chat' : n.type
     }));
 
     res.status(200).json({ notifications: formatted });
@@ -3506,6 +3506,12 @@ app.delete('/api/groups/:groupId/leave', async (req, res) => {
       }
     });
 
+    // Reset stale approved request so user can request to rejoin later.
+    await prisma.groupJoinRequest.updateMany({
+      where: { groupId, userId, status: 'APPROVED' },
+      data: { status: 'DENIED' }
+    });
+
     res.status(200).json({ message: 'Successfully left the group' });
 
   } catch (error) {
@@ -3555,7 +3561,17 @@ app.post('/api/groups/:groupId/request-join', async (req, res) => {
       return res.status(400).json({ message: 'You already have a pending request for this group' });
     }
     if (request?.status === 'APPROVED') {
-      return res.status(400).json({ message: 'You are already a member' });
+      // Safety: if membership was removed but request stayed APPROVED, allow re-request.
+      const approvedMember = await prisma.groupMember.findUnique({
+        where: { groupId_userId: { groupId, userId } }
+      });
+      if (approvedMember) {
+        return res.status(400).json({ message: 'You are already a member' });
+      }
+      request = await prisma.groupJoinRequest.update({
+        where: { id: request.id },
+        data: { status: 'PENDING' }
+      });
     }
 
     if (request && request.status === 'DENIED') {
@@ -3657,6 +3673,16 @@ app.post('/api/groups/:groupId/join-requests/:requestId/approve', async (req, re
       }
     });
 
+    // Remove the owner's actionable request notification after processing
+    await prisma.notification.deleteMany({
+      where: {
+        recipientId: ownerId,
+        type: 'group_join_request',
+        groupId,
+        groupJoinRequestId: requestId
+      }
+    });
+
     res.status(200).json({ message: 'Join request approved' });
   } catch (error) {
     console.error('Approve join request error:', error);
@@ -3697,6 +3723,16 @@ app.post('/api/groups/:groupId/join-requests/:requestId/deny', async (req, res) 
       }
     });
 
+    // Remove the owner's actionable request notification after processing
+    await prisma.notification.deleteMany({
+      where: {
+        recipientId: ownerId,
+        type: 'group_join_request',
+        groupId,
+        groupJoinRequestId: requestId
+      }
+    });
+
     res.status(200).json({ message: 'Join request denied' });
   } catch (error) {
     console.error('Deny join request error:', error);
@@ -3728,6 +3764,22 @@ app.delete('/api/groups/:groupId/members/:memberId', async (req, res) => {
 
     await prisma.groupMember.delete({
       where: { groupId_userId: { groupId, userId: memberId } }
+    });
+
+    // Reset stale approved request so removed users can request to join again cleanly.
+    await prisma.groupJoinRequest.updateMany({
+      where: { groupId, userId: memberId, status: 'APPROVED' },
+      data: { status: 'DENIED' }
+    });
+
+    // Notify the removed member.
+    await prisma.notification.create({
+      data: {
+        recipientId: memberId,
+        actorId: adminId,
+        type: 'group_member_removed',
+        groupId
+      }
     });
 
     res.status(200).json({ message: 'Member removed successfully' });
