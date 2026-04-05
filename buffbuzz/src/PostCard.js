@@ -4,6 +4,7 @@ import './PostCard.css';
 import CommentModel from './CommentModel';
 import LikesModal from './LikesModal';
 import ImageCarousel from './ImageCarousel';
+import ReportModal from './ReportModal';
 
 export default function PostCard({ post, currentUserId, onDelete, onUpdate, friendIds = new Set() }) {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
     post.imageUrls?.length > 0 ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : [])
   );
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Debug: Log the post data
 
@@ -219,6 +221,16 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
                 Add
               </button>
             )}
+            {post.author.id !== currentUserId && (
+              <button
+                type="button"
+                className="report-inline-btn"
+                onClick={() => setShowReportModal(true)}
+                title="Report post"
+              >
+                Report
+              </button>
+            )}
             {post.author.id === currentUserId && (
               <div className="post-owner-actions">
                 <button 
@@ -408,6 +420,15 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
         isOpen={isCommentsOpen}
         onClose={() => setIsCommentsOpen(false)}
         onCommentAdded={handleCommentAdded}
+      />
+
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        reporterId={currentUserId}
+        targetType="POST"
+        targetId={post.id}
+        subjectLabel="this post"
       />
 
       {/* Likes Modal */}

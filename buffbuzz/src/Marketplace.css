@@ -690,6 +690,23 @@
   background-color: #600000;
 }
 
+.detail-modal-seller .detail-report-listing-btn {
+  display: block;
+  margin-top: 10px;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: #800000;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.detail-modal-seller .detail-report-listing-btn:hover {
+  color: #600000;
+}
+
 /* ── Search Bar ── */
 .search-bar-wrapper {
   width: 100%;

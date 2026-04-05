@@ -4,6 +4,7 @@ import './Jobs.css';
 import Header from './Header.js';
 import Footer from './Footer';
 import { getValidUser } from './sessionUtils';
+import ReportModal from './ReportModal';
 
 export default function Jobs() {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ export default function Jobs() {
   const [searchTerm, setSearchTerm] = useState(''); // NEW
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingJobId, setEditingJobId] = useState(null);
+  const [reportJobId, setReportJobId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     company: '',
@@ -460,14 +462,25 @@ export default function Jobs() {
                       <> · Deadline: {new Date(job.applicationDeadline).toLocaleDateString()}</>
                     )}
                   </span>
-                  <button 
-                    className={`apply-button ${isJobExpired(job) ? 'apply-button-disabled' : ''}`}
-                    onClick={() => handleApply(job)}
-                    disabled={isJobExpired(job)}
-                    title={isJobExpired(job) ? 'Applications closed' : 'Apply for this job'}
-                  >
-                    {isJobExpired(job) ? 'Applications closed' : 'Apply Now'}
-                  </button>
+                  <div className="job-footer-actions">
+                    {job.posterId !== user.id && (
+                      <button
+                        type="button"
+                        className="job-report-btn"
+                        onClick={() => setReportJobId(job.id)}
+                      >
+                        Report
+                      </button>
+                    )}
+                    <button 
+                      className={`apply-button ${isJobExpired(job) ? 'apply-button-disabled' : ''}`}
+                      onClick={() => handleApply(job)}
+                      disabled={isJobExpired(job)}
+                      title={isJobExpired(job) ? 'Applications closed' : 'Apply for this job'}
+                    >
+                      {isJobExpired(job) ? 'Applications closed' : 'Apply Now'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -636,6 +649,15 @@ export default function Jobs() {
           </div>
         </div>
       )}
+
+      <ReportModal
+        isOpen={!!reportJobId}
+        onClose={() => setReportJobId(null)}
+        reporterId={user?.id}
+        targetType="JOB"
+        targetId={reportJobId}
+        subjectLabel="this job posting"
+      />
 
       <Footer />
     </div>

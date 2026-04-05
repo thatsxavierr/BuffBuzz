@@ -243,6 +243,29 @@
   align-items: center;
   padding-top: 16px;
   border-top: 1px solid #e5e7eb;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.job-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.job-report-btn {
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid #800000;
+  border-radius: 6px;
+  color: #800000;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.job-report-btn:hover {
+  background: rgba(128, 0, 0, 0.06);
 }
 
 .posted-date {
@@ -556,6 +579,16 @@
     flex-direction: column;
     gap: 12px;
     align-items: stretch;
+  }
+
+  .job-footer-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .job-report-btn {
+    width: 100%;
   }
 
   .apply-button {

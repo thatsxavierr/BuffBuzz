@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './CommentModel.css';
+import ReportModal from './ReportModal';
 
 export default function CommentModel({ post, currentUserId, isOpen, onClose, onCommentAdded }) {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
   const [mentionUsers, setMentionUsers] = useState([]);
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [reportComment, setReportComment] = useState(null);
 
   useEffect(() => {
     const fetchComments = async () => {
@@ -227,6 +229,15 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
                     </div>
                     <div className="modal-comment-footer">
                       <span className="modal-comment-time">{formatDate(comment.createdAt)}</span>
+                      {comment.author?.id && comment.author.id !== currentUserId && (
+                        <button
+                          type="button"
+                          className="modal-comment-reply-btn"
+                          onClick={() => setReportComment(comment)}
+                        >
+                          Report
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="modal-comment-reply-btn"
@@ -256,6 +267,15 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
                         </div>
                         <div className="modal-comment-footer">
                           <span className="modal-comment-time">{formatDate(reply.createdAt)}</span>
+                          {reply.author?.id && reply.author.id !== currentUserId && (
+                            <button
+                              type="button"
+                              className="modal-comment-reply-btn"
+                              onClick={() => setReportComment(reply)}
+                            >
+                              Report
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="modal-comment-reply-btn"
@@ -284,6 +304,15 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
                           </div>
                           <div className="modal-comment-footer">
                             <span className="modal-comment-time">{formatDate(nestedReply.createdAt)}</span>
+                            {nestedReply.author?.id && nestedReply.author.id !== currentUserId && (
+                              <button
+                                type="button"
+                                className="modal-comment-reply-btn"
+                                onClick={() => setReportComment(nestedReply)}
+                              >
+                                Report
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="modal-comment-reply-btn"
@@ -350,6 +379,15 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
             </div>
           )}
         </div>
+
+        <ReportModal
+          isOpen={!!reportComment}
+          onClose={() => setReportComment(null)}
+          reporterId={currentUserId}
+          targetType="COMMENT"
+          targetId={reportComment?.id}
+          subjectLabel="this comment"
+        />
       </div>
     </div>
   );

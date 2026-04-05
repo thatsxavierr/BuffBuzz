@@ -118,6 +118,9 @@ export default function Notifications() {
     if (filter === 'mention') {
       return notification.type === 'mention' || notification.type === 'group_chat_mention';
     }
+    if (filter === 'lostfound_listing') {
+      return notification.type === 'lostfound_listing' || notification.type === 'lostfound_resolved';
+    }
     return notification.type === filter;
   });
 
@@ -139,7 +142,8 @@ export default function Notifications() {
       event: '📅',
       message: '✉️',
       marketplace_listing: '🛒',
-      lostfound_listing: '🔍'
+      lostfound_listing: '🔍',
+      lostfound_resolved: '✅'
     };
     return icons[type] || '🔔';
   };

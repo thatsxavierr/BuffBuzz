@@ -5,6 +5,7 @@ import Header from './Header.js';
 import Footer from './Footer.js';
 import ImageCarousel from './ImageCarousel';
 import { getValidUser } from './sessionUtils';
+import ReportModal from './ReportModal';
 
 export default function Marketplace() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export default function Marketplace() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [detailItem, setDetailItem] = useState(null);
+  const [reportListingId, setReportListingId] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
   const [profilePrivacy, setProfilePrivacy] = useState(null);
   const [formData, setFormData] = useState({
@@ -536,11 +538,29 @@ export default function Marketplace() {
                     Message seller
                   </button>
                 )}
+                {detailItem.sellerId && detailItem.sellerId !== user.id && (
+                  <button
+                    type="button"
+                    className="detail-report-listing-btn"
+                    onClick={() => setReportListingId(detailItem.id)}
+                  >
+                    Report listing
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
+
+      <ReportModal
+        isOpen={!!reportListingId}
+        onClose={() => setReportListingId(null)}
+        reporterId={user?.id}
+        targetType="MARKETPLACE_ITEM"
+        targetId={reportListingId}
+        subjectLabel="this listing"
+      />
 
       <Footer />
     </div>

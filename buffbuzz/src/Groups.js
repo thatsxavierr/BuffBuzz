@@ -5,6 +5,7 @@ import Header from './Header.js';
 import Footer from './Footer';
 import ImageCarousel from './ImageCarousel';
 import { getValidUser } from './sessionUtils';
+import ReportModal from './ReportModal';
 
 const POST_TYPES = [
   { value: 'POST',         label: '📝 Post',         desc: 'Share something with the group' },
@@ -66,6 +67,8 @@ export default function Groups() {
     privacy: 'PUBLIC',
     imageUrl: ''
   });
+
+  const [reportTarget, setReportTarget] = useState(null);
 
   useEffect(() => {
     const userData = getValidUser();
@@ -685,6 +688,21 @@ export default function Groups() {
                 )}
               </div>
 
+              <button
+                type="button"
+                className="group-detail-report-link"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReportTarget({
+                    targetType: 'GROUP',
+                    targetId: detailGroup.id,
+                    subjectLabel: 'this group',
+                  });
+                }}
+              >
+                Report group
+              </button>
+
               <div className="detail-tabs">
                 <button className={`detail-tab ${detailTab === 'about' ? 'active' : ''}`} onClick={() => setDetailTab('about')}>ℹ️ About</button>
                 {isMember && <button className={`detail-tab ${detailTab === 'posts' ? 'active' : ''}`} onClick={() => setDetailTab('posts')}>📝 Posts</button>}
@@ -745,6 +763,22 @@ export default function Groups() {
                             >
                               💬 {post._count?.comments || 0}
                             </button>
+                            {post.author?.id && post.author.id !== user?.id && (
+                              <button
+                                type="button"
+                                className="group-post-action-btn group-post-report-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReportTarget({
+                                    targetType: 'POST',
+                                    targetId: post.id,
+                                    subjectLabel: 'this post',
+                                  });
+                                }}
+                              >
+                                Report
+                              </button>
+                            )}
                           </div>
 
                           {/* Comments section */}
@@ -783,6 +817,22 @@ export default function Groups() {
                                     <div className="group-comment-body">
                                       <span className="group-comment-author">{comment.author?.firstName} {comment.author?.lastName}</span>
                                       <span className="group-comment-time">{formatTimeAgo(comment.createdAt)}</span>
+                                      {comment.author?.id && comment.author.id !== user?.id && (
+                                        <button
+                                          type="button"
+                                          className="group-comment-report"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setReportTarget({
+                                              targetType: 'COMMENT',
+                                              targetId: comment.id,
+                                              subjectLabel: 'this comment',
+                                            });
+                                          }}
+                                        >
+                                          Report
+                                        </button>
+                                      )}
                                       <p className="group-comment-text">{comment.content}</p>
                                     </div>
                                   </div>
@@ -954,6 +1004,15 @@ export default function Groups() {
           </div>
         </div>
       )}
+
+      <ReportModal
+        isOpen={!!reportTarget}
+        onClose={() => setReportTarget(null)}
+        reporterId={user?.id}
+        targetType={reportTarget?.targetType}
+        targetId={reportTarget?.targetId}
+        subjectLabel={reportTarget?.subjectLabel}
+      />
 
       <Footer />
     </div>

@@ -94,6 +94,7 @@ async function shouldNotify(userId, type) {
       case 'mention':             return prefs.mentions;
       case 'group_chat_mention':  return prefs.mentions;
       case 'lostfound_listing':   return prefs.lostFoundNew;
+      case 'lostfound_resolved':  return prefs.lostFoundNew;
       case 'group_join_request':  return prefs.groupJoinRequests;
       case 'group_join_approved': return prefs.groupJoinResponse;
       case 'group_join_denied':   return prefs.groupJoinResponse;
@@ -2542,7 +2543,7 @@ app.get('/api/notifications/:userId', async (req, res) => {
       conversationId: n.conversationId,
       createdAt: n.createdAt,
       userName: `${n.actor.firstName} ${n.actor.lastName}`,
-      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type === 'group_join_request' ? 'requested to join your group' : n.type === 'group_join_approved' ? 'approved your request to join the group' : n.type === 'group_join_denied' ? 'denied your request to join the group' : n.type === 'direct_message' ? 'sent you a message' : n.type === 'group_message' ? 'sent a message in the group' : n.type === 'group_chat_mention' ? 'tagged you in a group chat' : n.type === 'group_new_post' ? 'posted in a group you belong to' : n.type === 'group_new_post' ? 'posted in a group you belong to': n.type === 'group_announcement' ? 'posted an announcement in your group': n.type === 'group_event' ? 'posted an event in your group': n.type
+      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type === 'lostfound_resolved' ? 'marked a lost & found item as resolved' : n.type === 'group_join_request' ? 'requested to join your group' : n.type === 'group_join_approved' ? 'approved your request to join the group' : n.type === 'group_join_denied' ? 'denied your request to join the group' : n.type === 'direct_message' ? 'sent you a message' : n.type === 'group_message' ? 'sent a message in the group' : n.type === 'group_chat_mention' ? 'tagged you in a group chat' : n.type === 'group_new_post' ? 'posted in a group you belong to' : n.type === 'group_new_post' ? 'posted in a group you belong to': n.type === 'group_announcement' ? 'posted an announcement in your group': n.type === 'group_event' ? 'posted an event in your group': n.type
     }));
 
     res.status(200).json({ notifications: formatted });
@@ -3324,7 +3325,7 @@ app.delete('/api/lostfound/:itemId', async (req, res) => {
 app.put('/api/lostfound/:itemId', async (req, res) => {
   try {
     const { itemId } = req.params;
-    const { userId, title, description, category, location, date, contactInfo, imageUrl, imageUrls } = req.body;
+    const { userId, title, description, category, location, date, contactInfo, imageUrl, imageUrls, resolved } = req.body;
 
     const item = await prisma.lostFoundItem.findUnique({
       where: { id: itemId }
@@ -3354,6 +3355,10 @@ app.put('/api/lostfound/:itemId', async (req, res) => {
     if (date !== undefined) updateData.date = new Date(date);
     if (contactInfo !== undefined) updateData.contactInfo = contactInfo;
     if (storedImageUrl !== undefined) updateData.imageUrl = storedImageUrl;
+    if (resolved !== undefined) updateData.resolved = Boolean(resolved);
+
+    const wasResolved = item.resolved === true;
+    const willBecomeResolved = resolved !== undefined && Boolean(resolved) === true;
 
     const updated = await prisma.lostFoundItem.update({
       where: { id: itemId },
@@ -3368,6 +3373,27 @@ app.put('/api/lostfound/:itemId', async (req, res) => {
         }
       }
     });
+
+    if (willBecomeResolved && !wasResolved) {
+      const listingRecipients = await prisma.notification.findMany({
+        where: {
+          lostFoundItemId: itemId,
+          type: 'lostfound_listing'
+        },
+        select: { recipientId: true }
+      });
+      const uniqueRecipientIds = [...new Set(listingRecipients.map(r => r.recipientId))].filter(id => id !== userId);
+      if (uniqueRecipientIds.length > 0) {
+        await prisma.notification.createMany({
+          data: uniqueRecipientIds.map(recipientId => ({
+            recipientId,
+            actorId: userId,
+            type: 'lostfound_resolved',
+            lostFoundItemId: itemId
+          }))
+        });
+      }
+    }
 
     const itemWithUrls = { ...updated, imageUrls: getImageUrlsFromItem(updated) };
     res.status(200).json({ message: 'Item updated successfully', item: itemWithUrls });
@@ -4862,6 +4888,152 @@ app.get('/api/friends/:userId', async (req, res) => {
   } catch (error) {
     console.error('Get friends error:', error);
     res.status(500).json({ message: 'An error occurred while fetching friends' });
+  }
+});
+
+// ==================== REPORTS (admin queue; submitted by users) ====================
+
+const REPORT_TARGET_TYPES = new Set([
+  'POST',
+  'COMMENT',
+  'MARKETPLACE_ITEM',
+  'LOST_FOUND_ITEM',
+  'GROUP',
+  'USER',
+  'JOB',
+  'MESSAGE',
+]);
+
+const REPORT_CATEGORIES = new Set([
+  'SPAM',
+  'HARASSMENT',
+  'INAPPROPRIATE_CONTENT',
+  'SCAM_OR_FRAUD',
+  'IMPERSONATION',
+  'OTHER',
+]);
+
+async function validateReportTarget(reporterId, targetType, targetId) {
+  switch (targetType) {
+    case 'USER': {
+      if (reporterId === targetId) {
+        return { ok: false, message: 'You cannot report your own account' };
+      }
+      const user = await prisma.user.findUnique({ where: { id: targetId } });
+      if (!user) return { ok: false, message: 'User not found' };
+      return { ok: true };
+    }
+    case 'POST': {
+      const post = await prisma.post.findUnique({ where: { id: targetId } });
+      if (!post) return { ok: false, message: 'Post not found' };
+      if (post.authorId === reporterId) {
+        return { ok: false, message: 'You cannot report your own post' };
+      }
+      return { ok: true };
+    }
+    case 'COMMENT': {
+      const comment = await prisma.comment.findUnique({ where: { id: targetId } });
+      if (!comment) return { ok: false, message: 'Comment not found' };
+      if (comment.authorId === reporterId) {
+        return { ok: false, message: 'You cannot report your own comment' };
+      }
+      return { ok: true };
+    }
+    case 'MARKETPLACE_ITEM': {
+      const listing = await prisma.marketplaceItem.findUnique({ where: { id: targetId } });
+      if (!listing) return { ok: false, message: 'Listing not found' };
+      if (listing.sellerId === reporterId) {
+        return { ok: false, message: 'You cannot report your own listing' };
+      }
+      return { ok: true };
+    }
+    case 'LOST_FOUND_ITEM': {
+      const entry = await prisma.lostFoundItem.findUnique({ where: { id: targetId } });
+      if (!entry) return { ok: false, message: 'Item not found' };
+      if (entry.userId === reporterId) {
+        return { ok: false, message: 'You cannot report your own lost & found entry' };
+      }
+      return { ok: true };
+    }
+    case 'GROUP': {
+      const group = await prisma.group.findUnique({ where: { id: targetId } });
+      if (!group) return { ok: false, message: 'Group not found' };
+      return { ok: true };
+    }
+    case 'JOB': {
+      const job = await prisma.job.findUnique({ where: { id: targetId } });
+      if (!job) return { ok: false, message: 'Job not found' };
+      if (job.posterId === reporterId) {
+        return { ok: false, message: 'You cannot report your own job posting' };
+      }
+      return { ok: true };
+    }
+    case 'MESSAGE': {
+      const message = await prisma.message.findUnique({ where: { id: targetId } });
+      if (!message) return { ok: false, message: 'Message not found' };
+      if (message.senderId === reporterId) {
+        return { ok: false, message: 'You cannot report your own message' };
+      }
+      return { ok: true };
+    }
+    default:
+      return { ok: false, message: 'Invalid report target type' };
+  }
+}
+
+app.post('/api/reports', async (req, res) => {
+  try {
+    const { reporterId, targetType, targetId, category, details } = req.body;
+
+    if (!reporterId || !targetType || !targetId) {
+      return res.status(400).json({ message: 'reporterId, targetType, and targetId are required' });
+    }
+
+    if (!REPORT_TARGET_TYPES.has(targetType)) {
+      return res.status(400).json({ message: 'Invalid targetType' });
+    }
+
+    const reporter = await prisma.user.findUnique({ where: { id: reporterId } });
+    if (!reporter) {
+      return res.status(404).json({ message: 'Reporter not found' });
+    }
+
+    const reportCategory = category && REPORT_CATEGORIES.has(category) ? category : 'OTHER';
+
+    const detailsStr =
+      typeof details === 'string' ? details.trim().slice(0, 2000) : '';
+    if (typeof details === 'string' && details.length > 2000) {
+      return res.status(400).json({ message: 'Details must be 2000 characters or less' });
+    }
+
+    const check = await validateReportTarget(reporterId, targetType, targetId);
+    if (!check.ok) {
+      return res.status(400).json({ message: check.message });
+    }
+
+    try {
+      const report = await prisma.report.create({
+        data: {
+          reporterId,
+          targetType,
+          targetId,
+          category: reportCategory,
+          details: detailsStr || null,
+        },
+      });
+      return res.status(201).json({
+        message: 'Report submitted. Our team will review it.',
+        report,
+      });
+    } catch (err) {
+      if (err.code === 'P2002') {
+        return res.status(409).json({ message: 'You have already reported this' });
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('Create report error:', error);
+    res.status(500).json({ message: 'An error occurred while submitting the report' });
   }
 });
 

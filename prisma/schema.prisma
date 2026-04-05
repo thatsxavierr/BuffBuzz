@@ -45,6 +45,7 @@ model User {
   posts                   Post[]
   profile                 Profile?
   shares                  Share[]
+  reportsFiled            Report[]                  @relation("ReportReporter")
 
   @@map("users")
 }
@@ -271,6 +272,7 @@ model LostFoundItem {
   contactInfo String
   imageUrl    String?
   userId      String
+  resolved    Boolean           @default(false)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -474,4 +476,49 @@ enum GroupPrivacy {
 enum MessageType {
   TEXT
   IMAGE
+}
+
+enum ReportTargetType {
+  POST
+  COMMENT
+  MARKETPLACE_ITEM
+  LOST_FOUND_ITEM
+  GROUP
+  USER
+  JOB
+  MESSAGE
+}
+
+enum ReportCategory {
+  SPAM
+  HARASSMENT
+  INAPPROPRIATE_CONTENT
+  SCAM_OR_FRAUD
+  IMPERSONATION
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  DISMISSED
+  ACTION_TAKEN
+}
+
+model Report {
+  id         String           @id @default(uuid())
+  reporterId String
+  targetType ReportTargetType
+  targetId   String
+  category   ReportCategory   @default(OTHER)
+  details    String?
+  status     ReportStatus     @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  reporter   User             @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([targetType, targetId])
+  @@index([status, createdAt])
+  @@map("reports")
 }

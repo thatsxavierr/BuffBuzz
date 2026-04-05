@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './RightSidebar.css';
 import { getValidUser } from './sessionUtils';
+import ReportModal from './ReportModal';
 
 export default function RightSidebar({ initialOpenChat, initialOpenConversationId }) {
   const navigate = useNavigate();
@@ -782,6 +783,7 @@ function ChatBox({ friend, conversation, messages, onClose, onSend, onEdit, onDe
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
   const [showReactions, setShowReactions] = useState(null);
+  const [reportMessage, setReportMessage] = useState(null);
   const messagesEndRef = React.useRef(null);
 
   const scrollToBottom = () => {
@@ -1083,6 +1085,16 @@ const handleDeleteGroup = async () => {
                     >
                       ↩️
                     </button>
+                    {msg.senderId !== currentUserId && (
+                      <button
+                        type="button"
+                        onClick={() => setReportMessage(msg)}
+                        className="message-action-btn"
+                        title="Report message"
+                      >
+                        🚩
+                      </button>
+                    )}
                     {msg.senderId === currentUserId && (
                       <>
                         <button 
@@ -1180,6 +1192,15 @@ const handleDeleteGroup = async () => {
           </div>
         </div>
       )}
+
+      <ReportModal
+        isOpen={!!reportMessage}
+        onClose={() => setReportMessage(null)}
+        reporterId={currentUserId}
+        targetType="MESSAGE"
+        targetId={reportMessage?.id}
+        subjectLabel="this message"
+      />
     </div>
   );
 }

@@ -366,6 +366,22 @@
   transform: translateY(-2px);
 }
 
+.profile-report-button {
+  padding: 8px 16px;
+  background: transparent;
+  color: #800000;
+  border: 1px solid #800000;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profile-report-button:hover {
+  background: rgba(128, 0, 0, 0.08);
+}
+
 .block-button {
   padding: 8px 16px;
   background-color: #800000;

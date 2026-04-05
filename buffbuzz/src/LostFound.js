@@ -5,6 +5,7 @@ import Header from './Header.js';
 import Footer from './Footer';
 import ImageCarousel from './ImageCarousel';
 import { getValidUser } from './sessionUtils';
+import ReportModal from './ReportModal';
 
 export default function LostFound() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export default function LostFound() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [detailItem, setDetailItem] = useState(null);
+  const [reportItemId, setReportItemId] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
   const [profilePrivacy, setProfilePrivacy] = useState(null);
   const [formData, setFormData] = useState({
@@ -240,6 +242,7 @@ export default function LostFound() {
       if (response.ok) {
         fetchItems(filter === 'all' ? null : filter, searchTerm);
         if (detailItem?.id === itemId) setDetailItem(prev => ({ ...prev, resolved }));
+        if (resolved) window.dispatchEvent(new Event('notificationsUpdated'));
       } else {
         alert(data.message || 'Failed to update item');
       }
@@ -575,11 +578,29 @@ export default function LostFound() {
                     Contact
                   </button>
                 )}
+                {detailItem.userId && detailItem.userId !== user.id && (
+                  <button
+                    type="button"
+                    className="detail-report-lostfound-btn"
+                    onClick={() => setReportItemId(detailItem.id)}
+                  >
+                    Report entry
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
+
+      <ReportModal
+        isOpen={!!reportItemId}
+        onClose={() => setReportItemId(null)}
+        reporterId={user?.id}
+        targetType="LOST_FOUND_ITEM"
+        targetId={reportItemId}
+        subjectLabel="this lost & found entry"
+      />
 
       <Footer />
     </div>

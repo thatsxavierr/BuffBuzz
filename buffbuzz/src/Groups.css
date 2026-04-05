@@ -559,6 +559,48 @@
   margin-bottom: 20px;
 }
 
+.group-detail-report-link {
+  display: block;
+  width: fit-content;
+  margin: -8px 0 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #800000;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.group-detail-report-link:hover {
+  color: #600000;
+}
+
+.group-post-report-btn {
+  margin-left: auto;
+  font-size: 12px !important;
+  color: #800000 !important;
+}
+
+.group-comment-report {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: #800000;
+  cursor: pointer;
+  text-decoration: underline;
+  vertical-align: baseline;
+}
+
+.group-comment-report:hover {
+  color: #600000;
+}
+
 /* ── Detail tabs (About / Posts) ─────────────────────────────────── */
 .detail-tabs {
   display: flex;

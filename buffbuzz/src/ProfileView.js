@@ -4,6 +4,7 @@ import './ProfileView.css';
 import Header from './Header';
 import Footer from './Footer';
 import { getValidUser } from './sessionUtils';
+import ReportModal from './ReportModal';
 
 // Abbreviate a group name to 2-4 characters for the badge
 // e.g. "Black Student Union" → "BSU", "ASO" → "ASO", "Computer Science Club" → "CSC"
@@ -55,6 +56,7 @@ export default function ProfileView() {
 
   // Organization badges
   const [userGroups, setUserGroups] = useState([]);
+  const [showReportProfile, setShowReportProfile] = useState(false);
 
   // Scroll to top when navigating to this profile (e.g. from comment section or likes modal)
   useEffect(() => {
@@ -390,6 +392,14 @@ export default function ProfileView() {
           </button>
         )}
         
+        <button
+          type="button"
+          className="profile-report-button"
+          onClick={() => setShowReportProfile(true)}
+        >
+          Report profile
+        </button>
+
         <button 
           className="block-button"
           onClick={handleBlock}
@@ -662,6 +672,15 @@ export default function ProfileView() {
           )}
         </div>
       </div>
+
+      <ReportModal
+        isOpen={showReportProfile}
+        onClose={() => setShowReportProfile(false)}
+        reporterId={currentUserId}
+        targetType="USER"
+        targetId={viewingUserId}
+        subjectLabel="this profile"
+      />
 
       <Footer />
     </div>
