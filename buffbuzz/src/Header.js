@@ -204,7 +204,11 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
             )}
           </button>
           <button className="header-button" onClick={handleSettingsClick}>⚙️ Settings</button>
-
+{getValidUser()?.email?.toLowerCase() === 'buffbuzz2025@gmail.com' && (
+  <button className="header-button admin-btn" onClick={() => navigate('/admin')}>
+    🛡️ Admin
+  </button>
+)}
           <div
             className="profile-circle"
             onClick={handleProfileClick}
