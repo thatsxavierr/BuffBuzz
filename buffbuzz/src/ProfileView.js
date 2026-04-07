@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import './ProfileView.css';
 import Header from './Header';
 import Footer from './Footer';
+import PostCard from './PostCard';
 import { getValidUser } from './sessionUtils';
 import ReportModal from './ReportModal';
 
@@ -28,6 +29,12 @@ function badgeColor(name) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i);
   return BADGE_COLORS[hash % BADGE_COLORS.length];
+}
+
+function getPostPreviewImage(post) {
+  if (post.imageUrls?.length) return post.imageUrls[0];
+  if (post.imageUrl) return post.imageUrl;
+  return null;
 }
 
 export default function ProfileView() {
@@ -58,10 +65,33 @@ export default function ProfileView() {
   const [userGroups, setUserGroups] = useState([]);
   const [showReportProfile, setShowReportProfile] = useState(false);
 
+  const [profilePosts, setProfilePosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [friendIds, setFriendIds] = useState(() => new Set());
+  const [enhancedPostId, setEnhancedPostId] = useState(null);
+
+  const enhancedPost = enhancedPostId
+    ? profilePosts.find((p) => p.id === enhancedPostId)
+    : null;
+
   // Scroll to top when navigating to this profile (e.g. from comment section or likes modal)
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [location.pathname, location.state?.userId]);
+
+  useEffect(() => {
+    if (!enhancedPostId) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setEnhancedPostId(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [enhancedPostId]);
 
   useEffect(() => {
     const userData = getValidUser();
@@ -133,6 +163,62 @@ export default function ProfileView() {
       setCurrentUserProfilePictureUrl(null);
     }
   }, [location.state?.userId, location.state?.refresh, navigate]);
+
+  useEffect(() => {
+    if (!currentUserId || !viewingUserId || !profile) {
+      return;
+    }
+    if (!isOwnProfile && !canViewFullProfile) {
+      setProfilePosts([]);
+      return;
+    }
+
+    let cancelled = false;
+    setPostsLoading(true);
+
+    (async () => {
+      try {
+        const [postsRes, friendsRes] = await Promise.all([
+          fetch(
+            `http://localhost:5000/api/posts?authorId=${encodeURIComponent(viewingUserId)}&userId=${encodeURIComponent(currentUserId)}`
+          ),
+          fetch(`http://localhost:5000/api/friends/${currentUserId}`)
+        ]);
+
+        if (cancelled) return;
+
+        if (postsRes.ok) {
+          const data = await postsRes.json();
+          setProfilePosts(data.posts || []);
+        } else {
+          setProfilePosts([]);
+        }
+
+        if (friendsRes.ok) {
+          const fdata = await friendsRes.json();
+          setFriendIds(new Set((fdata.friends || []).map(f => f.id)));
+        }
+      } catch (e) {
+        console.error('Error loading profile posts:', e);
+        if (!cancelled) setProfilePosts([]);
+      } finally {
+        if (!cancelled) setPostsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile, viewingUserId, currentUserId, isOwnProfile, canViewFullProfile]);
+
+  const handleProfilePostDelete = (postId) => {
+    setProfilePosts((prev) => prev.filter((p) => p.id !== postId));
+    setEnhancedPostId((cur) => (cur === postId ? null : cur));
+  };
+
+  const handleProfilePostUpdate = (updatedPost) => {
+    setProfilePosts((prev) => prev.map((p) => (p.id === updatedPost.id ? updatedPost : p)));
+  };
 
   const fetchFriendshipStatus = async (userId, otherUserId) => {
     try {
@@ -659,6 +745,48 @@ export default function ProfileView() {
             </div>
           ) : null}
 
+          {/* Posts (main feed only — same posts as home feed for this user) */}
+          {(isOwnProfile || canViewFullProfile) && (
+            <div className="profile-section profile-posts-section">
+              <h2>Posts</h2>
+              {postsLoading ? (
+                <p className="profile-posts-placeholder">Loading posts…</p>
+              ) : profilePosts.length === 0 ? (
+                <p className="profile-posts-placeholder">
+                  {isOwnProfile
+                    ? 'You have not shared any posts on the main feed yet.'
+                    : 'No posts on the main feed yet.'}
+                </p>
+              ) : (
+                <div className="profile-posts-grid" role="list">
+                  {profilePosts.map((post) => {
+                    const previewUrl = getPostPreviewImage(post);
+                    const snippet = [post.title, post.content].filter(Boolean).join(' ').slice(0, 80);
+                    return (
+                      <button
+                        key={post.id}
+                        type="button"
+                        className="profile-post-tile"
+                        onClick={() => setEnhancedPostId(post.id)}
+                        aria-label={`Open post: ${post.title || 'Post'}`}
+                      >
+                        {previewUrl ? (
+                          <img src={previewUrl} alt="" className="profile-post-tile-image" />
+                        ) : (
+                          <div className="profile-post-tile-text-only">
+                            <span className="profile-post-tile-icon" aria-hidden>📝</span>
+                            <span className="profile-post-tile-snippet">{snippet || 'Post'}</span>
+                          </div>
+                        )}
+                        <span className="profile-post-tile-overlay" aria-hidden />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Privacy Info for Own Profile */}
           {isOwnProfile && (
             <div className="profile-section">
@@ -681,6 +809,44 @@ export default function ProfileView() {
         targetId={viewingUserId}
         subjectLabel="this profile"
       />
+
+      {enhancedPost && currentUserId && (
+        <div
+          className="profile-post-enhanced-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="profile-post-enhanced-title"
+          onClick={() => setEnhancedPostId(null)}
+        >
+          <div
+            className="profile-post-enhanced-panel"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="profile-post-enhanced-header">
+              <h3 id="profile-post-enhanced-title" className="profile-post-enhanced-heading">
+                Post
+              </h3>
+              <button
+                type="button"
+                className="profile-post-enhanced-close"
+                onClick={() => setEnhancedPostId(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="profile-post-enhanced-body">
+              <PostCard
+                post={enhancedPost}
+                currentUserId={currentUserId}
+                onDelete={handleProfilePostDelete}
+                onUpdate={handleProfilePostUpdate}
+                friendIds={friendIds}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>

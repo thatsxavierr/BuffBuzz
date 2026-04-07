@@ -1117,15 +1117,20 @@ app.post('/api/posts/create', async (req, res) => {
   }
 });
 
-// Get all posts
+// Get all posts (optional authorId = posts by that user on the main feed only, groupId null)
 app.get('/api/posts', async (req, res) => {
   try {
-    const { userId } = req.query; // Optional: to check if current user liked posts
+    const { userId, authorId } = req.query; // userId: viewer for like status; authorId: filter by author
+
+    const where = {
+      groupId: null // Only main-feed posts, not group posts
+    };
+    if (authorId) {
+      where.authorId = authorId;
+    }
 
     const posts = await prisma.post.findMany({
-  where: {
-    groupId: null  // Only show posts that don't belong to a group
-  },
+  where,
   orderBy: {
     createdAt: 'desc'
   },

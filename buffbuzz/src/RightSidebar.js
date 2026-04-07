@@ -1,8 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './RightSidebar.css';
 import { getValidUser } from './sessionUtils';
 import ReportModal from './ReportModal';
+import PostCard from './PostCard';
+import SharedPostChatCard from './SharedPostChatCard';
+import {
+  parseSharedPostMessage,
+  getMessagePreviewLine,
+  getReplyPreviewText,
+} from './sharedPostMessageUtils';
 
 function buildListingContactDraft(contactCtx) {
   if (!contactCtx?.itemId) return null;
@@ -33,6 +40,8 @@ export default function RightSidebar({ initialOpenChat, initialOpenConversationI
   const [loading, setLoading] = useState(true);
   const [messageNotifications, setMessageNotifications] = useState([]);
   const [chatInputDrafts, setChatInputDrafts] = useState({});
+
+  const chatFriendIds = useMemo(() => new Set(friends.map((f) => f.id)), [friends]);
 
   useEffect(() => {
     setUser(getValidUser());
@@ -629,7 +638,9 @@ const openConversation = async (conversation) => {
             <div className="friend-info">
               <p className="friend-name">{conv.name}</p>
               <p className="friend-status">
-                {conv.messages?.[0]?.content?.substring(0, 30) || 'No messages yet'}
+                {conv.messages?.[0]?.content
+                  ? getMessagePreviewLine(conv.messages[0].content)
+                  : 'No messages yet'}
               </p>
             </div>
           </button>
@@ -685,6 +696,7 @@ const openConversation = async (conversation) => {
             onDelete={(messageId) => deleteMessage(friend.id, messageId)}
             onReact={(messageId, emoji) => reactToMessage(friend.id, messageId, emoji)}
             currentUserId={user.id}
+            chatFriendIds={chatFriendIds}
             index={index}
           />
         ))}
@@ -814,7 +826,7 @@ function GroupChatModal({ friends, onClose, onCreate }) {
 }
 
 // Chat Box Component (continued in next message due to length...)
-function ChatBox({ friend, conversation, messages, initialDraft, onClose, onSend, onEdit, onDelete, onReact, currentUserId, index }) {
+function ChatBox({ friend, conversation, messages, initialDraft, onClose, onSend, onEdit, onDelete, onReact, currentUserId, chatFriendIds, index }) {
   const [input, setInput] = useState('');
   const draftAppliedRef = useRef(false);
   const chatInputRef = useRef(null);
@@ -825,7 +837,10 @@ function ChatBox({ friend, conversation, messages, initialDraft, onClose, onSend
   const [editingContent, setEditingContent] = useState('');
   const [showReactions, setShowReactions] = useState(null);
   const [reportMessage, setReportMessage] = useState(null);
+  const [expandedSharedPost, setExpandedSharedPost] = useState(null);
   const messagesEndRef = React.useRef(null);
+
+  const friendIds = chatFriendIds || new Set();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -842,6 +857,20 @@ function ChatBox({ friend, conversation, messages, initialDraft, onClose, onSend
       requestAnimationFrame(() => chatInputRef.current?.focus());
     }
   }, [initialDraft]);
+
+  useEffect(() => {
+    if (!expandedSharedPost) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setExpandedSharedPost(null);
+    };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [expandedSharedPost]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -872,6 +901,7 @@ function ChatBox({ friend, conversation, messages, initialDraft, onClose, onSend
   };
 
   const startEditing = (message) => {
+    if (parseSharedPostMessage(message.content)) return;
     setEditingMessageId(message.id);
     setEditingContent(message.content);
   };
@@ -1022,7 +1052,9 @@ const handleDeleteGroup = async () => {
         {messages.length === 0 ? (
           <p className="no-messages">No messages yet. Say hi! 👋</p>
         ) : (
-          messages.map((msg) => (
+          messages.map((msg) => {
+            const sharedPayload = parseSharedPostMessage(msg.content);
+            return (
   <div 
     key={msg.id} 
     className={`message ${msg.senderId === currentUserId ? 'message-sent' : 'message-received'}`}
@@ -1040,7 +1072,7 @@ const handleDeleteGroup = async () => {
         <div className="reply-line"></div>
         <div className="reply-content">
           <span className="reply-sender">{msg.replyTo.sender.firstName}</span>
-          <span className="reply-text">{msg.replyTo.content}</span>
+          <span className="reply-text">{getReplyPreviewText(msg.replyTo.content)}</span>
         </div>
       </div>
     )}
@@ -1070,6 +1102,16 @@ const handleDeleteGroup = async () => {
                       <button onClick={() => saveEdit(msg.id)} className="edit-save-btn">Save</button>
                     </div>
                   </div>
+                ) : sharedPayload ? (
+                  <>
+                    <SharedPostChatCard
+                      payload={sharedPayload}
+                      onOpen={setExpandedSharedPost}
+                    />
+                    {msg.editedAt && (
+                      <span className="edited-badge">(edited)</span>
+                    )}
+                  </>
                 ) : (
                   <>
                     <p>{msg.content}</p>
@@ -1146,13 +1188,15 @@ const handleDeleteGroup = async () => {
                     )}
                     {msg.senderId === currentUserId && (
                       <>
-                        <button 
-                          onClick={() => startEditing(msg)}
-                          className="message-action-btn"
-                          title="Edit"
-                        >
-                          ✏️
-                        </button>
+                        {!sharedPayload && (
+                          <button 
+                            onClick={() => startEditing(msg)}
+                            className="message-action-btn"
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                        )}
                         <button 
                           onClick={() => onDelete(msg.id)}
                           className="message-action-btn"
@@ -1181,7 +1225,8 @@ const handleDeleteGroup = async () => {
                 )}
               </div>
             </div>
-          ))
+          );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -1191,7 +1236,7 @@ const handleDeleteGroup = async () => {
         <div className="replying-to">
           <div className="replying-to-content">
             <span className="replying-label">Replying to {replyTo.sender.firstName}:</span>
-            <span className="replying-text">{replyTo.content}</span>
+            <span className="replying-text">{getReplyPreviewText(replyTo.content)}</span>
           </div>
           <button onClick={cancelReply} className="cancel-reply">×</button>
         </div>
@@ -1239,6 +1284,37 @@ const handleDeleteGroup = async () => {
               ×
             </button>
             <img src={enlargedImage} alt="Enlarged view" className="enlarged-image" />
+          </div>
+        </div>
+      )}
+
+      {expandedSharedPost && (
+        <div
+          className="chat-shared-post-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Shared post"
+          onClick={() => setExpandedSharedPost(null)}
+        >
+          <div className="chat-shared-post-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="chat-shared-post-panel-header">
+              <h3>Post</h3>
+              <button
+                type="button"
+                className="chat-shared-post-panel-close"
+                onClick={() => setExpandedSharedPost(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="chat-shared-post-panel-body">
+              <PostCard
+                post={expandedSharedPost}
+                currentUserId={currentUserId}
+                friendIds={friendIds}
+              />
+            </div>
           </div>
         </div>
       )}
