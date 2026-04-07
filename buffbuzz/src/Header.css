@@ -241,4 +241,16 @@
     min-width: 16px;
     height: 16px;
   }
+
+  .admin-btn {
+  background-color: #800000;
+  color: white;
+  border-radius: 6px;
+  font-weight: 600;
+  }
+
+.admin-btn:hover {
+  background-color: #600000;
+  }
+
 }

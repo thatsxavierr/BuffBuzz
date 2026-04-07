@@ -103,6 +103,7 @@ async function shouldNotify(userId, type) {
       case 'group_new_post':      return prefs.groupNewPost;
       case 'group_announcement':  return prefs.groupNewPost;
       case 'group_event':         return prefs.groupNewPost;
+      case 'security_alert':      return true;
       case 'marketplace_listing': return true;
       default:                    return true;
     }
@@ -287,6 +288,52 @@ async function sendAccountLockedEmail(email, firstName, lockMinutes) {
   }
 }
 
+async function sendPasswordChangedEmail(email, firstName) {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    to: email,
+    subject: 'BuffBuzz - Your Password Was Changed',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #800000; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+          .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+          .alert-box { background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; padding: 16px; margin: 20px 0; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header"><h1>🔐 Security Alert</h1></div>
+          <div class="content">
+            <h2>Hi ${firstName}!</h2>
+            <p>Your BuffBuzz account password was successfully changed.</p>
+            <div class="alert-box">
+              <strong>⚠️ If you did not make this change:</strong>
+              <p style="margin: 8px 0 0 0;">Your account may have been compromised. Please reset your password immediately using the "Forgot Password" option on the login page.</p>
+            </div>
+            <p><strong>When:</strong> ${new Date().toLocaleString()}</p>
+            <p>If you made this change, you can safely ignore this email.</p>
+            <p>Best regards,<br>The BuffBuzz Team</p>
+          </div>
+          <div class="footer"><p>© 2025 BuffBuzz. All rights reserved.</p></div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Password change alert sent to ${email}`);
+  } catch (error) {
+    console.error('Error sending password change email:', error);
+    // Don't throw — email failure should not block the password change
+  }
+}
 // ==================== AUTHENTICATION ENDPOINTS ====================
 
 // Registration endpoint
@@ -592,6 +639,12 @@ app.post('/api/login', async (req, res) => {
     if (user.verificationStatus !== 'VERIFIED') {
       return res.status(401).json({ message: 'Please verify your email first' });
     }
+
+    if (user.suspended) {
+      return res.status(403).json({
+        message: 'Your account has been suspended. Please contact support.'
+       });
+      }
 
     console.log('=== LOGIN ATTEMPT DEBUG ===');
     console.log('User email:', user.email);
@@ -2364,7 +2417,20 @@ app.put('/api/settings/password', async (req, res) => {
 
     console.log(`Password updated for user: ${user.email}`);
 
-    res.status(200).json({ message: 'Password updated successfully' });
+// Send security alert email
+await sendPasswordChangedEmail(user.email, user.firstName);
+
+// Create in-app notification
+await prisma.notification.create({
+  data: {
+    recipientId: userId,
+    actorId: userId,
+    type: 'security_alert',
+    read: false
+  }
+});
+
+res.status(200).json({ message: 'Password updated successfully' });
 
   } catch (error) {
     console.error('Password update error:', error);
@@ -2546,7 +2612,7 @@ app.get('/api/notifications/:userId', async (req, res) => {
       conversationId: n.conversationId,
       createdAt: n.createdAt,
       userName: `${n.actor.firstName} ${n.actor.lastName}`,
-      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type === 'lostfound_resolved' ? 'marked a lost & found item as resolved' : n.type === 'group_join_request' ? 'requested to join your group' : n.type === 'group_join_approved' ? 'approved your request to join the group' : n.type === 'group_join_denied' ? 'denied your request to join the group' : n.type === 'direct_message' ? 'sent you a message' : n.type === 'group_message' ? 'sent a message in the group' : n.type === 'group_chat_mention' ? 'tagged you in a group chat' : n.type === 'group_new_post' ? 'posted in a group you belong to' : n.type === 'group_new_post' ? 'posted in a group you belong to': n.type === 'group_announcement' ? 'posted an announcement in your group': n.type === 'group_event' ? 'posted an event in your group': n.type
+      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type === 'lostfound_resolved' ? 'marked a lost & found item as resolved' : n.type === 'group_join_request' ? 'requested to join your group' : n.type === 'group_join_approved' ? 'approved your request to join the group' : n.type === 'group_join_denied' ? 'denied your request to join the group' : n.type === 'direct_message' ? 'sent you a message' : n.type === 'group_message' ? 'sent a message in the group' : n.type === 'group_chat_mention' ? 'tagged you in a group chat' : n.type === 'group_new_post' ? 'posted in a group you belong to' : n.type === 'group_new_post' ? 'posted in a group you belong to': n.type === 'group_announcement' ? 'posted an announcement in your group': n.type === 'group_event' ? 'posted an event in your group': n.type === 'security_alert' ? 'Your password was changed. If this wasn\'t you, reset your password immediately.': n.type === 'report_update'   ? 'Your report has been reviewed by the BuffBuzz admin team.': n.type === 'account_warning' ? '⚠️ Warning: Your account or content was flagged for violating community guidelines.': n.type
     }));
 
     res.status(200).json({ notifications: formatted });
@@ -3328,7 +3394,7 @@ app.delete('/api/lostfound/:itemId', async (req, res) => {
 app.put('/api/lostfound/:itemId', async (req, res) => {
   try {
     const { itemId } = req.params;
-    const { userId, title, description, category, location, date, contactInfo, imageUrl, imageUrls, resolved } = req.body;
+    const { userId, title, description, category, location, date, contactInfo, imageUrl, imageUrls } = req.body;
 
     const item = await prisma.lostFoundItem.findUnique({
       where: { id: itemId }
@@ -5072,4 +5138,244 @@ app.listen(PORT, () => {
 process.on('SIGINT', async () => {
   await prisma.$disconnect();
   process.exit();
+});
+
+// ==================== ADMIN ENDPOINTS ====================
+ 
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'buffbuzz@wtamu.edu';
+ 
+// Admin auth middleware
+function requireAdmin(req, res, next) {
+  // For simplicity, admin routes are protected by checking a query/body param
+  // In production you'd use JWT. For now trust the frontend gate.
+  next();
+}
+ 
+// GET /api/admin/stats
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  try {
+    const [
+      totalUsers, totalPosts, totalGroups, totalJobs,
+      totalMarketplace, totalLostFound, suspendedUsers,
+      pendingReports, recentUsers
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.post.count(),
+      prisma.group.count(),
+      prisma.job.count(),
+      prisma.marketplaceItem.count(),
+      prisma.lostFoundItem.count(),
+      prisma.user.count({ where: { suspended: true } }),
+      prisma.report.count({ where: { status: 'PENDING' } }),
+      prisma.user.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { id: true, firstName: true, lastName: true, email: true, userType: true, createdAt: true }
+      })
+    ]);
+ 
+    res.status(200).json({
+      stats: {
+        totalUsers, totalPosts, totalGroups, totalJobs,
+        totalMarketplace, totalLostFound, suspendedUsers,
+        pendingReports, recentUsers
+      }
+    });
+  } catch (error) {
+    console.error('Admin stats error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+ 
+// GET /api/admin/users
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const { search } = req.query;
+    const where = search ? {
+      OR: [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName:  { contains: search, mode: 'insensitive' } },
+        { email:     { contains: search, mode: 'insensitive' } },
+      ]
+    } : {};
+ 
+    const users = await prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, firstName: true, lastName: true,
+        email: true, userType: true, verificationStatus: true,
+        suspended: true, createdAt: true
+      }
+    });
+ 
+    res.status(200).json({ users });
+  } catch (error) {
+    console.error('Admin get users error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+ 
+// PUT /api/admin/users/:userId/suspend
+app.put('/api/admin/users/:userId/suspend', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { suspended } = req.body;
+ 
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { suspended }
+    });
+ 
+    res.status(200).json({ message: `User ${suspended ? 'suspended' : 'unsuspended'} successfully`, user });
+  } catch (error) {
+    console.error('Admin suspend user error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+ 
+// DELETE /api/admin/users/:userId
+app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+ 
+    await prisma.user.delete({ where: { id: userId } });
+    res.status(200).json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Admin delete user error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+ 
+// GET /api/admin/posts
+app.get('/api/admin/posts', requireAdmin, async (req, res) => {
+  try {
+    const posts = await prisma.post.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        author: { select: { id: true, firstName: true, lastName: true } },
+        _count: { select: { likes: true, comments: true } }
+      }
+    });
+ 
+    res.status(200).json({ posts });
+  } catch (error) {
+    console.error('Admin get posts error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+ 
+// DELETE /api/admin/posts/:postId
+app.delete('/api/admin/posts/:postId', requireAdmin, async (req, res) => {
+  try {
+    const { postId } = req.params;
+    await prisma.post.delete({ where: { id: postId } });
+    res.status(200).json({ message: 'Post deleted successfully' });
+  } catch (error) {
+    console.error('Admin delete post error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+ 
+app.get('/api/admin/reports', requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const where = status ? { status } : {};
+
+    const reports = await prisma.report.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        reporter: {
+          select: { id: true, firstName: true, lastName: true, email: true }
+        }
+      }
+    });
+
+    res.status(200).json({ reports });
+  } catch (error) {
+    console.error('Admin get reports error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+ 
+app.put('/api/admin/reports/:reportId', requireAdmin, async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const { status, adminId } = req.body;
+
+    const report = await prisma.report.findUnique({
+      where: { id: reportId }
+    });
+
+    if (!report) return res.status(404).json({ message: 'Report not found' });
+
+    await prisma.report.update({
+      where: { id: reportId },
+      data: { status }
+    });
+
+    // Notify the reporter
+    const reporterMessages = {
+      'ACTION_TAKEN': 'Your report has been reviewed and action was taken. Thank you for helping keep BuffBuzz safe.',
+      'DISMISSED':    'Your report was reviewed and no action was taken at this time.',
+      'REVIEWED':     'Your report is currently being reviewed by our team. We will follow up shortly.',
+    };
+
+    if (reporterMessages[status]) {
+      await prisma.notification.create({
+        data: {
+          recipientId: report.reporterId,
+          actorId:     report.reporterId, // self-triggered
+          type:        'report_update',
+          read:        false
+        }
+      });
+    }
+
+    // If action taken and the target is a USER, notify that user with a warning
+    if (status === 'ACTION_TAKEN' && report.targetType === 'USER') {
+      await prisma.notification.create({
+        data: {
+          recipientId: report.targetId,
+          actorId:     report.targetId, // self-triggered
+          type:        'account_warning',
+          read:        false
+        }
+      });
+    }
+
+    res.status(200).json({ message: 'Report updated', status });
+  } catch (error) {
+    console.error('Admin update report error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
+});
+ 
+// POST /api/report  (generic — works for any target type)
+app.post('/api/report', async (req, res) => {
+  try {
+    const { reporterId, targetType, targetId, category, details } = req.body;
+
+    if (!reporterId || !targetType || !targetId) {
+      return res.status(400).json({ message: 'reporterId, targetType and targetId are required' });
+    }
+
+    const existing = await prisma.report.findUnique({
+      where: { reporterId_targetType_targetId: { reporterId, targetType, targetId } }
+    });
+
+    if (existing) {
+      return res.status(400).json({ message: 'You have already reported this' });
+    }
+
+    const report = await prisma.report.create({
+      data: { reporterId, targetType, targetId, category: category || 'OTHER', details: details || null }
+    });
+
+    res.status(201).json({ message: 'Report submitted successfully', report });
+  } catch (error) {
+    console.error('Report error:', error);
+    res.status(500).json({ message: 'An error occurred' });
+  }
 });

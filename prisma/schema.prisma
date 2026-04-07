@@ -46,6 +46,7 @@ model User {
   profile                 Profile?
   shares                  Share[]
   reportsFiled            Report[]                  @relation("ReportReporter")
+  suspended               Boolean                    @default(false)
 
   @@map("users")
 }

@@ -19,6 +19,7 @@ import Notifications from './Notifications';
 import Jobs from './Jobs';
 import SettingsPage from './SettingsPage';
 import BlockedUsers from './BlockedUsers';
+import AdminPage from './AdminPage';
 import { getValidUser } from './sessionUtils';
 import VerificationRecoveryPage from './VerificationRecoveryPage';
 
@@ -85,6 +86,7 @@ function App() {
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/jobs" element={<Jobs />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="/blocked-users" element={<BlockedUsers />} />
         <Route path="/verify-recovery" element={<VerificationRecoveryPage />} />
       </Routes>

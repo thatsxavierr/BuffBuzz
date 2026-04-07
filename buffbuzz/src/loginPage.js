@@ -94,13 +94,14 @@ export default function LoginPage() {
       // Check if user has a profile
       const hasProfile = await checkUserProfile(data.user.id);
       
-      if (hasProfile) {
-        // User has profile, go to main page
-        navigate('/main', { state: { user: data.user }, replace: true });
-      } else {
-        // User doesn't have profile, go to profile edit with first-time flag
-        navigate('/profile-edit', { state: { isFirstTime: true, user: data.user }, replace: true });
-      }
+      // Admin gets sent to admin dashboard
+if (data.user.email?.toLowerCase() === 'buffbuzz2025@gmail.com') {
+  navigate('/admin', { replace: true });
+} else if (hasProfile) {
+  navigate('/main', { state: { user: data.user }, replace: true });
+} else {
+  navigate('/profile-edit', { state: { isFirstTime: true, user: data.user }, replace: true });
+}
     } else {
         // Handle different error cases
         if (data.message && data.message.includes('verify your email')) {
