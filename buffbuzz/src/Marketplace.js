@@ -224,7 +224,12 @@ export default function Marketplace() {
   const handleMessageSeller = (item) => {
     if (item.sellerId === user.id) return;
     const seller = item.seller || {};
-    navigate('/main', { state: { openChatWithUser: { id: item.sellerId, firstName: seller.firstName || 'User', lastName: seller.lastName || '', profile: seller.profile } } });
+    navigate('/main', {
+      state: {
+        openChatWithUser: { id: item.sellerId, firstName: seller.firstName || 'User', lastName: seller.lastName || '', profile: seller.profile },
+        listingContactContext: { kind: 'marketplace', itemId: item.id, itemTitle: item.title }
+      }
+    });
   };
 
   const handleFilterChange = (newFilter) => {

@@ -1,10 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './RightSidebar.css';
 import { getValidUser } from './sessionUtils';
 import ReportModal from './ReportModal';
 
-export default function RightSidebar({ initialOpenChat, initialOpenConversationId }) {
+function buildListingContactDraft(contactCtx) {
+  if (!contactCtx?.itemId) return null;
+  const title = (contactCtx.itemTitle || '').trim();
+  if (contactCtx.kind === 'marketplace') {
+    return title
+      ? `Hi, I'm reaching out about your listing "${title}". `
+      : `Hi, I'm reaching out about your marketplace listing. `;
+  }
+  if (contactCtx.kind === 'lostfound') {
+    return title
+      ? `Hi, I'm reaching out about your lost & found post "${title}". `
+      : `Hi, I'm reaching out about your lost & found post. `;
+  }
+  return null;
+}
+
+export default function RightSidebar({ initialOpenChat, initialOpenConversationId, listingContactContext }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [chatExpanded, setChatExpanded] = useState(false);
@@ -16,6 +32,7 @@ export default function RightSidebar({ initialOpenChat, initialOpenConversationI
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [messageNotifications, setMessageNotifications] = useState([]);
+  const [chatInputDrafts, setChatInputDrafts] = useState({});
 
   useEffect(() => {
     setUser(getValidUser());
@@ -52,12 +69,21 @@ export default function RightSidebar({ initialOpenChat, initialOpenConversationI
   }, [user?.id]);
 
   useEffect(() => {
-    if (initialOpenChat && user?.id && initialOpenChat.id !== user.id) {
-      setChatExpanded(true);
-      openChat(initialOpenChat);
-      navigate('/main', { replace: true, state: {} });
-    }
-  }, [initialOpenChat?.id, user?.id]);
+    if (!initialOpenChat || !user?.id || initialOpenChat.id === user.id) return;
+
+    let cancelled = false;
+    setChatExpanded(true);
+    (async () => {
+      await openChat(initialOpenChat, listingContactContext);
+      if (!cancelled) {
+        navigate('/main', { replace: true, state: {} });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialOpenChat?.id, user?.id, listingContactContext?.kind, listingContactContext?.itemId]);
 
   // Open a specific conversation by ID (e.g. from Notifications page when clicking a group_chat_mention)
   const openConversationId = initialOpenConversationId ?? location.state?.openConversationId;
@@ -151,7 +177,7 @@ const openConversation = async (conversation) => {
   await fetchMessages(conversation.id, chatKey);
 };
 
-  const openChat = async (friend) => {
+  const openChat = async (friend, contactCtx) => {
   // Check if chat is already open
   if (openChats.find(chat => chat.id === friend.id)) {
     return;
@@ -170,10 +196,15 @@ const openConversation = async (conversation) => {
     if (response.ok) {
       const data = await response.json();
       const conversation = data.conversation;
-      
+
+      const draft = buildListingContactDraft(contactCtx);
+      if (draft) {
+        setChatInputDrafts(prev => ({ ...prev, [friend.id]: draft }));
+      }
+
       // Add friend to open chats first
       setOpenChats(prev => [...prev, friend]);
-      
+
       // Fetch messages (this will set the conversation with messages)
       await fetchMessages(conversation.id, friend.id);
     }
@@ -273,7 +304,14 @@ const openConversation = async (conversation) => {
 
     if (response.ok) {
       const data = await response.json();
-      
+
+      setChatInputDrafts(prev => {
+        if (!prev[friendId]) return prev;
+        const next = { ...prev };
+        delete next[friendId];
+        return next;
+      });
+
       // Add message to existing messages
       setConversations(prev => ({
         ...prev,
@@ -640,6 +678,7 @@ const openConversation = async (conversation) => {
             friend={friend}
             conversation={conversations[friend.id]}
             messages={conversations[friend.id]?.messages || []}
+            initialDraft={chatInputDrafts[friend.id]}
             onClose={() => closeChat(friend.id)}
             onSend={(text, imageUrl, replyToId) => sendMessage(friend.id, text, imageUrl, replyToId)}
             onEdit={(messageId, newContent) => editMessage(friend.id, messageId, newContent)}
@@ -775,8 +814,10 @@ function GroupChatModal({ friends, onClose, onCreate }) {
 }
 
 // Chat Box Component (continued in next message due to length...)
-function ChatBox({ friend, conversation, messages, onClose, onSend, onEdit, onDelete, onReact, currentUserId, index }) {
+function ChatBox({ friend, conversation, messages, initialDraft, onClose, onSend, onEdit, onDelete, onReact, currentUserId, index }) {
   const [input, setInput] = useState('');
+  const draftAppliedRef = useRef(false);
+  const chatInputRef = useRef(null);
   const [replyTo, setReplyTo] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [enlargedImage, setEnlargedImage] = useState(null);
@@ -793,6 +834,14 @@ function ChatBox({ friend, conversation, messages, onClose, onSend, onEdit, onDe
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (initialDraft && !draftAppliedRef.current) {
+      setInput(initialDraft);
+      draftAppliedRef.current = true;
+      requestAnimationFrame(() => chatInputRef.current?.focus());
+    }
+  }, [initialDraft]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -1169,6 +1218,7 @@ const handleDeleteGroup = async () => {
           style={{ display: 'none' }}
         />
         <input
+          ref={chatInputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
