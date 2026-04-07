@@ -228,7 +228,12 @@ export default function LostFound() {
   const handleContactPoster = (item) => {
     if (item.userId === user.id) return;
     const poster = item.user || {};
-    navigate('/main', { state: { openChatWithUser: { id: item.userId, firstName: poster.firstName || 'User', lastName: poster.lastName || '', profile: poster.profile } } });
+    navigate('/main', {
+      state: {
+        openChatWithUser: { id: item.userId, firstName: poster.firstName || 'User', lastName: poster.lastName || '', profile: poster.profile },
+        listingContactContext: { kind: 'lostfound', itemId: item.id, itemTitle: item.title }
+      }
+    });
   };
 
   const handleMarkResolved = async (itemId, resolved) => {
