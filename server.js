@@ -94,7 +94,7 @@ async function shouldNotify(userId, type) {
       case 'mention':             return prefs.mentions;
       case 'group_chat_mention':  return prefs.mentions;
       case 'lostfound_listing':   return prefs.lostFoundNew;
-      case 'lostfound_resolved':  return prefs.lostFoundNew;
+      case 'lostfound_resolved':  return prefs.lostFoundResolved;
       case 'group_join_request':  return prefs.groupJoinRequests;
       case 'group_join_approved': return prefs.groupJoinResponse;
       case 'group_join_denied':   return prefs.groupJoinResponse;
@@ -2396,6 +2396,7 @@ app.get('/api/settings/notifications/:userId', async (req, res) => {
           groupNewPost:       true,
           lostFoundNew:       false,
           lostFoundContact:   true,
+          lostFoundResolved:  true,
           newFollowers:       true,
         }
       });
@@ -2424,6 +2425,7 @@ app.put('/api/settings/notifications', async (req, res) => {
       groupNewPost,
       lostFoundNew,
       lostFoundContact,
+      lostFoundResolved,
       newFollowers
     } = req.body;
 
@@ -2442,6 +2444,7 @@ app.put('/api/settings/notifications', async (req, res) => {
       groupNewPost:       groupNewPost       ?? true,
       lostFoundNew:       lostFoundNew       ?? false,
       lostFoundContact:   lostFoundContact   ?? true,
+      lostFoundResolved:  lostFoundResolved  ?? true,
       newFollowers:       newFollowers       ?? true,
     };
 
@@ -3383,9 +3386,16 @@ app.put('/api/lostfound/:itemId', async (req, res) => {
         select: { recipientId: true }
       });
       const uniqueRecipientIds = [...new Set(listingRecipients.map(r => r.recipientId))].filter(id => id !== userId);
-      if (uniqueRecipientIds.length > 0) {
+      const notifyRecipientIds = (await Promise.all(
+        uniqueRecipientIds.map(async (recipientId) => {
+          const ok = await shouldNotify(recipientId, 'lostfound_resolved');
+          return ok ? recipientId : null;
+        })
+      )).filter(Boolean);
+
+      if (notifyRecipientIds.length > 0) {
         await prisma.notification.createMany({
-          data: uniqueRecipientIds.map(recipientId => ({
+          data: notifyRecipientIds.map(recipientId => ({
             recipientId,
             actorId: userId,
             type: 'lostfound_resolved',

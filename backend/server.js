@@ -66,6 +66,51 @@ function parsePostImages(imageUrl) {
   return [imageUrl];
 }
 
+async function shouldNotify(userId, type) {
+  try {
+    const prefs = await prisma.notificationPreferences.findUnique({
+      where: { userId }
+    });
+    if (!prefs) return true;
+
+    // Check permanent mute
+    if (prefs.muteAll) return false;
+
+    // Check temporary mute — if muteUntil is in the future, silence everything
+    if (prefs.muteUntil && prefs.muteUntil > new Date()) return false;
+
+    // If muteUntil has expired, clear it automatically
+    if (prefs.muteUntil && prefs.muteUntil <= new Date()) {
+      await prisma.notificationPreferences.update({
+        where: { userId },
+        data: { muteUntil: null }
+      });
+    }
+
+    switch (type) {
+      case 'like':                return prefs.postLikes;
+      case 'comment':             return prefs.comments;
+      case 'reply':               return prefs.commentReplies;
+      case 'mention':             return prefs.mentions;
+      case 'group_chat_mention':  return prefs.mentions;
+      case 'lostfound_listing':   return prefs.lostFoundNew;
+      case 'lostfound_resolved':  return prefs.lostFoundResolved ?? prefs.lostFoundNew;
+      case 'group_join_request':  return prefs.groupJoinRequests;
+      case 'group_join_approved': return prefs.groupJoinResponse;
+      case 'group_join_denied':   return prefs.groupJoinResponse;
+      case 'direct_message':      return prefs.pushNotifications;
+      case 'group_message':       return prefs.groupNewPost;
+      case 'group_new_post':      return prefs.groupNewPost;
+      case 'group_announcement':  return prefs.groupNewPost;
+      case 'group_event':         return prefs.groupNewPost;
+      case 'marketplace_listing': return true;
+      default:                    return true;
+    }
+  } catch {
+    return true;
+  }
+}
+
 // Send verification email
 async function sendVerificationEmail(email, verificationCode, firstName) {
   const mailOptions = {
@@ -3260,9 +3305,16 @@ app.put('/api/lostfound/:itemId', async (req, res) => {
         select: { recipientId: true }
       });
       const uniqueRecipientIds = [...new Set(listingRecipients.map(r => r.recipientId))].filter(id => id !== userId);
-      if (uniqueRecipientIds.length > 0) {
+      const notifyRecipientIds = (await Promise.all(
+        uniqueRecipientIds.map(async (recipientId) => {
+          const ok = await shouldNotify(recipientId, 'lostfound_resolved');
+          return ok ? recipientId : null;
+        })
+      )).filter(Boolean);
+
+      if (notifyRecipientIds.length > 0) {
         await prisma.notification.createMany({
-          data: uniqueRecipientIds.map(recipientId => ({
+          data: notifyRecipientIds.map(recipientId => ({
             recipientId,
             actorId: userId,
             type: 'lostfound_resolved',
