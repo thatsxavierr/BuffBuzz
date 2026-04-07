@@ -90,6 +90,7 @@ model NotificationPreferences {
   groupNewPost       Boolean  @default(true)
   lostFoundNew       Boolean  @default(false)
   lostFoundContact   Boolean  @default(true)
+  lostFoundResolved  Boolean  @default(true)
   newFollowers       Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

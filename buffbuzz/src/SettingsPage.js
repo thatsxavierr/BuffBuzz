@@ -27,6 +27,7 @@ const NOTIFICATION_ITEMS = [
     items: [
       { name: 'lostFoundNew',     label: 'New Listings',    desc: 'Get notified when a new Lost & Found posting is created' },
       { name: 'lostFoundContact', label: 'Listing Enquiry', desc: 'Get notified when someone contacts you about your Lost & Found listing' },
+      { name: 'lostFoundResolved', label: 'Marked Resolved', desc: 'Get notified when a Lost & Found item you interacted with is marked as resolved' },
     ]
   },
   {
@@ -52,6 +53,7 @@ const DEFAULT_NOTIFICATIONS = {
   groupNewPost:         true,
   lostFoundNew:         false,
   lostFoundContact:     true,
+  lostFoundResolved:    true,
   newFollowers:         true,
 };
 

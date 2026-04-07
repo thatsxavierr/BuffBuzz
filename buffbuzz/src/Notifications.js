@@ -142,8 +142,7 @@ export default function Notifications() {
       event: '📅',
       message: '✉️',
       marketplace_listing: '🛒',
-      lostfound_listing: '🔍',
-      lostfound_resolved: '✅'
+      lostfound_listing: '🔍'
     };
     return icons[type] || '🔔';
   };
