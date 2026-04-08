@@ -22,6 +22,7 @@ import BlockedUsers from './BlockedUsers';
 import AdminPage from './AdminPage';
 import { getValidUser } from './sessionUtils';
 import VerificationRecoveryPage from './VerificationRecoveryPage';
+import CommunityGuidelines from './CommunityGuidelines';
 
 function ProtectedRoute({ element }) {
   const [user, setUser] = useState(null);
@@ -89,6 +90,7 @@ function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/blocked-users" element={<BlockedUsers />} />
         <Route path="/verify-recovery" element={<VerificationRecoveryPage />} />
+        <Route path="/community-guidelines" element={<CommunityGuidelines />} />
       </Routes>
     </Router>
   );
