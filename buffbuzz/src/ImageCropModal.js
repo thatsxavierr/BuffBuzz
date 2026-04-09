@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Cropper from 'react-easy-crop';
 import './ImageCropModal.css';
 
-export default function ImageCropModal({ image, onClose, onCropComplete }) {
+/** @param {'profile' | 'post'} variant - profile: square circle; post: 4:5 rectangle for feed cards */
+export default function ImageCropModal({ image, onClose, onCropComplete, variant = 'profile' }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+
+  const isPost = variant === 'post';
+  const aspect = isPost ? 4 / 5 : 1;
+
+  useEffect(() => {
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+  }, [image, variant]);
 
   const onCropChange = (crop) => {
     setCrop(crop);
@@ -85,21 +95,25 @@ export default function ImageCropModal({ image, onClose, onCropComplete }) {
     <div className="crop-modal-overlay" onClick={handleCancel}>
       <div className="crop-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="crop-modal-header">
-          <h2>Adjust Profile Picture</h2>
-          <p>Drag to reposition, use the slider to zoom</p>
+          <h2>{isPost ? 'Crop photo for post' : 'Adjust Profile Picture'}</h2>
+          <p>
+            {isPost
+              ? 'Frame your photo (4:5 works well in the feed). Drag to reposition and zoom.'
+              : 'Drag to reposition, use the slider to zoom'}
+          </p>
         </div>
         
-        <div className="crop-container">
+        <div className={`crop-container ${isPost ? 'crop-container--post' : ''}`}>
           <Cropper
             image={image}
             crop={crop}
             zoom={zoom}
-            aspect={1}
+            aspect={aspect}
             onCropChange={onCropChange}
             onZoomChange={onZoomChange}
             onCropComplete={onCropCompleteCallback}
-            cropShape="round"
-            showGrid={false}
+            cropShape={isPost ? 'rect' : 'round'}
+            showGrid={isPost}
           />
         </div>
 
@@ -125,7 +139,7 @@ export default function ImageCropModal({ image, onClose, onCropComplete }) {
             Cancel
           </button>
           <button type="button" className="crop-save-button" onClick={handleSave}>
-            Save
+            {isPost ? 'Use photo' : 'Save'}
           </button>
         </div>
       </div>

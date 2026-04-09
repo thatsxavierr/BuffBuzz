@@ -154,6 +154,31 @@
   display: block;
 }
 
+.image-preview-item .adjust-crop-button {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: rgba(128, 0, 0, 0.92);
+  color: #fff;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.image-preview-item .adjust-crop-button:hover:not(:disabled) {
+  background: #600000;
+}
+
+.image-preview-item .adjust-crop-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .image-preview-item .remove-image-button {
   position: absolute;
   top: 4px;

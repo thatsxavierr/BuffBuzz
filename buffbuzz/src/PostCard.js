@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './PostCard.css';
 import CommentModel from './CommentModel';
@@ -6,6 +6,9 @@ import LikesModal from './LikesModal';
 import ImageCarousel from './ImageCarousel';
 import ReportModal from './ReportModal';
 import SharePostModal from './SharePostModal';
+import ImageCropModal from './ImageCropModal';
+
+const MAX_EDIT_IMAGES = 5;
 
 export default function PostCard({ post, currentUserId, onDelete, onUpdate, friendIds = new Set() }) {
   const navigate = useNavigate();
@@ -25,6 +28,16 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
   const [isUpdating, setIsUpdating] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+
+  const [editCropQueue, setEditCropQueue] = useState([]);
+  const [editRecropIndex, setEditRecropIndex] = useState(null);
+  const editPreviewsLenRef = useRef(0);
+  editPreviewsLenRef.current = editImagePreviews.length;
+  const editCropQueueLenRef = useRef(0);
+  editCropQueueLenRef.current = editCropQueue.length;
+  const currentEditCropSrc = editCropQueue[0] ?? null;
+  const editSlotsLeft = () =>
+    MAX_EDIT_IMAGES - editPreviewsLenRef.current - editCropQueueLenRef.current;
 
   // Debug: Log the post data
 
@@ -120,37 +133,124 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
     setCommentCount(commentCount + 1);
   };
 
+  const closeEditModal = () => {
+    setEditCropQueue([]);
+    setEditRecropIndex(null);
+    setShowEditModal(false);
+  };
+
   const handleEditClick = () => {
     setEditTitle(post.title || '');
     setEditContent(post.content || '');
     setEditImagePreviews(post.imageUrls?.length > 0 ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : []));
+    setEditCropQueue([]);
+    setEditRecropIndex(null);
     setShowEditModal(true);
+  };
+
+  const enqueueEditCrops = (dataUrls) => {
+    setEditCropQueue((prev) => {
+      const slots = MAX_EDIT_IMAGES - editPreviewsLenRef.current - prev.length;
+      const slice = dataUrls.slice(0, Math.max(0, slots));
+      if (dataUrls.length > slice.length) {
+        alert(`Maximum ${MAX_EDIT_IMAGES} images per post. Extra image(s) were not added.`);
+      }
+      return [...prev, ...slice];
+    });
+  };
+
+  const processEditFiles = (files, e) => {
+    const readers = files.map(
+      (file) =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        })
+    );
+    Promise.all(readers).then((results) => enqueueEditCrops(results));
+    if (e) e.target.value = '';
+  };
+
+  const handleEditCropComplete = (croppedUrl) => {
+    if (editRecropIndex !== null) {
+      const idx = editRecropIndex;
+      setEditImagePreviews((prev) => {
+        const next = [...prev];
+        if (idx >= 0 && idx < next.length) next[idx] = croppedUrl;
+        return next;
+      });
+      setEditRecropIndex(null);
+    } else {
+      setEditImagePreviews((prev) => [...prev, croppedUrl].slice(0, MAX_EDIT_IMAGES));
+    }
+    setEditCropQueue((q) => q.slice(1));
+  };
+
+  const handleEditCropClose = () => {
+    setEditCropQueue((q) => q.slice(1));
+    setEditRecropIndex(null);
+  };
+
+  const handleEditAdjustCrop = (index) => {
+    if (editCropQueue.length > 0) {
+      alert('Finish cropping the current photo first.');
+      return;
+    }
+    setEditRecropIndex(index);
+    setEditCropQueue([editImagePreviews[index]]);
   };
 
   const handleEditImageChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    const validFiles = files.filter(f => allowedTypes.includes(f.type));
-    const toAdd = validFiles.slice(0, 5 - editImagePreviews.length);
-    toAdd.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditImagePreviews(prev => [...prev, reader.result].slice(0, 5));
-      };
-      reader.readAsDataURL(file);
-    });
-    e.target.value = '';
+    const validFiles = files.filter((f) => allowedTypes.includes(f.type));
+    if (validFiles.length !== files.length) {
+      alert('Only image files are accepted (JPEG, PNG, GIF, WebP).');
+      e.target.value = '';
+      return;
+    }
+
+    const slots = editSlotsLeft();
+    if (slots <= 0) {
+      alert(`Maximum ${MAX_EDIT_IMAGES} images per post. Remove an image or finish cropping first.`);
+      e.target.value = '';
+      return;
+    }
+
+    const MAX_SIZE_MB = 5;
+    const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+    const oversized = validFiles.filter((f) => f.size > MAX_SIZE_BYTES);
+    if (oversized.length > 0) {
+      alert(
+        `Some file(s) exceed the ${MAX_SIZE_MB}MB limit and were skipped.`
+      );
+    }
+    const sizeOk = validFiles.filter((f) => f.size <= MAX_SIZE_BYTES);
+    const toProcess = sizeOk.slice(0, slots);
+    if (toProcess.length < sizeOk.length) {
+      alert(`Only ${slots} more image slot(s) available. Extra file(s) were not added.`);
+    }
+    if (toProcess.length === 0) {
+      e.target.value = '';
+      return;
+    }
+    processEditFiles(toProcess, e);
   };
 
   const handleRemoveEditImage = (index) => {
-    setEditImagePreviews(prev => prev.filter((_, i) => i !== index));
+    setEditImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleUpdatePost = async (e) => {
     e.preventDefault();
     if (!editTitle?.trim() || !editContent?.trim()) {
       alert('Title and content are required');
+      return;
+    }
+    if (editCropQueue.length > 0) {
+      alert('Finish cropping each new photo (or cancel) before saving.');
       return;
     }
     setIsUpdating(true);
@@ -168,7 +268,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
       const data = await response.json();
       if (response.ok && data.post) {
         if (onUpdate) onUpdate(data.post);
-        setShowEditModal(false);
+        closeEditModal();
       } else {
         alert(data.message || 'Failed to update post');
       }
@@ -351,7 +451,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
 
       {/* Edit Post Modal */}
       {showEditModal && (
-        <div className="post-edit-modal-overlay" onClick={() => setShowEditModal(false)}>
+        <div className="post-edit-modal-overlay" onClick={closeEditModal}>
           <div className="post-edit-modal-content" onClick={e => e.stopPropagation()}>
             <h3>Edit Post</h3>
             <form onSubmit={handleUpdatePost}>
@@ -381,20 +481,39 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
                   multiple
                   onChange={handleEditImageChange}
                 />
+                <p className="post-edit-image-hint">New photos open the crop tool (4:5) before they are added.</p>
                 {editImagePreviews.length > 0 && (
                   <div className="post-edit-image-previews">
                     {editImagePreviews.map((src, i) => (
                       <div key={i} className="post-edit-preview-item">
                         <img src={src} alt={`Preview ${i + 1}`} />
-                        <button type="button" onClick={() => handleRemoveEditImage(i)}>×</button>
+                        <button
+                          type="button"
+                          className="post-edit-crop-img"
+                          onClick={() => handleEditAdjustCrop(i)}
+                          disabled={isUpdating || editCropQueue.length > 0}
+                          title="Adjust crop"
+                        >
+                          Crop
+                        </button>
+                        <button
+                          type="button"
+                          className="post-edit-remove-img"
+                          onClick={() => handleRemoveEditImage(i)}
+                          aria-label="Remove image"
+                        >
+                          ×
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
               <div className="post-edit-modal-actions">
-                <button type="button" onClick={() => setShowEditModal(false)}>Cancel</button>
-                <button type="submit" disabled={isUpdating}>{isUpdating ? 'Saving...' : 'Save'}</button>
+                <button type="button" onClick={closeEditModal}>Cancel</button>
+                <button type="submit" disabled={isUpdating || editCropQueue.length > 0}>
+                  {isUpdating ? 'Saving...' : 'Save'}
+                </button>
               </div>
             </form>
           </div>
@@ -433,6 +552,15 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
         post={post}
         currentUserId={currentUserId}
       />
+
+      {currentEditCropSrc && (
+        <ImageCropModal
+          image={currentEditCropSrc}
+          variant="post"
+          onClose={handleEditCropClose}
+          onCropComplete={handleEditCropComplete}
+        />
+      )}
     </>
   );
 }

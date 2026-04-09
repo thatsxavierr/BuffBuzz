@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './CreatePost.css';
 import Header from './Header.js';
 import Footer from './Footer';
+import ImageCropModal from './ImageCropModal';
+
+const MAX_POST_IMAGES = 5;
 
 export default function CreatePost() {
   const navigate = useNavigate();
@@ -11,7 +14,19 @@ export default function CreatePost() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imagePreviews, setImagePreviews] = useState([]);
+  /** Data URLs waiting to be cropped (FIFO). */
+  const [cropQueue, setCropQueue] = useState([]);
+  /** When set, next completed crop replaces this index instead of appending. */
+  const [recropReplaceIndex, setRecropReplaceIndex] = useState(null);
+  const previewsLenRef = useRef(0);
+  previewsLenRef.current = imagePreviews.length;
+  const cropQueueLenRef = useRef(0);
+  cropQueueLenRef.current = cropQueue.length;
   const [loading, setLoading] = useState(false);
+
+  const currentCropSrc = cropQueue[0] ?? null;
+  const slotsLeftForNewImages = () =>
+    MAX_POST_IMAGES - previewsLenRef.current - cropQueueLenRef.current;
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user') || 'null');
@@ -56,22 +71,58 @@ export default function CreatePost() {
     navigate('/main');
   };
 
-  const processFiles = (files, e) => {
-    const maxImages = 5;
-    const remaining = maxImages - imagePreviews.length;
-    const toAdd = files.slice(0, remaining);
-    if (toAdd.length < files.length) {
-      alert(`Maximum ${maxImages} images per post. ${files.length - toAdd.length} image(s) not added.`);
-    }
-    const readers = toAdd.map(file => new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(file);
-    }));
-    Promise.all(readers).then(results => {
-      setImagePreviews(prev => [...prev, ...results].slice(0, maxImages));
+  const enqueueForCrop = (dataUrls) => {
+    setCropQueue((prev) => {
+      const slots = MAX_POST_IMAGES - previewsLenRef.current - prev.length;
+      const slice = dataUrls.slice(0, Math.max(0, slots));
+      if (dataUrls.length > slice.length) {
+        alert(`Maximum ${MAX_POST_IMAGES} images per post. Extra image(s) were not added.`);
+      }
+      return [...prev, ...slice];
     });
+  };
+
+  const processFiles = (files, e) => {
+    const readers = files.map(
+      (file) =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        })
+    );
+    Promise.all(readers).then((results) => enqueueForCrop(results));
     if (e) e.target.value = '';
+  };
+
+  const handleCropComplete = (croppedUrl) => {
+    if (recropReplaceIndex !== null) {
+      const idx = recropReplaceIndex;
+      setImagePreviews((prev) => {
+        const next = [...prev];
+        if (idx >= 0 && idx < next.length) next[idx] = croppedUrl;
+        return next;
+      });
+      setRecropReplaceIndex(null);
+    } else {
+      setImagePreviews((prev) => [...prev, croppedUrl].slice(0, MAX_POST_IMAGES));
+    }
+    setCropQueue((q) => q.slice(1));
+  };
+
+  /** Skip current uncropped file or cancel re-crop without changing the preview. */
+  const handleCropClose = () => {
+    setCropQueue((q) => q.slice(1));
+    setRecropReplaceIndex(null);
+  };
+
+  const handleAdjustCrop = (index) => {
+    if (cropQueue.length > 0) {
+      alert('Finish cropping the current photo first.');
+      return;
+    }
+    setRecropReplaceIndex(index);
+    setCropQueue([imagePreviews[index]]);
   };
 
   const handleImageChange = (e) => {
@@ -82,6 +133,13 @@ export default function CreatePost() {
     const validFiles = files.filter(f => allowedTypes.includes(f.type));
     if (validFiles.length !== files.length) {
       alert('Only image files are accepted (JPEG, PNG, GIF, WebP).');
+      e.target.value = '';
+      return;
+    }
+
+    const slots = slotsLeftForNewImages();
+    if (slots <= 0) {
+      alert(`Maximum ${MAX_POST_IMAGES} images per post. Remove an image or finish cropping first.`);
       e.target.value = '';
       return;
     }
@@ -97,11 +155,19 @@ export default function CreatePost() {
         e.target.value = '';
         return;
       }
-      processFiles(sizeValidFiles, e);
+      const toProcess = sizeValidFiles.slice(0, slots);
+      if (toProcess.length < sizeValidFiles.length) {
+        alert(`Only ${slots} more image slot(s) available. Extra file(s) were not added.`);
+      }
+      processFiles(toProcess, e);
       return;
     }
 
-    processFiles(validFiles, e);
+    const toProcess = validFiles.slice(0, slots);
+    if (toProcess.length < validFiles.length) {
+      alert(`Only ${slots} more image slot(s) available. Extra file(s) were not added.`);
+    }
+    processFiles(toProcess, e);
   };
 
   const handleRemoveImage = (index) => {
@@ -114,6 +180,11 @@ export default function CreatePost() {
     if (!user) {
       alert('You must be logged in to create a post');
       navigate('/login');
+      return;
+    }
+
+    if (cropQueue.length > 0) {
+      alert('Finish cropping each photo (or skip with Cancel) before posting.');
       return;
     }
 
@@ -200,7 +271,9 @@ export default function CreatePost() {
                 <label htmlFor="image" className="image-upload-label">
                   <span className="upload-icon">📷</span>
                   <span className="upload-main-text">Click to upload images (multiple allowed)</span>
-                  <span className="upload-sub-text">Max 5 images · 5MB per image · JPEG, PNG, GIF, WebP</span>
+                  <span className="upload-sub-text">
+                    Max {MAX_POST_IMAGES} images · 5MB each · You’ll crop each photo (4:5) for the feed
+                  </span>
                 </label>
               </div>
               {imagePreviews.length > 0 && (
@@ -208,6 +281,15 @@ export default function CreatePost() {
                   {imagePreviews.map((src, index) => (
                     <div key={index} className="image-preview-item">
                       <img src={src} alt={`Preview ${index + 1}`} className="image-preview" />
+                      <button
+                        type="button"
+                        onClick={() => handleAdjustCrop(index)}
+                        className="adjust-crop-button"
+                        disabled={loading || cropQueue.length > 0}
+                        title="Adjust crop"
+                      >
+                        Crop
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleRemoveImage(index)}
@@ -234,7 +316,7 @@ export default function CreatePost() {
               <button 
                 type="submit" 
                 className="submit-button"
-                disabled={loading}
+                disabled={loading || cropQueue.length > 0}
               >
                 {loading ? 'Creating...' : 'Create Post'}
               </button>
@@ -244,6 +326,15 @@ export default function CreatePost() {
       </div>
 
       <Footer />
+
+      {currentCropSrc && (
+        <ImageCropModal
+          image={currentCropSrc}
+          variant="post"
+          onClose={handleCropClose}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 }
