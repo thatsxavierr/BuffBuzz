@@ -5,6 +5,7 @@ import { getValidUser } from './sessionUtils';
 import ReportModal from './ReportModal';
 import PostCard from './PostCard';
 import SharedPostChatCard from './SharedPostChatCard';
+import RecommendedUsers from './RecommendedUsers';
 import {
   parseSharedPostMessage,
   getMessagePreviewLine,
@@ -526,10 +527,12 @@ const openConversation = async (conversation) => {
   return (
     <>
       <aside className="right-sidebar">
-        <button
-          onClick={() => setChatExpanded(!chatExpanded)}
-          className="chat-toggle-button"
-        >
+  <RecommendedUsers currentUserId={user?.id} />
+
+  <button
+    onClick={() => setChatExpanded(!chatExpanded)}
+    className="chat-toggle-button"
+  >
           <span>Messages</span>
           <span className="chat-icon-wrap">
             💬

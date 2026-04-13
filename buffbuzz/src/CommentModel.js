@@ -14,6 +14,11 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
   const [replyingTo, setReplyingTo] = useState(null);
   const [reportComment, setReportComment] = useState(null);
 
+  // ── Edit state ───────────────────────────────────────────────────
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [editCommentLoading, setEditCommentLoading] = useState(false);
+
   useEffect(() => {
     const fetchComments = async () => {
       setLoading(true);
@@ -32,6 +37,9 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
 
     if (isOpen) {
       fetchComments();
+      // Reset edit state when modal opens
+      setEditingCommentId(null);
+      setEditCommentText('');
     }
   }, [isOpen, post.id]);
 
@@ -50,7 +58,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     return date.toLocaleDateString();
   };
 
-  // When user types @, search for users and show dropdown
+  // ── Mention handlers ─────────────────────────────────────────────
   useEffect(() => {
     const lastAtIndex = commentText.lastIndexOf('@');
     if (lastAtIndex === -1) {
@@ -94,6 +102,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     setMentionUsers([]);
   };
 
+  // ── Post / reply comment ─────────────────────────────────────────
   const handleComment = async () => {
     if (!commentText.trim()) return;
 
@@ -141,12 +150,171 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
       setCommentText('');
       setMentionedUserIds([]);
       setReplyingTo(null);
-      if (onCommentAdded) {
-        onCommentAdded();
-      }
+      if (onCommentAdded) onCommentAdded();
     } catch (error) {
       console.error('Error adding comment:', error);
     }
+  };
+
+  // ── Edit handlers ────────────────────────────────────────────────
+  const handleStartEdit = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditCommentText(comment.content);
+    // Cancel any active reply
+    setReplyingTo(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCommentId(null);
+    setEditCommentText('');
+  };
+
+  const handleSaveEdit = async (commentId) => {
+    if (!editCommentText.trim()) return;
+    setEditCommentLoading(true);
+    try {
+      const response = await fetch(`http://localhost:5000/api/comments/${commentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId, content: editCommentText.trim() })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        // Update content in nested comment tree
+        const updateContentInTree = (list) =>
+          list.map(c => {
+            if (c.id === commentId) return { ...c, content: data.comment.content };
+            if (c.replies?.length) return { ...c, replies: updateContentInTree(c.replies) };
+            return c;
+          });
+        setComments(prev => updateContentInTree(prev));
+        setEditingCommentId(null);
+        setEditCommentText('');
+      } else {
+        alert(data.message || 'Failed to update comment');
+      }
+    } catch (error) {
+      console.error('Error editing comment:', error);
+      alert('An error occurred while editing the comment');
+    } finally {
+      setEditCommentLoading(false);
+    }
+  };
+
+  // ── Render a single comment row (used for all levels) ─────────────
+  const renderComment = (comment, isReply = false, isNested = false) => {
+    const isOwn = comment.author?.id === currentUserId;
+    const isEditing = editingCommentId === comment.id;
+
+    return (
+      <div
+        key={comment.id}
+        className={`modal-comment-item${isReply ? ' modal-comment-reply' : ''}${isNested ? ' modal-comment-nested' : ''}`}
+      >
+        <div
+          className={`modal-comment-avatar${!isReply ? ' modal-comment-avatar-clickable' : ''}`}
+          onClick={() => !isReply && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
+          role={!isReply ? 'button' : undefined}
+          tabIndex={!isReply ? 0 : undefined}
+          onKeyDown={(e) => !isReply && e.key === 'Enter' && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
+        >
+          {comment.author?.profile?.profilePictureUrl ? (
+            <img src={comment.author.profile.profilePictureUrl} alt={comment.author.firstName} />
+          ) : '👤'}
+        </div>
+
+        <div className="modal-comment-content">
+          <div className="modal-comment-header">
+            <span
+              className={`modal-comment-username${!isReply ? ' modal-comment-username-clickable' : ''}`}
+              onClick={() => !isReply && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
+              role={!isReply ? 'button' : undefined}
+              tabIndex={!isReply ? 0 : undefined}
+              onKeyDown={(e) => !isReply && e.key === 'Enter' && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
+            >
+              {comment.author ? `${comment.author.firstName?.toLowerCase() ?? ''}${comment.author.lastName?.toLowerCase() ?? ''}` : 'Unknown'}
+            </span>
+
+            {/* Show inline edit input OR comment text */}
+            {isEditing ? (
+              <div className="modal-comment-edit-row">
+                <input
+                  type="text"
+                  className="modal-comment-edit-input"
+                  value={editCommentText}
+                  onChange={(e) => setEditCommentText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveEdit(comment.id);
+                    if (e.key === 'Escape') handleCancelEdit();
+                  }}
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <span className="modal-comment-text">{comment.content}</span>
+            )}
+          </div>
+
+          <div className="modal-comment-footer">
+            <span className="modal-comment-time">{formatDate(comment.createdAt)}</span>
+
+            {/* Edit button — only for own comments, not while editing */}
+            {isOwn && !isEditing && (
+              <button
+                type="button"
+                className="modal-comment-edit-btn"
+                onClick={() => handleStartEdit(comment)}
+              >
+                Edit
+              </button>
+            )}
+
+            {/* Save / Cancel buttons — only while editing */}
+            {isEditing && (
+              <>
+                <button
+                  type="button"
+                  className="modal-comment-save-btn"
+                  onClick={() => handleSaveEdit(comment.id)}
+                  disabled={editCommentLoading || !editCommentText.trim()}
+                >
+                  {editCommentLoading ? '…' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  className="modal-comment-cancel-btn"
+                  onClick={handleCancelEdit}
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+
+            {/* Report — only for others' comments */}
+            {!isOwn && (
+              <button
+                type="button"
+                className="modal-comment-reply-btn"
+                onClick={() => setReportComment(comment)}
+              >
+                Report
+              </button>
+            )}
+
+            {/* Reply — only when not editing */}
+            {!isEditing && (
+              <button
+                type="button"
+                className="modal-comment-reply-btn"
+                onClick={() => setReplyingTo(replyingTo?.id === comment.id ? null : comment)}
+              >
+                Reply
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (!isOpen) return null;
@@ -172,9 +340,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
             <div className="preview-avatar">
               {post?.author?.profile?.profilePictureUrl ? (
                 <img src={post.author.profile.profilePictureUrl} alt={post.author.firstName} />
-              ) : (
-                '👤'
-              )}
+              ) : '👤'}
             </div>
             <div className="preview-info">
               <span className="preview-username">
@@ -199,135 +365,20 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
             comments
               .filter((comment) => comment && comment.id && comment.author)
               .map((comment) => (
-              <div key={comment.id} className="modal-comment-block">
-                <div className="modal-comment-item">
-                  <div
-                    className="modal-comment-avatar modal-comment-avatar-clickable"
-                    onClick={() => comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
-                  >
-                    {comment.author?.profile?.profilePictureUrl ? (
-                      <img src={comment.author.profile.profilePictureUrl} alt={comment.author.firstName} />
-                    ) : (
-                      '👤'
-                    )}
-                  </div>
-                  <div className="modal-comment-content">
-                    <div className="modal-comment-header">
-                      <span
-                        className="modal-comment-username modal-comment-username-clickable"
-                        onClick={() => comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => e.key === 'Enter' && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
-                      >
-                        {comment.author ? `${comment.author.firstName?.toLowerCase() ?? ''}${comment.author.lastName?.toLowerCase() ?? ''}` : 'Unknown'}
-                      </span>
-                      <span className="modal-comment-text">{comment.content}</span>
+                <div key={comment.id} className="modal-comment-block">
+                  {renderComment(comment)}
+                  {comment.replies?.map((reply) => (
+                    <div key={reply.id} className="modal-reply-thread">
+                      {renderComment(reply, true)}
+                      {reply.replies?.map((nestedReply) => (
+                        <div key={nestedReply.id}>
+                          {renderComment(nestedReply, true, true)}
+                        </div>
+                      ))}
                     </div>
-                    <div className="modal-comment-footer">
-                      <span className="modal-comment-time">{formatDate(comment.createdAt)}</span>
-                      {comment.author?.id && comment.author.id !== currentUserId && (
-                        <button
-                          type="button"
-                          className="modal-comment-reply-btn"
-                          onClick={() => setReportComment(comment)}
-                        >
-                          Report
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="modal-comment-reply-btn"
-                        onClick={() => setReplyingTo(replyingTo?.id === comment.id ? null : comment)}
-                      >
-                        Reply
-                      </button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-                {comment.replies?.map((reply) => (
-                  <div key={reply.id} className="modal-reply-thread">
-                    <div className="modal-comment-item modal-comment-reply">
-                      <div className="modal-comment-avatar">
-                        {reply.author?.profile?.profilePictureUrl ? (
-                          <img src={reply.author.profile.profilePictureUrl} alt={reply.author.firstName} />
-                        ) : (
-                          '👤'
-                        )}
-                      </div>
-                      <div className="modal-comment-content">
-                        <div className="modal-comment-header">
-                          <span className="modal-comment-username">
-                            {reply.author?.firstName?.toLowerCase()}{reply.author?.lastName?.toLowerCase()}
-                          </span>
-                          <span className="modal-comment-text">{reply.content}</span>
-                        </div>
-                        <div className="modal-comment-footer">
-                          <span className="modal-comment-time">{formatDate(reply.createdAt)}</span>
-                          {reply.author?.id && reply.author.id !== currentUserId && (
-                            <button
-                              type="button"
-                              className="modal-comment-reply-btn"
-                              onClick={() => setReportComment(reply)}
-                            >
-                              Report
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="modal-comment-reply-btn"
-                            onClick={() => setReplyingTo(replyingTo?.id === reply.id ? null : reply)}
-                          >
-                            Reply
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    {reply.replies?.map((nestedReply) => (
-                      <div key={nestedReply.id} className="modal-comment-item modal-comment-reply modal-comment-nested">
-                        <div className="modal-comment-avatar">
-                          {nestedReply.author?.profile?.profilePictureUrl ? (
-                            <img src={nestedReply.author.profile.profilePictureUrl} alt={nestedReply.author.firstName} />
-                          ) : (
-                            '👤'
-                          )}
-                        </div>
-                        <div className="modal-comment-content">
-                          <div className="modal-comment-header">
-                            <span className="modal-comment-username">
-                              {nestedReply.author?.firstName?.toLowerCase()}{nestedReply.author?.lastName?.toLowerCase()}
-                            </span>
-                            <span className="modal-comment-text">{nestedReply.content}</span>
-                          </div>
-                          <div className="modal-comment-footer">
-                            <span className="modal-comment-time">{formatDate(nestedReply.createdAt)}</span>
-                            {nestedReply.author?.id && nestedReply.author.id !== currentUserId && (
-                              <button
-                                type="button"
-                                className="modal-comment-reply-btn"
-                                onClick={() => setReportComment(nestedReply)}
-                              >
-                                Report
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              className="modal-comment-reply-btn"
-                              onClick={() => setReplyingTo(replyingTo?.id === nestedReply.id ? null : nestedReply)}
-                            >
-                              Reply
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ))
+              ))
           )}
         </div>
 
@@ -338,7 +389,9 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
               type="text"
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
-              placeholder={replyingTo ? `Reply to ${replyingTo.author?.firstName || 'comment'}... (type @ to mention)` : 'Add a comment... (type @ to mention)'}
+              placeholder={replyingTo
+                ? `Reply to ${replyingTo.author?.firstName || 'comment'}... (type @ to mention)`
+                : 'Add a comment... (type @ to mention)'}
               onKeyPress={(e) => e.key === 'Enter' && !showMentionDropdown && handleComment()}
             />
             {replyingTo && (
@@ -351,8 +404,8 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
                 Cancel
               </button>
             )}
-            <button 
-              className="modal-post-btn" 
+            <button
+              className="modal-post-btn"
               onClick={handleComment}
               disabled={!commentText.trim()}
             >

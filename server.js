@@ -1806,6 +1806,53 @@ app.delete('/api/comments/:commentId', async (req, res) => {
   }
 });
 
+// Edit a comment
+app.put('/api/comments/:commentId', async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { userId, content } = req.body;
+
+    if (!userId || !content?.trim()) {
+      return res.status(400).json({ message: 'User ID and content are required' });
+    }
+
+    const comment = await prisma.comment.findUnique({
+      where: { id: commentId }
+    });
+
+    if (!comment) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+
+    if (comment.authorId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to edit this comment' });
+    }
+
+    const updated = await prisma.comment.update({
+      where: { id: commentId },
+      data: {
+        content: content.trim(),
+        updatedAt: new Date()
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: { select: { profilePictureUrl: true } }
+          }
+        }
+      }
+    });
+
+    res.status(200).json({ message: 'Comment updated successfully', comment: updated });
+  } catch (error) {
+    console.error('Edit comment error:', error);
+    res.status(500).json({ message: 'An error occurred while editing the comment' });
+  }
+});
+
 // ==================== SHARE ENDPOINTS ====================
 
 // Share a post
@@ -5115,6 +5162,114 @@ app.post('/api/reports', async (req, res) => {
   } catch (error) {
     console.error('Create report error:', error);
     res.status(500).json({ message: 'An error occurred while submitting the report' });
+  }
+});
+// GET /api/users/recommendations/:userId
+app.get('/api/users/recommendations/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const limit = parseInt(req.query.limit) || 6;
+
+    // Get IDs to exclude: self, existing friends/pending, blocked
+    const [friendships, blocks, profile] = await Promise.all([
+      prisma.friendship.findMany({
+        where: { OR: [{ senderId: userId }, { receiverId: userId }] },
+        select: { senderId: true, receiverId: true }
+      }),
+      prisma.block.findMany({
+        where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+        select: { blockerId: true, blockedId: true }
+      }),
+      prisma.profile.findUnique({
+        where: { userId },
+        select: { major: true, department: true }
+      })
+    ]);
+
+    const excludedIds = new Set([userId]);
+    friendships.forEach(f => {
+      excludedIds.add(f.senderId);
+      excludedIds.add(f.receiverId);
+    });
+    blocks.forEach(b => {
+      excludedIds.add(b.blockerId);
+      excludedIds.add(b.blockedId);
+    });
+
+    // Get friends-of-friends for prioritization
+    const friendIds = friendships.map(f =>
+      f.senderId === userId ? f.receiverId : f.senderId
+    );
+
+    const friendsOfFriends = await prisma.friendship.findMany({
+      where: {
+        OR: [
+          { senderId: { in: friendIds }, status: 'ACCEPTED' },
+          { receiverId: { in: friendIds }, status: 'ACCEPTED' }
+        ]
+      },
+      select: { senderId: true, receiverId: true }
+    });
+
+    const fofIds = new Set();
+    friendsOfFriends.forEach(f => {
+      if (!excludedIds.has(f.senderId)) fofIds.add(f.senderId);
+      if (!excludedIds.has(f.receiverId)) fofIds.add(f.receiverId);
+    });
+
+    // Fetch candidate users
+    const candidates = await prisma.user.findMany({
+      where: {
+        id: { notIn: [...excludedIds] },
+        verificationStatus: 'VERIFIED',
+        suspended: false
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        userType: true,
+        profile: {
+          select: {
+            profilePictureUrl: true,
+            major: true,
+            department: true,
+            bio: true
+          }
+        }
+      },
+      take: 50
+    });
+
+    // Score each candidate
+    const scored = candidates.map(u => {
+      let score = 0;
+      if (fofIds.has(u.id)) score += 3;
+      if (profile?.major && u.profile?.major === profile.major) score += 2;
+      if (profile?.department && u.profile?.department === profile.department) score += 1;
+      return { ...u, score };
+    });
+
+    // Sort by score desc, then shuffle within same score for variety
+    scored.sort((a, b) => b.score - a.score || Math.random() - 0.5);
+
+    const recommendations = scored.slice(0, limit).map(u => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      userType: u.userType,
+      profilePictureUrl: u.profile?.profilePictureUrl || null,
+      major: u.profile?.major || null,
+      department: u.profile?.department || null,
+      bio: u.profile?.bio || null,
+      score: u.score,
+      mutualFriends: fofIds.has(u.id)
+    }));
+
+    res.status(200).json({ recommendations });
+  } catch (error) {
+    console.error('Recommendations error:', error);
+    res.status(500).json({ message: 'An error occurred' });
   }
 });
 
