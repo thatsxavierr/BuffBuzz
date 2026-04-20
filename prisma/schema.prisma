@@ -47,8 +47,67 @@ model User {
   shares                  Share[]
   reportsFiled            Report[]                  @relation("ReportReporter")
   suspended               Boolean                    @default(false)
+  newsletter              Newsletter?
+  newsletterSubscriptions NewsletterSubscription[]  @relation("NewsletterSubscriber")
+  announcementsAuthored   PlatformAnnouncement[]    @relation("AnnouncementAuthor")
 
   @@map("users")
+}
+
+model PlatformAnnouncement {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  authorId  String
+  createdAt DateTime @default(now())
+  author    User     @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@map("platform_announcements")
+}
+
+model Newsletter {
+  id             String                   @id @default(uuid())
+  userId         String                   @unique
+  title          String
+  description    String?
+  coverImageUrl  String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts          NewsletterPost[]
+  subscriptions  NewsletterSubscription[]
+
+  @@map("newsletters")
+}
+
+model NewsletterPost {
+  id            String     @id @default(uuid())
+  newsletterId  String
+  title         String
+  content       String
+  imageUrl      String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  newsletter    Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
+
+  @@index([newsletterId])
+  @@index([createdAt])
+  @@map("newsletter_posts")
+}
+
+model NewsletterSubscription {
+  id             String     @id @default(uuid())
+  subscriberId   String
+  newsletterId   String
+  createdAt      DateTime   @default(now())
+  subscriber     User       @relation("NewsletterSubscriber", fields: [subscriberId], references: [id], onDelete: Cascade)
+  newsletter     Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriberId, newsletterId])
+  @@index([subscriberId])
+  @@index([newsletterId])
+  @@map("newsletter_subscriptions")
 }
 
 model Profile {

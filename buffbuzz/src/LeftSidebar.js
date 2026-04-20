@@ -82,6 +82,11 @@ export default function LeftSidebar() {
           <span className="nav-icon">👥</span>
           <span className="nav-text">Groups</span>
         </button>
+
+        <button className="nav-button" onClick={() => navigate('/newsletter')}>
+          <span className="nav-icon">📰</span>
+          <span className="nav-text">Newsletter</span>
+        </button>
       </nav>
     </aside>
   );

@@ -50,6 +50,15 @@ function normalizeEmail(email) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
 }
 
+const NEWSLETTER_MAX_WORDS = 500;
+
+function wordCount(text) {
+  if (!text || typeof text !== 'string') return 0;
+  const t = text.trim();
+  if (!t) return 0;
+  return t.split(/\s+/).filter(Boolean).length;
+}
+
 // Parse post imageUrl: supports JSON array (multiple images) or single URL
 function parsePostImages(imageUrl) {
   if (!imageUrl) return [];
@@ -94,7 +103,7 @@ async function shouldNotify(userId, type) {
       case 'mention':             return prefs.mentions;
       case 'group_chat_mention':  return prefs.mentions;
       case 'lostfound_listing':   return prefs.lostFoundNew;
-      case 'lostfound_resolved':  return prefs.lostFoundResolved;
+      case 'lostfound_resolved':  return prefs.lostFoundResolved ?? prefs.lostFoundNew;
       case 'group_join_request':  return prefs.groupJoinRequests;
       case 'group_join_approved': return prefs.groupJoinResponse;
       case 'group_join_denied':   return prefs.groupJoinResponse;
@@ -105,6 +114,8 @@ async function shouldNotify(userId, type) {
       case 'group_event':         return prefs.groupNewPost;
       case 'security_alert':      return true;
       case 'marketplace_listing': return true;
+      case 'platform_announcement': return true;
+      case 'newsletter_post': return true;
       default:                    return true;
     }
   } catch {
@@ -2632,6 +2643,33 @@ app.get('/api/notifications/:userId/unread-count', async (req, res) => {
   }
 });
 
+function notificationMessageForType(type) {
+  switch (type) {
+    case 'like': return 'liked your post';
+    case 'comment': return 'commented on your post';
+    case 'mention': return 'mentioned you in a comment';
+    case 'reply': return 'replied to your comment';
+    case 'marketplace_listing': return 'listed a new item for sale';
+    case 'lostfound_listing': return 'posted a new lost & found item';
+    case 'lostfound_resolved': return 'marked a lost & found item as resolved';
+    case 'group_join_request': return 'requested to join your group';
+    case 'group_join_approved': return 'approved your request to join the group';
+    case 'group_join_denied': return 'denied your request to join the group';
+    case 'direct_message': return 'sent you a message';
+    case 'group_message': return 'sent a message in the group';
+    case 'group_chat_mention': return 'tagged you in a group chat';
+    case 'group_new_post': return 'posted in a group you belong to';
+    case 'group_announcement': return 'posted an announcement in your group';
+    case 'group_event': return 'posted an event in your group';
+    case 'security_alert': return 'Your password was changed. If this wasn\'t you, reset your password immediately.';
+    case 'report_update': return 'Your report has been reviewed by the BuffBuzz admin team.';
+    case 'account_warning': return '⚠️ Warning: Your account or content was flagged for violating community guidelines.';
+    case 'platform_announcement': return 'sent a platform-wide announcement';
+    case 'newsletter_post': return 'published a new post in their newsletter';
+    default: return 'sent you an update';
+  }
+}
+
 // Get notifications for a user
 app.get('/api/notifications/:userId', async (req, res) => {
   try {
@@ -2664,7 +2702,7 @@ app.get('/api/notifications/:userId', async (req, res) => {
       conversationId: n.conversationId,
       createdAt: n.createdAt,
       userName: `${n.actor.firstName} ${n.actor.lastName}`,
-      message: n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented on your post' : n.type === 'mention' ? 'mentioned you in a comment' : n.type === 'reply' ? 'replied to your comment' : n.type === 'marketplace_listing' ? 'listed a new item for sale' : n.type === 'lostfound_listing' ? 'posted a new lost & found item' : n.type === 'lostfound_resolved' ? 'marked a lost & found item as resolved' : n.type === 'group_join_request' ? 'requested to join your group' : n.type === 'group_join_approved' ? 'approved your request to join the group' : n.type === 'group_join_denied' ? 'denied your request to join the group' : n.type === 'direct_message' ? 'sent you a message' : n.type === 'group_message' ? 'sent a message in the group' : n.type === 'group_chat_mention' ? 'tagged you in a group chat' : n.type === 'group_new_post' ? 'posted in a group you belong to' : n.type === 'group_new_post' ? 'posted in a group you belong to': n.type === 'group_announcement' ? 'posted an announcement in your group': n.type === 'group_event' ? 'posted an event in your group': n.type === 'security_alert' ? 'Your password was changed. If this wasn\'t you, reset your password immediately.': n.type === 'report_update'   ? 'Your report has been reviewed by the BuffBuzz admin team.': n.type === 'account_warning' ? '⚠️ Warning: Your account or content was flagged for violating community guidelines.': n.type
+      message: notificationMessageForType(n.type),
     }));
 
     res.status(200).json({ notifications: formatted });
@@ -3446,7 +3484,7 @@ app.delete('/api/lostfound/:itemId', async (req, res) => {
 app.put('/api/lostfound/:itemId', async (req, res) => {
   try {
     const { itemId } = req.params;
-    const { userId, title, description, category, location, date, contactInfo, imageUrl, imageUrls } = req.body;
+    const { userId, title, description, category, location, date, contactInfo, imageUrl, imageUrls, resolved } = req.body;
 
     const item = await prisma.lostFoundItem.findUnique({
       where: { id: itemId }
@@ -5270,6 +5308,455 @@ app.get('/api/users/recommendations/:userId', async (req, res) => {
   } catch (error) {
     console.error('Recommendations error:', error);
     res.status(500).json({ message: 'An error occurred' });
+  }
+});
+
+// ==================== NEWSLETTERS & PLATFORM ANNOUNCEMENTS ====================
+
+async function assertNewsletterAdminUser(adminUserId) {
+  if (!adminUserId) return null;
+  const u = await prisma.user.findUnique({ where: { id: adminUserId } });
+  if (!u) return null;
+  const adminEmail = (process.env.ADMIN_EMAIL || 'buffbuzz@wtamu.edu').trim().toLowerCase();
+  if (normalizeEmail(u.email) !== adminEmail) return null;
+  return u;
+}
+
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const announcements = await prisma.platformAnnouncement.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        author: { select: { id: true, firstName: true, lastName: true, email: true } }
+      }
+    });
+    res.status(200).json({ announcements });
+  } catch (error) {
+    console.error('Get announcements error:', error);
+    res.status(500).json({ message: 'Failed to load announcements' });
+  }
+});
+
+app.post('/api/admin/announcements', async (req, res) => {
+  try {
+    const { adminUserId, title, content } = req.body;
+    if (!adminUserId || !String(title || '').trim() || !String(content || '').trim()) {
+      return res.status(400).json({ message: 'adminUserId, title, and content are required' });
+    }
+    const admin = await assertNewsletterAdminUser(adminUserId);
+    if (!admin) return res.status(403).json({ message: 'Admin access required' });
+
+    const announcement = await prisma.platformAnnouncement.create({
+      data: {
+        title: String(title).trim(),
+        content: String(content).trim(),
+        authorId: adminUserId
+      },
+      include: {
+        author: { select: { id: true, firstName: true, lastName: true } }
+      }
+    });
+
+    const recipients = await prisma.user.findMany({
+      where: { id: { not: adminUserId }, suspended: false },
+      select: { id: true }
+    });
+    if (recipients.length > 0) {
+      await prisma.notification.createMany({
+        data: recipients.map((r) => ({
+          recipientId: r.id,
+          actorId: adminUserId,
+          type: 'platform_announcement'
+        }))
+      });
+    }
+
+    res.status(201).json({ announcement });
+  } catch (error) {
+    console.error('Admin announcement error:', error);
+    res.status(500).json({ message: 'Failed to publish announcement' });
+  }
+});
+
+app.get('/api/newsletters/feed', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ message: 'userId is required' });
+
+    const [announcements, subs, ownedNewsletter] = await Promise.all([
+      prisma.platformAnnouncement.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: {
+          author: { select: { id: true, firstName: true, lastName: true } }
+        }
+      }),
+      prisma.newsletterSubscription.findMany({
+        where: { subscriberId: userId },
+        select: { newsletterId: true }
+      }),
+      prisma.newsletter.findUnique({
+        where: { userId },
+        select: { id: true }
+      })
+    ]);
+
+    const subIds = subs.map((s) => s.newsletterId);
+    const ownedId = ownedNewsletter?.id;
+    const newsletterIdsForFeed = [...new Set([...subIds, ...(ownedId ? [ownedId] : [])])];
+
+    const posts =
+      newsletterIdsForFeed.length > 0
+        ? await prisma.newsletterPost.findMany({
+            where: { newsletterId: { in: newsletterIdsForFeed } },
+            orderBy: { createdAt: 'desc' },
+            take: 80,
+            include: {
+              newsletter: {
+                select: {
+                  id: true,
+                  title: true,
+                  coverImageUrl: true,
+                  userId: true,
+                  user: { select: { id: true, firstName: true, lastName: true } }
+                }
+              }
+            }
+          })
+        : [];
+
+    const feed = [
+      ...announcements.map((a) => ({
+        kind: 'announcement',
+        sortAt: a.createdAt,
+        id: a.id,
+        title: a.title,
+        content: a.content,
+        createdAt: a.createdAt,
+        author: a.author
+      })),
+      ...posts.map((p) => ({
+        kind: 'newsletter_post',
+        sortAt: p.createdAt,
+        id: p.id,
+        title: p.title,
+        content: p.content,
+        imageUrl: p.imageUrl,
+        createdAt: p.createdAt,
+        newsletter: p.newsletter,
+        isOwnNewsletter: p.newsletter?.userId === userId
+      }))
+    ].sort((a, b) => new Date(b.sortAt) - new Date(a.sortAt));
+
+    res.status(200).json({ feed });
+  } catch (error) {
+    console.error('Newsletter feed error:', error);
+    res.status(500).json({ message: 'Failed to load feed' });
+  }
+});
+
+app.get('/api/newsletters/discover', async (req, res) => {
+  try {
+    const { userId, search } = req.query;
+    if (!userId) return res.status(400).json({ message: 'userId is required' });
+
+    const q = search && String(search).trim();
+    const where = {
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: 'insensitive' } },
+              { description: { contains: q, mode: 'insensitive' } },
+              {
+                user: {
+                  OR: [
+                    { firstName: { contains: q, mode: 'insensitive' } },
+                    { lastName: { contains: q, mode: 'insensitive' } }
+                  ]
+                }
+              }
+            ]
+          }
+        : {})
+    };
+
+    const list = await prisma.newsletter.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: { select: { profilePictureUrl: true } }
+          }
+        },
+        _count: { select: { subscriptions: true, posts: true } }
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 60
+    });
+
+    const subscribed = await prisma.newsletterSubscription.findMany({
+      where: { subscriberId: userId },
+      select: { newsletterId: true }
+    });
+    const subSet = new Set(subscribed.map((s) => s.newsletterId));
+    const newsletters = list.map((n) => ({
+      ...n,
+      isSubscribed: subSet.has(n.id),
+      isOwner: n.userId === userId
+    }));
+
+    res.status(200).json({ newsletters });
+  } catch (error) {
+    console.error('Newsletter discover error:', error);
+    res.status(500).json({ message: 'Failed to discover newsletters' });
+  }
+});
+
+app.get('/api/newsletters/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const newsletter = await prisma.newsletter.findUnique({
+      where: { userId },
+      include: {
+        posts: { orderBy: { createdAt: 'desc' } },
+        _count: { select: { subscriptions: true } },
+        user: { select: { id: true, firstName: true, lastName: true } }
+      }
+    });
+    if (!newsletter) return res.status(404).json({ message: 'No newsletter yet' });
+    res.status(200).json({ newsletter });
+  } catch (error) {
+    console.error('Get user newsletter error:', error);
+    res.status(500).json({ message: 'Failed to load newsletter' });
+  }
+});
+
+app.get('/api/newsletters/:newsletterId', async (req, res) => {
+  try {
+    const { newsletterId } = req.params;
+    const { viewerId } = req.query;
+
+    const newsletter = await prisma.newsletter.findUnique({
+      where: { id: newsletterId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            profile: { select: { profilePictureUrl: true } }
+          }
+        },
+        posts: { orderBy: { createdAt: 'desc' }, take: 80 },
+        _count: { select: { subscriptions: true } }
+      }
+    });
+    if (!newsletter) return res.status(404).json({ message: 'Newsletter not found' });
+
+    let isSubscribed = false;
+    if (viewerId) {
+      const row = await prisma.newsletterSubscription.findUnique({
+        where: {
+          subscriberId_newsletterId: { subscriberId: viewerId, newsletterId }
+        }
+      });
+      isSubscribed = !!row;
+    }
+
+    res.status(200).json({ newsletter, isSubscribed });
+  } catch (error) {
+    console.error('Get newsletter error:', error);
+    res.status(500).json({ message: 'Failed to load newsletter' });
+  }
+});
+
+app.post('/api/newsletters', async (req, res) => {
+  try {
+    const { userId, title, description, coverImageUrl } = req.body;
+    if (!userId || !String(title || '').trim()) {
+      return res.status(400).json({ message: 'userId and title are required' });
+    }
+    const descStr = description != null && String(description).trim() ? String(description).trim() : null;
+    if (descStr && wordCount(descStr) > NEWSLETTER_MAX_WORDS) {
+      return res.status(400).json({ message: `Description must be ${NEWSLETTER_MAX_WORDS} words or fewer` });
+    }
+    const existing = await prisma.newsletter.findUnique({ where: { userId } });
+    if (existing) return res.status(400).json({ message: 'You already have a newsletter' });
+
+    const newsletter = await prisma.newsletter.create({
+      data: {
+        userId,
+        title: String(title).trim(),
+        description: descStr,
+        coverImageUrl: coverImageUrl != null && String(coverImageUrl).trim() ? String(coverImageUrl).trim() : null
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true } },
+        posts: { orderBy: { createdAt: 'desc' } },
+        _count: { select: { subscriptions: true, posts: true } }
+      }
+    });
+    res.status(201).json({ newsletter });
+  } catch (error) {
+    console.error('Create newsletter error:', error);
+    res.status(500).json({ message: 'Failed to create newsletter' });
+  }
+});
+
+app.put('/api/newsletters/:newsletterId', async (req, res) => {
+  try {
+    const { newsletterId } = req.params;
+    const { userId, title, description, coverImageUrl } = req.body;
+    if (!userId) return res.status(400).json({ message: 'userId is required' });
+
+    const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
+    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed' });
+
+    if (description !== undefined) {
+      const descStr = description != null && String(description).trim() ? String(description).trim() : null;
+      if (descStr && wordCount(descStr) > NEWSLETTER_MAX_WORDS) {
+        return res.status(400).json({ message: `Description must be ${NEWSLETTER_MAX_WORDS} words or fewer` });
+      }
+    }
+
+    const newsletter = await prisma.newsletter.update({
+      where: { id: newsletterId },
+      data: {
+        ...(title != null ? { title: String(title).trim() } : {}),
+        ...(description !== undefined
+          ? { description: description != null && String(description).trim() ? String(description).trim() : null }
+          : {}),
+        ...(coverImageUrl !== undefined
+          ? { coverImageUrl: coverImageUrl != null && String(coverImageUrl).trim() ? String(coverImageUrl).trim() : null }
+          : {})
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true } },
+        posts: { orderBy: { createdAt: 'desc' } },
+        _count: { select: { subscriptions: true, posts: true } }
+      }
+    });
+    res.status(200).json({ newsletter });
+  } catch (error) {
+    console.error('Update newsletter error:', error);
+    res.status(500).json({ message: 'Failed to update newsletter' });
+  }
+});
+
+app.post('/api/newsletters/:newsletterId/posts', async (req, res) => {
+  try {
+    const { newsletterId } = req.params;
+    const { userId, title, content, imageUrl } = req.body;
+    if (!userId || !String(title || '').trim() || !String(content || '').trim()) {
+      return res.status(400).json({ message: 'userId, title, and content are required' });
+    }
+    const body = String(content).trim();
+    if (wordCount(body) > NEWSLETTER_MAX_WORDS) {
+      return res.status(400).json({ message: `Each issue must be ${NEWSLETTER_MAX_WORDS} words or fewer` });
+    }
+
+    const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
+    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed' });
+
+    const post = await prisma.newsletterPost.create({
+      data: {
+        newsletterId,
+        title: String(title).trim(),
+        content: body,
+        imageUrl: imageUrl != null && String(imageUrl).trim() ? String(imageUrl).trim() : null
+      }
+    });
+
+    const subs = await prisma.newsletterSubscription.findMany({
+      where: { newsletterId },
+      select: { subscriberId: true }
+    });
+    if (subs.length > 0) {
+      await prisma.notification.createMany({
+        data: subs.map((s) => ({
+          recipientId: s.subscriberId,
+          actorId: userId,
+          type: 'newsletter_post'
+        }))
+      });
+    }
+
+    res.status(201).json({ post });
+  } catch (error) {
+    console.error('Create newsletter post error:', error);
+    res.status(500).json({ message: 'Failed to publish post' });
+  }
+});
+
+app.delete('/api/newsletters/:newsletterId/posts/:postId', async (req, res) => {
+  try {
+    const { newsletterId, postId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ message: 'userId is required' });
+
+    const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
+    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed' });
+
+    const post = await prisma.newsletterPost.findFirst({
+      where: { id: postId, newsletterId }
+    });
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+
+    await prisma.newsletterPost.delete({ where: { id: postId } });
+    res.status(200).json({ message: 'Post deleted' });
+  } catch (error) {
+    console.error('Delete newsletter post error:', error);
+    res.status(500).json({ message: 'Failed to delete post' });
+  }
+});
+
+app.post('/api/newsletters/:newsletterId/subscribe', async (req, res) => {
+  try {
+    const { newsletterId } = req.params;
+    const { subscriberId } = req.body;
+    if (!subscriberId) return res.status(400).json({ message: 'subscriberId is required' });
+
+    const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
+    if (!nl) return res.status(404).json({ message: 'Newsletter not found' });
+    if (nl.userId === subscriberId) {
+      return res.status(400).json({ message: 'You cannot subscribe to your own newsletter' });
+    }
+
+    try {
+      await prisma.newsletterSubscription.create({
+        data: { subscriberId, newsletterId }
+      });
+    } catch (e) {
+      if (e.code === 'P2002') {
+        return res.status(400).json({ message: 'Already subscribed' });
+      }
+      throw e;
+    }
+
+    res.status(200).json({ message: 'Subscribed' });
+  } catch (error) {
+    console.error('Subscribe newsletter error:', error);
+    res.status(500).json({ message: 'Failed to subscribe' });
+  }
+});
+
+app.delete('/api/newsletters/:newsletterId/subscribe', async (req, res) => {
+  try {
+    const { newsletterId } = req.params;
+    const { subscriberId } = req.body;
+    if (!subscriberId) return res.status(400).json({ message: 'subscriberId is required' });
+
+    await prisma.newsletterSubscription.deleteMany({
+      where: { newsletterId, subscriberId }
+    });
+    res.status(200).json({ message: 'Unsubscribed' });
+  } catch (error) {
+    console.error('Unsubscribe newsletter error:', error);
+    res.status(500).json({ message: 'Failed to unsubscribe' });
   }
 });
 
