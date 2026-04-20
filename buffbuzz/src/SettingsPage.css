@@ -113,6 +113,58 @@
   font-size: 12px;
 }
 
+/* ── Appearance section ────────────────────────────────────── */
+
+.appearance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.appearance-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.appearance-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.appearance-desc {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.settings-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.settings-theme-toggle:hover {
+  border-color: #800000;
+  background: #fff5f5;
+}
+
+.settings-theme-toggle .theme-toggle-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
 /* ── Notification dropdown ─────────────────────────────────── */
 
 .notif-section {
@@ -369,7 +421,8 @@
   transform: none;
 }
 
-/* Danger Zone Section */
+/* ── Danger Zone ───────────────────────────────────────────── */
+
 .danger-zone {
   border: 2px solid #dc3545;
   background-color: #fff5f5;
@@ -424,7 +477,8 @@
   box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
 }
 
-/* Modal Styles */
+/* ── Modal ─────────────────────────────────────────────────── */
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -501,10 +555,179 @@
 .confirm-delete-button:hover { background-color: #c82333; }
 .confirm-delete-button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* Mobile Responsive */
+/* ── Dark mode overrides ───────────────────────────────────── */
+
+[data-theme="dark"] .settings-container {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .settings-header h1 {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .settings-section {
+  background: #1e2130;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .settings-section h2 {
+  color: #f87171;
+}
+
+[data-theme="dark"] .form-group label {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .form-group input[type="password"],
+[data-theme="dark"] .form-group input[type="text"] {
+  background-color: #242736;
+  border-color: #2d3148;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .form-group input:focus {
+  border-color: #f87171;
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2);
+}
+
+[data-theme="dark"] .form-group small {
+  color: #64748b;
+}
+
+[data-theme="dark"] .appearance-label {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .appearance-desc {
+  color: #64748b;
+}
+
+[data-theme="dark"] .settings-theme-toggle {
+  background: #242736;
+  border-color: #2d3148;
+}
+
+[data-theme="dark"] .settings-theme-toggle:hover {
+  border-color: #f87171;
+  background: #2d1b1b;
+}
+
+[data-theme="dark"] .settings-theme-toggle .theme-toggle-label {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .notif-toggle:hover {
+  background-color: #242736;
+}
+
+[data-theme="dark"] .notif-toggle h2 {
+  color: #f87171;
+}
+
+[data-theme="dark"] .notif-summary {
+  color: #64748b;
+}
+
+[data-theme="dark"] .notif-chevron {
+  color: #f87171;
+}
+
+[data-theme="dark"] .notif-form {
+  border-top-color: #2d3148;
+}
+
+[data-theme="dark"] .temp-mute-block {
+  background: #1a1d35;
+  border-color: #3730a3;
+}
+
+[data-theme="dark"] .temp-mute-header strong {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .mute-duration-btn {
+  background: #1e2130;
+  border-color: #6366f1;
+  color: #a5b4fc;
+}
+
+[data-theme="dark"] .mute-duration-btn:hover {
+  background: #6366f1;
+  color: white;
+}
+
+[data-theme="dark"] .mute-cancel-btn {
+  background: #1e2130;
+  border-color: #f87171;
+  color: #f87171;
+}
+
+[data-theme="dark"] .mute-cancel-btn:hover {
+  background: #f87171;
+  color: white;
+}
+
+[data-theme="dark"] .notif-group-label {
+  color: #475569;
+}
+
+[data-theme="dark"] .notification-item:hover {
+  background-color: #242736;
+}
+
+[data-theme="dark"] .notification-item label strong {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .notification-item label span {
+  color: #64748b;
+}
+
+[data-theme="dark"] .danger-zone {
+  background-color: #1f1515;
+  border-color: #ef4444;
+}
+
+[data-theme="dark"] .danger-zone h2 {
+  color: #ef4444;
+}
+
+[data-theme="dark"] .danger-info h3 {
+  color: #ef4444;
+}
+
+[data-theme="dark"] .danger-info p,
+[data-theme="dark"] .danger-info ul {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .modal-content {
+  background-color: #1e2130;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .modal-content h2 {
+  color: #ef4444;
+}
+
+[data-theme="dark"] .modal-warning {
+  background-color: #2d2000;
+  border-color: #d97706;
+  color: #fcd34d;
+}
+
+[data-theme="dark"] .cancel-button {
+  background-color: #374151;
+}
+
+[data-theme="dark"] .cancel-button:hover {
+  background-color: #4b5563;
+}
+
+/* ── Mobile ────────────────────────────────────────────────── */
+
 @media (max-width: 768px) {
   .settings-container { padding: 20px 16px; }
-
   .settings-header h1 { font-size: 24px; }
 
   .settings-back-button {
@@ -519,19 +742,17 @@
   .settings-back-button:active { transform: none; }
 
   .settings-section { padding: 20px; }
-
   .notif-toggle { padding: 20px; }
   .notif-form { padding: 0 20px 24px; }
 
   .temp-mute-buttons { gap: 6px; }
-
   .mute-duration-btn,
   .mute-cancel-btn { font-size: 12px; padding: 5px 12px; }
 
   .modal-content { padding: 20px; }
-
   .modal-buttons { flex-direction: column; }
-
   .cancel-button,
   .confirm-delete-button { width: 100%; }
+
+  .appearance-row { flex-direction: column; align-items: flex-start; }
 }

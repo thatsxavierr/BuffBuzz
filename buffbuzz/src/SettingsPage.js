@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import "./SettingsPage.css";
 import { getValidUser } from './sessionUtils';
+import { useTheme } from './Theme';
 
 const NOTIFICATION_ITEMS = [
   {
@@ -17,16 +18,16 @@ const NOTIFICATION_ITEMS = [
   {
     group: 'Groups',
     items: [
-      { name: 'groupJoinRequests', label: 'Join Requests',          desc: 'Get notified when someone requests to join your private group' },
-      { name: 'groupJoinResponse', label: 'Join Request Response',  desc: 'Get notified when your request to join a group is approved or denied' },
-      { name: 'groupNewPost',      label: 'New Group Posts',        desc: 'Get notified when a new post is created in a group you belong to' },
+      { name: 'groupJoinRequests', label: 'Join Requests',         desc: 'Get notified when someone requests to join your private group' },
+      { name: 'groupJoinResponse', label: 'Join Request Response', desc: 'Get notified when your request to join a group is approved or denied' },
+      { name: 'groupNewPost',      label: 'New Group Posts',       desc: 'Get notified when a new post is created in a group you belong to' },
     ]
   },
   {
     group: 'Lost & Found',
     items: [
-      { name: 'lostFoundNew',     label: 'New Listings',    desc: 'Get notified when a new Lost & Found posting is created' },
-      { name: 'lostFoundContact', label: 'Listing Enquiry', desc: 'Get notified when someone contacts you about your Lost & Found listing' },
+      { name: 'lostFoundNew',      label: 'New Listings',    desc: 'Get notified when a new Lost & Found posting is created' },
+      { name: 'lostFoundContact',  label: 'Listing Enquiry', desc: 'Get notified when someone contacts you about your Lost & Found listing' },
       { name: 'lostFoundResolved', label: 'Marked Resolved', desc: 'Get notified when a Lost & Found item you interacted with is marked as resolved' },
     ]
   },
@@ -60,6 +61,7 @@ const DEFAULT_NOTIFICATIONS = {
 const SettingsPage = () => {
   const navigate = useNavigate();
   const user = getValidUser();
+  const { theme, toggleTheme } = useTheme();
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -204,7 +206,6 @@ const SettingsPage = () => {
   };
 
   const isMutedTemporarily = muteUntil && muteUntil > new Date();
-
   const allItems = NOTIFICATION_ITEMS.flatMap(g => g.items);
   const enabledCount = allItems.filter(i => notifications[i.name]).length;
   const totalCount = allItems.length;
@@ -222,7 +223,35 @@ const SettingsPage = () => {
         <div className={`message ${message.type}`}>{message.text}</div>
       )}
 
-      {/* Password Section */}
+      {/* ── Appearance ── */}
+      <section className="settings-section">
+        <h2>Appearance</h2>
+        <div className="appearance-row">
+          <div className="appearance-info">
+            <span className="appearance-label">
+              {theme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+            </span>
+            <p className="appearance-desc">
+              {theme === 'dark'
+                ? 'Dark mode is on. Easy on the eyes at night.'
+                : 'Light mode is on. Switch to dark for a darker look.'}
+            </p>
+          </div>
+          <button
+            className="theme-toggle settings-theme-toggle"
+            onClick={toggleTheme}
+            title="Toggle dark mode"
+          >
+            <span className="theme-toggle-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+            <div className={`theme-toggle-track ${theme === 'dark' ? 'active' : ''}`}>
+              <div className="theme-toggle-knob" />
+            </div>
+            <span className="theme-toggle-label">{theme === 'dark' ? 'Dark' : 'Light'}</span>
+          </button>
+        </div>
+      </section>
+
+      {/* ── Password ── */}
       <section className="settings-section">
         <h2>Change Password</h2>
         <form onSubmit={handlePasswordSubmit}>
@@ -248,7 +277,7 @@ const SettingsPage = () => {
         </form>
       </section>
 
-      {/* Notifications Section — collapsible */}
+      {/* ── Notifications — collapsible ── */}
       <section className="settings-section notif-section">
         <button
           type="button"
@@ -269,8 +298,6 @@ const SettingsPage = () => {
 
         {notifOpen && (
           <form onSubmit={handleNotificationSubmit} className="notif-form">
-
-            {/* Temporary Mute Block */}
             <div className="temp-mute-block">
               <div className="temp-mute-header">
                 <span className="temp-mute-icon">⏰</span>
@@ -287,32 +314,16 @@ const SettingsPage = () => {
                 </div>
               </div>
               <div className="temp-mute-buttons">
-                <button type="button" className="mute-duration-btn"
-                  onClick={() => handleTemporaryMute(1)} disabled={muteLoading}>
-                  1 hour
-                </button>
-                <button type="button" className="mute-duration-btn"
-                  onClick={() => handleTemporaryMute(4)} disabled={muteLoading}>
-                  4 hours
-                </button>
-                <button type="button" className="mute-duration-btn"
-                  onClick={() => handleTemporaryMute(8)} disabled={muteLoading}>
-                  8 hours
-                </button>
-                <button type="button" className="mute-duration-btn"
-                  onClick={() => handleTemporaryMute(24)} disabled={muteLoading}>
-                  24 hours
-                </button>
+                <button type="button" className="mute-duration-btn" onClick={() => handleTemporaryMute(1)} disabled={muteLoading}>1 hour</button>
+                <button type="button" className="mute-duration-btn" onClick={() => handleTemporaryMute(4)} disabled={muteLoading}>4 hours</button>
+                <button type="button" className="mute-duration-btn" onClick={() => handleTemporaryMute(8)} disabled={muteLoading}>8 hours</button>
+                <button type="button" className="mute-duration-btn" onClick={() => handleTemporaryMute(24)} disabled={muteLoading}>24 hours</button>
                 {isMutedTemporarily && (
-                  <button type="button" className="mute-cancel-btn"
-                    onClick={() => handleTemporaryMute(0)} disabled={muteLoading}>
-                    Unmute now
-                  </button>
+                  <button type="button" className="mute-cancel-btn" onClick={() => handleTemporaryMute(0)} disabled={muteLoading}>Unmute now</button>
                 )}
               </div>
             </div>
 
-            {/* Grouped checkboxes */}
             {NOTIFICATION_ITEMS.map(({ group, items }) => (
               <div key={group} className="notif-group-block">
                 <p className="notif-group-label">{group}</p>
@@ -344,7 +355,7 @@ const SettingsPage = () => {
         )}
       </section>
 
-      {/* Delete Account Section */}
+      {/* ── Danger Zone ── */}
       <section className="settings-section danger-zone">
         <h2>Danger Zone</h2>
         <div className="danger-content">
@@ -365,7 +376,6 @@ const SettingsPage = () => {
         </div>
       </section>
 
-      {/* Delete Account Modal */}
       {showDeleteModal && (
         <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>

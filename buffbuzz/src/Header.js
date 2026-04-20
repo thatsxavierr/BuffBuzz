@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Header.css';
 import { clearSession, getValidUser } from './sessionUtils';
+import { useTheme } from './Theme';
 
 export default function Header({ onBackClick, profilePictureUrl, currentUserId }) {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   // Search state
   const [searchText, setSearchText] = useState("");
@@ -12,15 +14,14 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
   const [showResults, setShowResults] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const resultsRef = useRef(null);
-
   const searchTimeoutRef = useRef(null);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (resultsRef.current && !resultsRef.current.contains(event.target)) {
         setShowResults(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -33,54 +34,30 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
     const fetchPendingRequestsCount = async () => {
       const user = getValidUser();
       if (!user) return;
-
       try {
         const response = await fetch(`http://localhost:5000/api/friends/requests/${user.id}`);
         const data = await response.json();
-        
-        if (response.ok) {
-          setPendingRequestsCount(data.requests.length);
-        }
+        if (response.ok) setPendingRequestsCount(data.requests.length);
       } catch (err) {
         console.error('Error fetching pending requests count:', err);
       }
     };
 
     fetchPendingRequestsCount();
-
-    // Poll every 30 seconds to update count
     const interval = setInterval(fetchPendingRequestsCount, 50000);
-
-    // Listen for friend request updates
     const handleRefresh = () => fetchPendingRequestsCount();
     window.addEventListener('friendRequestsUpdated', handleRefresh);
-
     return () => {
       clearInterval(interval);
       window.removeEventListener('friendRequestsUpdated', handleRefresh);
     };
   }, []);
 
-  // Navigation handlers
-  const handleProfileClick = () => {
-    navigate('/profile');
-  };
-
-  const handleHomeClick = () => {
-    navigate('/main');
-  };
-
-  const handleFriendsClick = () => {
-    navigate('/friends');
-  };
-
-  const handleFriendRequestsClick = () => {
-    navigate('/friend-requests');
-  };
-
-  const handleSettingsClick = () => {
-    navigate('/settings');
-  };
+  const handleProfileClick = () => navigate('/profile');
+  const handleHomeClick = () => navigate('/main');
+  const handleFriendsClick = () => navigate('/friends');
+  const handleFriendRequestsClick = () => navigate('/friend-requests');
+  const handleSettingsClick = () => navigate('/settings');
 
   const handleLogout = () => {
     const confirmLogout = window.confirm('Are you sure you want to logout?');
@@ -91,7 +68,6 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
     }
   };
 
-  // Search functionality with debounce to reduce API calls while typing
   const handleSearch = (e) => {
     const value = e.target.value;
     setSearchText(value);
@@ -124,27 +100,23 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
     }, 300);
   };
 
-  // When clicking a search result
   const handleSelectUser = (userId) => {
     setShowResults(false);
     setSearchText("");
-
     if (currentUserId && userId === currentUserId) {
       navigate('/profile');
       return;
     }
-
     navigate('/profile', { state: { userId } });
   };
 
   return (
     <header className="header">
       <div className="header-content" ref={resultsRef}>
+
         {/* LEFT SIDE */}
         <div className="header-left">
-          <button className="header-button" onClick={onBackClick}>
-            ← Back
-          </button>
+          <button className="header-button" onClick={onBackClick}>← Back</button>
           <div className="logo-text">BuffBuzz</div>
         </div>
 
@@ -159,8 +131,6 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
               onChange={handleSearch}
               onFocus={() => searchText && setShowResults(true)}
             />
-
-            {/* DROPDOWN RESULTS */}
             {showResults && (
               <div className={`search-results-box ${results.length === 0 ? 'empty' : ''}`}>
                 {results.length === 0 ? (
@@ -173,11 +143,7 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
                       onClick={() => handleSelectUser(user.id)}
                     >
                       {user.profilePictureUrl ? (
-                        <img
-                          src={user.profilePictureUrl}
-                          alt=""
-                          className="search-avatar"
-                        />
+                        <img src={user.profilePictureUrl} alt="" className="search-avatar" />
                       ) : (
                         <div className="search-avatar fallback">👤</div>
                       )}
@@ -204,11 +170,22 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
             )}
           </button>
           <button className="header-button" onClick={handleSettingsClick}>⚙️ Settings</button>
-{getValidUser()?.email?.toLowerCase() === 'buffbuzz2025@gmail.com' && (
-  <button className="header-button admin-btn" onClick={() => navigate('/admin')}>
-    🛡️ Admin
-  </button>
-)}
+
+          {/* Admin button — only for admin email */}
+          {getValidUser()?.email?.toLowerCase() === 'buffbuzz2025@gmail.com' && (
+            <button className="header-button admin-btn" onClick={() => navigate('/admin')}>
+              🛡️ Admin
+            </button>
+          )}
+
+          {/* ── Dark mode toggle ── */}
+          <button className="theme-toggle" onClick={toggleTheme} title="Toggle dark mode">
+            <span className="theme-toggle-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+            <div className={`theme-toggle-track ${theme === 'dark' ? 'active' : ''}`}>
+              <div className="theme-toggle-knob" />
+            </div>
+          </button>
+
           <div
             className="profile-circle"
             onClick={handleProfileClick}
@@ -222,9 +199,7 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
             {!profilePictureUrl && '👤'}
           </div>
 
-          <button className="header-button logout" onClick={handleLogout}>
-            Logout
-          </button>
+          <button className="header-button logout" onClick={handleLogout}>Logout</button>
         </div>
       </div>
     </header>
