@@ -43,6 +43,7 @@ model User {
   notificationsSent      Notification[]            @relation("NotificationActor")
   notificationPreferences NotificationPreferences?
   posts                   Post[]
+  pollVotes               PollVote[]
   profile                 Profile?
   shares                  Share[]
   reportsFiled            Report[]                  @relation("ReportReporter")
@@ -137,6 +138,7 @@ model Post {
   author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
   group     Group?    @relation(fields: [groupId], references: [id], onDelete: Cascade) // ADD THIS
   shares    Share[]
+  poll      Poll?
 
   @@index([authorId])
   @@index([groupId])                         // ADD THIS
@@ -188,6 +190,47 @@ model Share {
   @@index([postId])
   @@index([userId])
   @@map("shares")
+}
+
+model Poll {
+  id              String       @id @default(uuid())
+  postId          String       @unique
+  anonymousVoting Boolean      @default(false)
+  expiresAt       DateTime?
+  post            Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  options         PollOption[]
+  votes           PollVote[]
+
+  @@map("polls")
+}
+
+model PollOption {
+  id        String     @id @default(uuid())
+  pollId    String
+  text      String
+  sortOrder Int        @default(0)
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes     PollVote[]
+
+  @@index([pollId])
+  @@map("poll_options")
+}
+
+model PollVote {
+  id        String     @id @default(uuid())
+  pollId    String
+  optionId  String
+  userId    String
+  createdAt DateTime   @default(now())
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@index([pollId])
+  @@index([optionId])
+  @@index([userId])
+  @@map("poll_votes")
 }
 
 model Friendship {

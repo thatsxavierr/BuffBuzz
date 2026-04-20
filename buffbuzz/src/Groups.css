@@ -1031,11 +1031,14 @@
 
 .post-type-badge.announcement { background: #fef3c7; color: #92400e; }
 .post-type-badge.event { background: #dbeafe; color: #1e40af; }
+.post-type-badge.poll { background: #ede9fe; color: #5b21b6; }
 .group-post-card.post-announcement { border-left: 4px solid #f59e0b; }
 .group-post-card.post-event { border-left: 4px solid #3b82f6; }
+.group-post-card.post-poll { border-left: 4px solid #7c3aed; }
 
 .group-post-notice.notice-announcement { background-color: #fef3c7; border-color: #f59e0b; color: #92400e; }
 .group-post-notice.notice-event { background-color: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+.group-post-notice.notice-poll { background-color: #ede9fe; border-color: #c4b5fd; color: #5b21b6; }
 
 /* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 768px) {

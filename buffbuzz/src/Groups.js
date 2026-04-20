@@ -6,16 +6,19 @@ import Footer from './Footer';
 import ImageCarousel from './ImageCarousel';
 import { getValidUser } from './sessionUtils';
 import ReportModal from './ReportModal';
+import PollBlock from './PollBlock';
 
 const POST_TYPES = [
   { value: 'POST',         label: '📝 Post',         desc: 'Share something with the group' },
   { value: 'ANNOUNCEMENT', label: '📣 Announcement',  desc: 'Important update for all members' },
   { value: 'EVENT',        label: '📅 Event',         desc: 'Invite members to an event' },
+  { value: 'POLL',         label: '📊 Poll',          desc: 'Ask the group a question' },
 ];
 
 const postTypeBadge = (type) => {
   if (type === 'ANNOUNCEMENT') return <span className="post-type-badge announcement">📣 Announcement</span>;
   if (type === 'EVENT')        return <span className="post-type-badge event">📅 Event</span>;
+  if (type === 'POLL')         return <span className="post-type-badge poll">📊 Poll</span>;
   return null;
 };
 
@@ -47,7 +50,14 @@ export default function Groups() {
   // ── Group post state ─────────────────────────────────────────────
   const [showGroupPostModal, setShowGroupPostModal] = useState(false);
   const [postingToGroup, setPostingToGroup] = useState(null);
-  const [groupPostForm, setGroupPostForm] = useState({ title: '', content: '', postType: 'POST' });
+  const [groupPostForm, setGroupPostForm] = useState({
+    title: '',
+    content: '',
+    postType: 'POST',
+    pollOptions: ['', ''],
+    anonymousVoting: false,
+    expiresAt: ''
+  });
   const [groupPostLoading, setGroupPostLoading] = useState(false);
 
   // ── Group posts feed state ───────────────────────────────────────
@@ -368,26 +378,64 @@ export default function Groups() {
   // ── Group post handler ───────────────────────────────────────────
   const handleCreateGroupPost = async (e) => {
     e.preventDefault();
-    if (!groupPostForm.title.trim() || !groupPostForm.content.trim()) return;
+    if (groupPostForm.postType === 'POLL') {
+      if (!groupPostForm.title.trim()) {
+        alert('Please enter a poll question.');
+        return;
+      }
+      const opts = groupPostForm.pollOptions.map((o) => String(o).trim()).filter(Boolean);
+      if (opts.length < 2 || opts.length > 5) {
+        alert('Poll must have between 2 and 5 options.');
+        return;
+      }
+    } else if (!groupPostForm.title.trim() || !groupPostForm.content.trim()) {
+      return;
+    }
     setGroupPostLoading(true);
     try {
+      let payload = {
+        title: groupPostForm.title,
+        content: groupPostForm.postType === 'POLL' ? (groupPostForm.content.trim() || '') : groupPostForm.content,
+        postType: groupPostForm.postType,
+        authorId: user.id,
+        groupId: postingToGroup.id
+      };
+      if (groupPostForm.postType === 'POLL') {
+        const opts = groupPostForm.pollOptions.map((o) => String(o).trim()).filter(Boolean);
+        payload = {
+          ...payload,
+          pollOptions: opts,
+          anonymousVoting: groupPostForm.anonymousVoting,
+          expiresAt: groupPostForm.expiresAt
+            ? new Date(groupPostForm.expiresAt).toISOString()
+            : undefined
+        };
+      }
       const response = await fetch('http://localhost:5000/api/posts/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: groupPostForm.title,
-          content: groupPostForm.content,
-          postType: groupPostForm.postType,
-          authorId: user.id,
-          groupId: postingToGroup.id
-        })
+        body: JSON.stringify(payload)
       });
       const data = await response.json();
       if (response.ok) {
-        const typeLabel = groupPostForm.postType === 'ANNOUNCEMENT' ? 'Announcement' : groupPostForm.postType === 'EVENT' ? 'Event' : 'Post';
+        const typeLabel =
+          groupPostForm.postType === 'ANNOUNCEMENT'
+            ? 'Announcement'
+            : groupPostForm.postType === 'EVENT'
+              ? 'Event'
+              : groupPostForm.postType === 'POLL'
+                ? 'Poll'
+                : 'Post';
         alert(`${typeLabel} created in ${postingToGroup.name}! All group members have been notified.`);
         setShowGroupPostModal(false);
-        setGroupPostForm({ title: '', content: '', postType: 'POST' });
+        setGroupPostForm({
+          title: '',
+          content: '',
+          postType: 'POST',
+          pollOptions: ['', ''],
+          anonymousVoting: false,
+          expiresAt: ''
+        });
         if (detailGroup?.id === postingToGroup.id && detailTab === 'posts') {
           fetchGroupPosts(postingToGroup.id);
         }
@@ -404,7 +452,14 @@ export default function Groups() {
 
   const handleCloseGroupPostModal = () => {
     setShowGroupPostModal(false);
-    setGroupPostForm({ title: '', content: '', postType: 'POST' });
+    setGroupPostForm({
+      title: '',
+      content: '',
+      postType: 'POST',
+      pollOptions: ['', ''],
+      anonymousVoting: false,
+      expiresAt: ''
+    });
     setPostingToGroup(null);
   };
 
@@ -747,7 +802,10 @@ export default function Groups() {
                   ) : (
                     <div className="group-posts-list">
                       {groupPosts.map(post => (
-                        <div key={post.id} className={`group-post-card ${post.postType === 'ANNOUNCEMENT' ? 'post-announcement' : post.postType === 'EVENT' ? 'post-event' : ''}`}>
+                        <div
+                          key={post.id}
+                          className={`group-post-card ${post.postType === 'ANNOUNCEMENT' ? 'post-announcement' : post.postType === 'EVENT' ? 'post-event' : post.postType === 'POLL' ? 'post-poll' : ''}`}
+                        >
 
                           {postTypeBadge(post.postType)}
 
@@ -763,8 +821,22 @@ export default function Groups() {
                             </div>
                           </div>
 
-                          <h4 className="group-post-title">{post.title}</h4>
-                          <p className="group-post-content">{post.content}</p>
+                          {post.postType === 'POLL' && post.poll ? (
+                            <PollBlock
+                              post={post}
+                              currentUserId={user?.id}
+                              onPollUpdate={(nextPoll) => {
+                                setGroupPosts((prev) =>
+                                  prev.map((p) => (p.id === post.id ? { ...p, poll: nextPoll } : p))
+                                );
+                              }}
+                            />
+                          ) : (
+                            <>
+                              <h4 className="group-post-title">{post.title}</h4>
+                              <p className="group-post-content">{post.content}</p>
+                            </>
+                          )}
 
                           <div className="group-post-actions" onClick={(e) => e.stopPropagation()}>
                             <button
@@ -994,7 +1066,15 @@ export default function Groups() {
                       key={value}
                       type="button"
                       className={`post-type-option ${groupPostForm.postType === value ? 'selected' : ''}`}
-                      onClick={() => setGroupPostForm(prev => ({ ...prev, postType: value }))}
+                      onClick={() =>
+                        setGroupPostForm((prev) => ({
+                          ...prev,
+                          postType: value,
+                          pollOptions: value === 'POLL' && (!prev.pollOptions || prev.pollOptions.length < 2)
+                            ? ['', '']
+                            : prev.pollOptions
+                        }))
+                      }
                     >
                       <span className="post-type-label">{label}</span>
                       <span className="post-type-desc">{desc}</span>
@@ -1003,7 +1083,7 @@ export default function Groups() {
                 </div>
               </div>
               <div className="form-group">
-                <label htmlFor="postTitle">Title *</label>
+                <label htmlFor="postTitle">{groupPostForm.postType === 'POLL' ? 'Poll question *' : 'Title *'}</label>
                 <input
                   type="text"
                   id="postTitle"
@@ -1012,13 +1092,14 @@ export default function Groups() {
                   placeholder={
                     groupPostForm.postType === 'ANNOUNCEMENT' ? 'e.g., Meeting rescheduled to Friday' :
                     groupPostForm.postType === 'EVENT' ? 'e.g., Study session – Thursday 6PM' :
+                    groupPostForm.postType === 'POLL' ? 'What do you want to ask?' :
                     'Post title'
                   }
                   required
                 />
               </div>
               <div className="form-group">
-                <label htmlFor="postContent">Content *</label>
+                <label htmlFor="postContent">{groupPostForm.postType === 'POLL' ? 'Description (optional)' : 'Content *'}</label>
                 <textarea
                   id="postContent"
                   value={groupPostForm.content}
@@ -1026,22 +1107,96 @@ export default function Groups() {
                   placeholder={
                     groupPostForm.postType === 'ANNOUNCEMENT' ? 'Share an important update with the group…' :
                     groupPostForm.postType === 'EVENT' ? 'Add event details, location, and what to bring…' :
+                    groupPostForm.postType === 'POLL' ? 'Optional context for your poll…' :
                     'What do you want to share with the group?'
                   }
-                  rows="5"
-                  required
+                  rows={groupPostForm.postType === 'POLL' ? 3 : 5}
+                  required={groupPostForm.postType !== 'POLL'}
                 />
               </div>
-              <div className={`group-post-notice ${groupPostForm.postType === 'ANNOUNCEMENT' ? 'notice-announcement' : groupPostForm.postType === 'EVENT' ? 'notice-event' : ''}`}>
+              {groupPostForm.postType === 'POLL' && (
+                <>
+                  <div className="form-group">
+                    <label>Poll options (2–5)</label>
+                    {groupPostForm.pollOptions.map((opt, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setGroupPostForm((prev) => {
+                              const next = [...prev.pollOptions];
+                              next[i] = v;
+                              return { ...prev, pollOptions: next };
+                            });
+                          }}
+                          placeholder={`Option ${i + 1}`}
+                          style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid #ccc' }}
+                        />
+                        {groupPostForm.pollOptions.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setGroupPostForm((prev) => ({
+                                ...prev,
+                                pollOptions: prev.pollOptions.filter((_, j) => j !== i)
+                              }))
+                            }
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {groupPostForm.pollOptions.length < 5 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setGroupPostForm((prev) => ({
+                            ...prev,
+                            pollOptions: [...prev.pollOptions, '']
+                          }))
+                        }
+                        style={{ marginTop: 4, background: 'none', border: 'none', color: '#800000', fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        + Add option
+                      </button>
+                    )}
+                  </div>
+                  <div className="form-group">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={groupPostForm.anonymousVoting}
+                        onChange={(e) => setGroupPostForm((prev) => ({ ...prev, anonymousVoting: e.target.checked }))}
+                      />{' '}
+                      Anonymous voting (hide names on results)
+                    </label>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="groupPollExpires">End date (optional)</label>
+                    <input
+                      type="datetime-local"
+                      id="groupPollExpires"
+                      value={groupPostForm.expiresAt}
+                      onChange={(e) => setGroupPostForm((prev) => ({ ...prev, expiresAt: e.target.value }))}
+                      style={{ width: '100%', maxWidth: 280, padding: '8px 10px' }}
+                    />
+                  </div>
+                </>
+              )}
+              <div className={`group-post-notice ${groupPostForm.postType === 'ANNOUNCEMENT' ? 'notice-announcement' : groupPostForm.postType === 'EVENT' ? 'notice-event' : groupPostForm.postType === 'POLL' ? 'notice-poll' : ''}`}>
                 {groupPostForm.postType === 'ANNOUNCEMENT' && '📣 '}
                 {groupPostForm.postType === 'EVENT' && '📅 '}
                 {groupPostForm.postType === 'POST' && '📝 '}
+                {groupPostForm.postType === 'POLL' && '📊 '}
                 All members of <strong>{postingToGroup.name}</strong> will be notified.
               </div>
               <div className="modal-actions">
                 <button type="button" className="cancel-btn" onClick={handleCloseGroupPostModal}>Cancel</button>
                 <button type="submit" className="submit-btn" disabled={groupPostLoading}>
-                  {groupPostLoading ? 'Posting...' : `Post ${groupPostForm.postType === 'ANNOUNCEMENT' ? 'Announcement' : groupPostForm.postType === 'EVENT' ? 'Event' : 'to Group'}`}
+                  {groupPostLoading ? 'Posting...' : `Post ${groupPostForm.postType === 'ANNOUNCEMENT' ? 'Announcement' : groupPostForm.postType === 'EVENT' ? 'Event' : groupPostForm.postType === 'POLL' ? 'Poll' : 'to Group'}`}
                 </button>
               </div>
             </form>

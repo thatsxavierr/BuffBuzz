@@ -7,6 +7,7 @@ import ImageCarousel from './ImageCarousel';
 import ReportModal from './ReportModal';
 import SharePostModal from './SharePostModal';
 import ImageCropModal from './ImageCropModal';
+import PollBlock from './PollBlock';
 
 const MAX_EDIT_IMAGES = 5;
 
@@ -319,7 +320,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
                 Report
               </button>
             )}
-            {post.author.id === currentUserId && (
+            {post.author.id === currentUserId && post.postType !== 'POLL' && (
               <div className="post-owner-actions">
                 <button 
                   className="edit-button" 
@@ -362,6 +363,16 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
               className="post-image"
             />
           </div>
+        )}
+
+        {post.postType === 'POLL' && post.poll && (
+          <PollBlock
+            post={post}
+            currentUserId={currentUserId}
+            onPollUpdate={(nextPoll) => {
+              if (onUpdate) onUpdate({ ...post, poll: nextPoll });
+            }}
+          />
         )}
 
         {/* Post Actions */}
@@ -418,7 +429,8 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
           </span>
         </div>
 
-        {/* Post Content */}
+        {/* Post Content (poll question/description shown inside PollBlock) */}
+        {post.postType !== 'POLL' && (
         <div className="post-content">
           <span 
             className="content-username" 
@@ -430,6 +442,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
           <span className="content-title"> {post.title}</span>
           {post.content && <p className="content-text">{post.content}</p>}
         </div>
+        )}
 
         {/* View Comments */}
         {commentCount > 0 && (

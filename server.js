@@ -66,6 +66,84 @@ function parsePostImages(imageUrl) {
   return [imageUrl];
 }
 
+/** Polls: attach vote counts, optional voter lists (non-anonymous), and current user's vote. */
+async function enrichPollsForPosts(posts, viewerUserId) {
+  const withPoll = posts.filter((p) => p.poll);
+  if (withPoll.length === 0) return posts;
+
+  const pollIds = withPoll.map((p) => p.poll.id);
+  const nonAnonPollIds = withPoll.filter((p) => !p.poll.anonymousVoting).map((p) => p.poll.id);
+
+  const [myVotes, voterRows] = await Promise.all([
+    viewerUserId
+      ? prisma.pollVote.findMany({
+          where: { userId: viewerUserId, pollId: { in: pollIds } },
+          select: { pollId: true, optionId: true }
+        })
+      : Promise.resolve([]),
+    nonAnonPollIds.length > 0
+      ? prisma.pollVote.findMany({
+          where: { pollId: { in: nonAnonPollIds } },
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                profile: { select: { profilePictureUrl: true } }
+              }
+            }
+          }
+        })
+      : Promise.resolve([])
+  ]);
+
+  const myVoteByPoll = new Map(myVotes.map((v) => [v.pollId, v.optionId]));
+  const votersByPollOption = new Map();
+  for (const v of voterRows) {
+    const key = `${v.pollId}:${v.optionId}`;
+    if (!votersByPollOption.has(key)) votersByPollOption.set(key, []);
+    votersByPollOption.get(key).push({
+      id: v.user.id,
+      firstName: v.user.firstName,
+      lastName: v.user.lastName,
+      profile: v.user.profile
+    });
+  }
+
+  return posts.map((post) => {
+    if (!post.poll) return post;
+    const p = post.poll;
+    const options = (p.options || []).map((opt) => {
+      const voteCount = opt._count?.votes ?? 0;
+      const voters = p.anonymousVoting
+        ? null
+        : votersByPollOption.get(`${p.id}:${opt.id}`) || [];
+      return {
+        id: opt.id,
+        text: opt.text,
+        sortOrder: opt.sortOrder,
+        voteCount,
+        voters
+      };
+    });
+    const totalVotes = options.reduce((s, o) => s + o.voteCount, 0);
+    const expiresAt = p.expiresAt ? p.expiresAt.toISOString() : null;
+    const isExpired = p.expiresAt ? new Date(p.expiresAt) <= new Date() : false;
+    const pollClient = {
+      id: p.id,
+      anonymousVoting: p.anonymousVoting,
+      expiresAt,
+      isExpired,
+      options,
+      myVoteOptionId: viewerUserId ? (myVoteByPoll.get(p.id) ?? null) : null,
+      totalVotes
+    };
+    const { poll: _raw, ...rest } = post;
+    return { ...rest, poll: pollClient };
+  });
+}
+
 async function shouldNotify(userId, type) {
   try {
     const prefs = await prisma.notificationPreferences.findUnique({
@@ -103,6 +181,7 @@ async function shouldNotify(userId, type) {
       case 'group_new_post':      return prefs.groupNewPost;
       case 'group_announcement':  return prefs.groupNewPost;
       case 'group_event':         return prefs.groupNewPost;
+      case 'group_poll':          return prefs.groupNewPost;
       case 'security_alert':      return true;
       case 'marketplace_listing': return true;
       default:                    return true;
@@ -1044,10 +1123,26 @@ app.put('/api/profile/update', async (req, res) => {
 // Create a post
 app.post('/api/posts/create', async (req, res) => {
   try {
-    const { title, content, imageUrl, imageUrls, authorId, groupId, postType} = req.body;
+    const {
+      title,
+      content,
+      imageUrl,
+      imageUrls,
+      authorId,
+      groupId,
+      postType,
+      pollOptions,
+      anonymousVoting,
+      expiresAt
+    } = req.body;
 
-    if (!title || !content || !authorId) {
+    const resolvedType = postType || 'POST';
+
+    if (resolvedType !== 'POLL' && (!title || !content || !authorId)) {
       return res.status(400).json({ message: 'Title, content, and author are required' });
+    }
+    if (resolvedType === 'POLL' && (!title?.trim() || !authorId)) {
+      return res.status(400).json({ message: 'Title and author are required' });
     }
 
     // If posting to a group, verify the author is a member
@@ -1058,6 +1153,90 @@ app.post('/api/posts/create', async (req, res) => {
       if (!membership) {
         return res.status(403).json({ message: 'You must be a group member to post here' });
       }
+    }
+
+    if (resolvedType === 'POLL') {
+      const rawOpts = Array.isArray(pollOptions) ? pollOptions : [];
+      const options = rawOpts.map((o) => String(o).trim()).filter(Boolean);
+      if (options.length < 2 || options.length > 5) {
+        return res.status(400).json({ message: 'Poll must have between 2 and 5 non-empty options' });
+      }
+      let expiresAtDate = null;
+      if (expiresAt != null && String(expiresAt).trim() !== '') {
+        expiresAtDate = new Date(expiresAt);
+        if (Number.isNaN(expiresAtDate.getTime())) {
+          return res.status(400).json({ message: 'Invalid expiration date' });
+        }
+      }
+
+      const created = await prisma.$transaction(async (tx) => {
+        const post = await tx.post.create({
+          data: {
+            title,
+            content: typeof content === 'string' ? content : '',
+            imageUrl: null,
+            authorId,
+            groupId: groupId || null,
+            postType: 'POLL'
+          },
+          include: {
+            author: {
+              select: { id: true, firstName: true, lastName: true, email: true }
+            }
+          }
+        });
+        const poll = await tx.poll.create({
+          data: {
+            postId: post.id,
+            anonymousVoting: !!anonymousVoting,
+            expiresAt: expiresAtDate
+          }
+        });
+        await tx.pollOption.createMany({
+          data: options.map((text, i) => ({
+            pollId: poll.id,
+            text,
+            sortOrder: i
+          }))
+        });
+        const fullPoll = await tx.poll.findUnique({
+          where: { id: poll.id },
+          include: {
+            options: {
+              orderBy: { sortOrder: 'asc' },
+              include: { _count: { select: { votes: true } } }
+            }
+          }
+        });
+        return { post, poll: fullPoll };
+      });
+
+      if (groupId) {
+        const groupMembers = await prisma.groupMember.findMany({
+          where: { groupId, userId: { not: authorId } },
+          select: { userId: true }
+        });
+        const notifType = 'group_poll';
+        for (const member of groupMembers) {
+          if (await shouldNotify(member.userId, 'group_message')) {
+            await prisma.notification.create({
+              data: {
+                recipientId: member.userId,
+                actorId: authorId,
+                type: notifType,
+                postId: created.post.id,
+                groupId
+              }
+            });
+          }
+        }
+      }
+
+      const [enriched] = await enrichPollsForPosts(
+        [{ ...created.post, poll: created.poll }],
+        authorId
+      );
+      return res.status(201).json({ message: 'Poll created successfully', post: enriched });
     }
 
     let storedImageUrl = imageUrl;
@@ -1072,7 +1251,7 @@ app.post('/api/posts/create', async (req, res) => {
         imageUrl: storedImageUrl,
         authorId,
         groupId: groupId || null,
-        postType: postType || 'POST'
+        postType: resolvedType
       },
       include: {
         author: {
@@ -1088,9 +1267,9 @@ app.post('/api/posts/create', async (req, res) => {
     select: { userId: true }
   });
 
-  const notifType = postType === 'ANNOUNCEMENT'
+  const notifType = resolvedType === 'ANNOUNCEMENT'
     ? 'group_announcement'
-    : postType === 'EVENT'
+    : resolvedType === 'EVENT'
     ? 'group_event'
     : 'group_new_post';
 
@@ -1161,7 +1340,17 @@ app.get('/api/posts', async (req, res) => {
           select: {
             id: true
           }
-        } : false
+        } : false,
+        poll: {
+          include: {
+            options: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                _count: { select: { votes: true } }
+              }
+            }
+          }
+        }
       }
     });
 
@@ -1177,7 +1366,9 @@ app.get('/api/posts', async (req, res) => {
       };
     });
 
-    res.status(200).json({ posts: postsWithLikeStatus });
+    const postsOut = await enrichPollsForPosts(postsWithLikeStatus, userId || null);
+
+    res.status(200).json({ posts: postsOut });
 
   } catch (error) {
     console.error('Get posts error:', error);
@@ -1228,10 +1419,78 @@ app.get('/api/posts/:postId/likes', async (req, res) => {
   }
 });
 
+// Vote on a poll (single choice per user)
+app.post('/api/posts/:postId/poll/vote', async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const { userId, optionId } = req.body;
+
+    if (!userId || !optionId) {
+      return res.status(400).json({ message: 'userId and optionId are required' });
+    }
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: {
+        poll: {
+          include: {
+            options: { select: { id: true } }
+          }
+        }
+      }
+    });
+
+    if (!post || post.postType !== 'POLL' || !post.poll) {
+      return res.status(404).json({ message: 'Poll not found' });
+    }
+
+    if (post.poll.expiresAt && new Date(post.poll.expiresAt) <= new Date()) {
+      return res.status(400).json({ message: 'This poll has ended' });
+    }
+
+    const validOption = post.poll.options.some((o) => o.id === optionId);
+    if (!validOption) {
+      return res.status(400).json({ message: 'Invalid option' });
+    }
+
+    try {
+      await prisma.pollVote.create({
+        data: {
+          pollId: post.poll.id,
+          optionId,
+          userId
+        }
+      });
+    } catch (e) {
+      if (e.code === 'P2002') {
+        return res.status(400).json({ message: 'You have already voted on this poll' });
+      }
+      throw e;
+    }
+
+    const fullPoll = await prisma.poll.findUnique({
+      where: { id: post.poll.id },
+      include: {
+        options: {
+          orderBy: { sortOrder: 'asc' },
+          include: { _count: { select: { votes: true } } }
+        }
+      }
+    });
+
+    const [enriched] = await enrichPollsForPosts([{ ...post, poll: fullPoll }], userId);
+    res.status(200).json({ message: 'Vote recorded', poll: enriched.poll });
+  } catch (error) {
+    console.error('Poll vote error:', error);
+    res.status(500).json({ message: 'An error occurred while recording your vote' });
+  }
+});
+
 // Get single post
 app.get('/api/posts/:postId', async (req, res) => {
   try {
     const { postId } = req.params;
+    const viewerId = req.query.userId;
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
@@ -1267,6 +1526,16 @@ app.get('/api/posts/:postId', async (req, res) => {
             likes: true,
             shares: true
           }
+        },
+        poll: {
+          include: {
+            options: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                _count: { select: { votes: true } }
+              }
+            }
+          }
         }
       }
     });
@@ -1276,11 +1545,14 @@ app.get('/api/posts/:postId', async (req, res) => {
     }
 
     const imageUrls = parsePostImages(post.imageUrl);
-    const postWithImages = {
+    let postWithImages = {
       ...post,
       imageUrls: imageUrls.length > 0 ? imageUrls : null,
       imageUrl: imageUrls[0] || post.imageUrl
     };
+
+    const [out] = await enrichPollsForPosts([postWithImages], viewerId || null);
+    postWithImages = out;
 
     res.status(200).json({ post: postWithImages });
 
@@ -1336,6 +1608,10 @@ app.put('/api/posts/:postId', async (req, res) => {
 
     if (post.authorId !== userId) {
       return res.status(403).json({ message: 'Not authorized to edit this post' });
+    }
+
+    if (post.postType === 'POLL') {
+      return res.status(400).json({ message: 'Poll posts cannot be edited' });
     }
 
     let storedImageUrl = post.imageUrl;
@@ -3696,6 +3972,7 @@ app.get('/api/groups/:groupId', async (req, res) => {
 app.get('/api/groups/:groupId/posts', async (req, res) => {
   try {
     const { groupId } = req.params;
+    const { userId } = req.query;
 
     const posts = await prisma.post.findMany({
       where: { groupId },
@@ -3712,12 +3989,41 @@ app.get('/api/groups/:groupId/posts', async (req, res) => {
           }
         },
         _count: {
-          select: { comments: true, likes: true }
+          select: { comments: true, likes: true, shares: true }
+        },
+        likes: userId
+          ? {
+              where: { userId },
+              select: { id: true }
+            }
+          : false,
+        poll: {
+          include: {
+            options: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                _count: { select: { votes: true } }
+              }
+            }
+          }
         }
       }
     });
 
-    res.status(200).json({ posts });
+    const mapped = posts.map((post) => {
+      const imageUrls = parsePostImages(post.imageUrl);
+      return {
+        ...post,
+        imageUrls: imageUrls.length > 0 ? imageUrls : null,
+        imageUrl: imageUrls[0] || post.imageUrl,
+        isLiked: userId ? post.likes?.length > 0 : false,
+        likes: undefined
+      };
+    });
+
+    const out = await enrichPollsForPosts(mapped, userId || null);
+
+    res.status(200).json({ posts: out });
   } catch (error) {
     console.error('Get group posts error:', error);
     res.status(500).json({ message: 'An error occurred while fetching group posts' });

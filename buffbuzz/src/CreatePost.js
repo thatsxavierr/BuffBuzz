@@ -6,13 +6,19 @@ import Footer from './Footer';
 import ImageCropModal from './ImageCropModal';
 
 const MAX_POST_IMAGES = 5;
+const MAX_POLL_OPTIONS = 5;
+const MIN_POLL_OPTIONS = 2;
 
 export default function CreatePost() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [profilePicture, setProfilePicture] = useState(null);
+  const [postKind, setPostKind] = useState('post');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [anonymousVoting, setAnonymousVoting] = useState(false);
+  const [expiresAt, setExpiresAt] = useState('');
   const [imagePreviews, setImagePreviews] = useState([]);
   /** Data URLs waiting to be cropped (FIFO). */
   const [cropQueue, setCropQueue] = useState([]);
@@ -54,7 +60,30 @@ export default function CreatePost() {
   };
 
   const hasUnsavedChanges = () => {
+    if (postKind === 'poll') {
+      const opts = pollOptions.map((o) => o.trim()).filter(Boolean);
+      return !!(title?.trim() || content?.trim() || opts.length > 0 || expiresAt);
+    }
     return !!(title?.trim() || content?.trim() || imagePreviews.length > 0);
+  };
+
+  const setPollOptionAt = (index, value) => {
+    setPollOptions((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const addPollOption = () => {
+    setPollOptions((prev) => (prev.length >= MAX_POLL_OPTIONS ? prev : [...prev, '']));
+  };
+
+  const removePollOption = (index) => {
+    setPollOptions((prev) => {
+      if (prev.length <= MIN_POLL_OPTIONS) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleBackClick = () => {
@@ -191,23 +220,49 @@ export default function CreatePost() {
     setLoading(true);
 
     try {
+      let body;
+      if (postKind === 'poll') {
+        const opts = pollOptions.map((o) => String(o).trim()).filter(Boolean);
+        if (opts.length < MIN_POLL_OPTIONS || opts.length > MAX_POLL_OPTIONS) {
+          alert(`Please provide between ${MIN_POLL_OPTIONS} and ${MAX_POLL_OPTIONS} poll options.`);
+          setLoading(false);
+          return;
+        }
+        if (!title.trim()) {
+          alert('Please enter a poll question (title).');
+          setLoading(false);
+          return;
+        }
+        body = {
+          title: title.trim(),
+          content: content.trim(),
+          postType: 'POLL',
+          pollOptions: opts,
+          anonymousVoting,
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+          authorId: user.id
+        };
+      } else {
+        body = {
+          title,
+          content,
+          imageUrls: imagePreviews.length > 0 ? imagePreviews : undefined,
+          authorId: user.id
+        };
+      }
+
       const response = await fetch('http://localhost:5000/api/posts/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          title,
-          content,
-          imageUrls: imagePreviews.length > 0 ? imagePreviews : undefined,
-          authorId: user.id
-        })
+        body: JSON.stringify(body)
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        alert('Post created successfully!');
+        alert(postKind === 'poll' ? 'Poll created successfully!' : 'Post created successfully!');
         navigate('/main');
       } else {
         alert(data.message || 'Failed to create post');
@@ -231,32 +286,101 @@ export default function CreatePost() {
       <div className="create-post-container">
         <div className="create-post-box">
           <h2 className="create-post-title">Create New Post</h2>
+
+          <div className="form-group create-post-kind-toggle">
+            <label>Type</label>
+            <div className="create-post-kind-buttons">
+              <button
+                type="button"
+                className={postKind === 'post' ? 'kind-active' : ''}
+                onClick={() => setPostKind('post')}
+              >
+                Standard post
+              </button>
+              <button
+                type="button"
+                className={postKind === 'poll' ? 'kind-active' : ''}
+                onClick={() => setPostKind('poll')}
+              >
+                Poll
+              </button>
+            </div>
+          </div>
           
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="title">Title</label>
+              <label htmlFor="title">{postKind === 'poll' ? 'Poll question *' : 'Title'}</label>
               <input
                 type="text"
                 id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter post title..."
+                placeholder={postKind === 'poll' ? 'What do you want to ask?' : 'Enter post title...'}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label htmlFor="content">Content</label>
+              <label htmlFor="content">{postKind === 'poll' ? 'Description (optional)' : 'Content'}</label>
               <textarea
                 id="content"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="What's on your mind?"
-                rows="8"
-                required
+                placeholder={postKind === 'poll' ? 'Add context for your poll…' : "What's on your mind?"}
+                rows={postKind === 'poll' ? 4 : 8}
+                required={postKind !== 'poll'}
               />
             </div>
 
+            {postKind === 'poll' && (
+              <>
+                <div className="form-group">
+                  <label>Options ({MIN_POLL_OPTIONS}–{MAX_POLL_OPTIONS})</label>
+                  {pollOptions.map((opt, i) => (
+                    <div key={i} className="poll-option-input-row">
+                      <input
+                        type="text"
+                        value={opt}
+                        onChange={(e) => setPollOptionAt(i, e.target.value)}
+                        placeholder={`Option ${i + 1}`}
+                        maxLength={200}
+                      />
+                      {pollOptions.length > MIN_POLL_OPTIONS && (
+                        <button type="button" className="poll-remove-opt" onClick={() => removePollOption(i)}>
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {pollOptions.length < MAX_POLL_OPTIONS && (
+                    <button type="button" className="poll-add-opt" onClick={addPollOption}>
+                      + Add option
+                    </button>
+                  )}
+                </div>
+                <div className="form-group create-post-checkbox-row">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={anonymousVoting}
+                      onChange={(e) => setAnonymousVoting(e.target.checked)}
+                    />
+                    Anonymous voting (hide names on results)
+                  </label>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="expiresAt">End date & time (optional)</label>
+                  <input
+                    type="datetime-local"
+                    id="expiresAt"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
+            {postKind === 'post' && (
             <div className="form-group">
               <label htmlFor="image">Add Images (Optional)</label>
               <div className="image-upload-area">
@@ -303,6 +427,7 @@ export default function CreatePost() {
                 </div>
               )}
             </div>
+            )}
 
             <div className="form-actions">
               <button 
@@ -318,7 +443,7 @@ export default function CreatePost() {
                 className="submit-button"
                 disabled={loading || cropQueue.length > 0}
               >
-                {loading ? 'Creating...' : 'Create Post'}
+                {loading ? 'Creating...' : postKind === 'poll' ? 'Create Poll' : 'Create Post'}
               </button>
             </div>
           </form>
