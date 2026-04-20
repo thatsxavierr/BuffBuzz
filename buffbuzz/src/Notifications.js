@@ -142,7 +142,10 @@ export default function Notifications() {
       event: '📅',
       message: '✉️',
       marketplace_listing: '🛒',
-      lostfound_listing: '🔍'
+      lostfound_listing: '🔍',
+      lostfound_resolved: '✅',
+      platform_announcement: '📣',
+      newsletter_post: '📰'
     };
     return icons[type] || '🔔';
   };
@@ -318,6 +321,12 @@ export default function Notifications() {
                   if (notification.type === 'group_chat_mention' && notification.conversationId) {
                     if (!notification.read) markAsRead(notification.id);
                     navigate('/main', { state: { openConversationId: notification.conversationId } });
+                  } else if (
+                    notification.type === 'platform_announcement' ||
+                    notification.type === 'newsletter_post'
+                  ) {
+                    if (!notification.read) markAsRead(notification.id);
+                    navigate('/newsletter');
                   } else if (!notification.read) {
                     markAsRead(notification.id);
                   }

@@ -243,13 +243,14 @@ export default function LostFound() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, resolved })
       });
-      const data = await response.json();
+      let data = {};
+      try { data = await response.json(); } catch (_) {}
       if (response.ok) {
         fetchItems(filter === 'all' ? null : filter, searchTerm);
         if (detailItem?.id === itemId) setDetailItem(prev => ({ ...prev, resolved }));
         if (resolved) window.dispatchEvent(new Event('notificationsUpdated'));
       } else {
-        alert(data.message || 'Failed to update item');
+        alert(data.message || `Failed to update item (${response.status})`);
       }
     } catch (error) {
       console.error('Error updating resolved status:', error);

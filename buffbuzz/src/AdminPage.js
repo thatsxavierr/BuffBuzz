@@ -29,6 +29,11 @@ export default function AdminPage() {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportFilter, setReportFilter] = useState('PENDING');
 
+  // ── Platform announcements (newsletters) ─────────────────────────
+  const [announcements, setAnnouncements] = useState([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(false);
+  const [announcementForm, setAnnouncementForm] = useState({ title: '', content: '' });
+
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user') || 'null');
     if (!userData) { navigate('/login'); return; }
@@ -45,7 +50,53 @@ export default function AdminPage() {
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'content') fetchPosts();
     if (activeTab === 'reports') fetchReports();
+    if (activeTab === 'announcements') fetchAnnouncements();
   }, [activeTab, user]);
+
+  const fetchAnnouncements = async () => {
+    setAnnouncementsLoading(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/announcements');
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncements(data.announcements || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAnnouncementsLoading(false);
+    }
+  };
+
+  const handlePublishAnnouncement = async (e) => {
+    e.preventDefault();
+    if (!announcementForm.title.trim() || !announcementForm.content.trim()) {
+      showMsg('error', 'Title and content are required');
+      return;
+    }
+    try {
+      const res = await fetch('http://localhost:5000/api/admin/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminUserId: user.id,
+          title: announcementForm.title.trim(),
+          content: announcementForm.content.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMsg('success', 'Announcement published. All users were notified.');
+        setAnnouncementForm({ title: '', content: '' });
+        fetchAnnouncements();
+        window.dispatchEvent(new Event('notificationsUpdated'));
+      } else {
+        showMsg('error', data.message || 'Failed to publish');
+      }
+    } catch (err) {
+      showMsg('error', 'An error occurred');
+    }
+  };
 
   const showMsg = (type, text) => {
     setMessage({ type, text });
@@ -200,6 +251,7 @@ export default function AdminPage() {
             { key: 'users',     icon: '👥', label: 'Users' },
             { key: 'content',   icon: '📝', label: 'Content' },
             { key: 'reports',   icon: '🚨', label: 'Reports' },
+            { key: 'announcements', icon: '📣', label: 'Announcements' },
           ].map(({ key, icon, label }) => (
             <button
               key={key}
@@ -422,6 +474,96 @@ export default function AdminPage() {
         )}
 
         {/* ── REPORTS ── */}
+        {activeTab === 'announcements' && (
+          <div className="admin-content">
+            <div className="admin-content-header">
+              <h1>Platform announcements</h1>
+              <p style={{ margin: '8px 0 0', color: '#6b7280', fontSize: 15 }}>
+                These appear in everyone&apos;s Newsletter feed and trigger a notification for all active users.
+              </p>
+            </div>
+
+            <form
+              onSubmit={handlePublishAnnouncement}
+              style={{
+                background: '#fff',
+                border: '1px solid #e5e7eb',
+                borderRadius: 12,
+                padding: 24,
+                marginBottom: 28,
+                maxWidth: 720,
+              }}
+            >
+              <h2 style={{ margin: '0 0 16px', fontSize: 18, color: '#800000' }}>New announcement</h2>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: 14 }}>Title</label>
+              <input
+                type="text"
+                value={announcementForm.title}
+                onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
+                placeholder="Short headline"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '10px 12px',
+                  marginBottom: 14,
+                  borderRadius: 8,
+                  border: '1px solid #e5e7eb',
+                  fontSize: 15,
+                }}
+                maxLength={200}
+              />
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: 14 }}>Message</label>
+              <textarea
+                value={announcementForm.content}
+                onChange={(e) => setAnnouncementForm({ ...announcementForm, content: e.target.value })}
+                placeholder="Full announcement text…"
+                rows={8}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '10px 12px',
+                  marginBottom: 16,
+                  borderRadius: 8,
+                  border: '1px solid #e5e7eb',
+                  fontSize: 15,
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                }}
+              />
+              <button type="submit" className="admin-refresh-btn" style={{ cursor: 'pointer', border: 'none' }}>
+                Publish to all users
+              </button>
+            </form>
+
+            {announcementsLoading ? (
+              <div className="admin-loading">Loading announcements…</div>
+            ) : announcements.length === 0 ? (
+              <div className="admin-empty">No announcements yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {announcements.map((a) => (
+                  <div
+                    key={a.id}
+                    style={{
+                      background: '#fff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 12,
+                      padding: 20,
+                      borderLeft: '4px solid #800000',
+                    }}
+                  >
+                    <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 8 }}>
+                      {new Date(a.createdAt).toLocaleString()} · {a.author?.firstName} {a.author?.lastName}
+                    </div>
+                    <h3 style={{ margin: '0 0 10px', fontSize: 18 }}>{a.title}</h3>
+                    <p style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#374151', lineHeight: 1.6 }}>{a.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'reports' && (
           <div className="admin-content">
             <div className="admin-content-header">
