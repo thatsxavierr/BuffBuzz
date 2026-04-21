@@ -40,7 +40,6 @@ export default function Marketplace() {
     }
   }, [navigate]);
 
-  // Debounced search — re-runs whenever searchTerm or filter changes
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoading(true);
@@ -69,7 +68,6 @@ export default function Marketplace() {
       if (search && search.trim()) params.set('search', search.trim());
       const query = params.toString();
       const url = `http://localhost:5000/api/marketplace${query ? `?${query}` : ''}`;
-
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -121,7 +119,6 @@ export default function Marketplace() {
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     const validTypes = files.filter(f => allowedTypes.includes(f.type));
     if (validTypes.length !== files.length) {
@@ -129,21 +126,18 @@ export default function Marketplace() {
       e.target.value = '';
       return;
     }
-
     const overSize = validTypes.filter(f => f.size > MAX_IMAGE_SIZE_BYTES);
     if (overSize.length > 0) {
       alert(`Each image must be ${MAX_IMAGE_SIZE_MB}MB or smaller. ${overSize.length} image(s) were not added.`);
       e.target.value = '';
       return;
     }
-
     const current = formData.imageUrls || [];
     const remaining = MAX_IMAGES - current.length;
     const toAdd = validTypes.slice(0, remaining);
     if (toAdd.length < validTypes.length) {
       alert(`Maximum ${MAX_IMAGES} images per listing. ${validTypes.length - toAdd.length} image(s) not added.`);
     }
-
     Promise.all(toAdd.map(file => new Promise(resolve => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result);
@@ -263,14 +257,13 @@ export default function Marketplace() {
           <button className="sell-item-button" onClick={() => setShowCreateModal(true)}>
             + Sell Item
           </button>
-
           <div className="filter-buttons">
             {[
-              { key: 'all', label: 'All Items' },
-              { key: 'textbooks', label: 'Textbooks' },
+              { key: 'all',         label: 'All Items' },
+              { key: 'textbooks',   label: 'Textbooks' },
               { key: 'electronics', label: 'Electronics' },
-              { key: 'furniture', label: 'Furniture' },
-              { key: 'other', label: 'Other' }
+              { key: 'furniture',   label: 'Furniture' },
+              { key: 'other',       label: 'Other' }
             ].map(({ key, label }) => (
               <button
                 key={key}
@@ -286,21 +279,21 @@ export default function Marketplace() {
         {/* Search Bar */}
         <div className="search-bar-wrapper" style={{ marginBottom: '24px' }}>
           <div className="search-bar">
-            <span className="search-icon">🔍</span>
+            <span className="search-icon" aria-hidden="true">🔍</span>
             <input
               type="text"
               className="search-input"
               placeholder="Search by title or description…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Search marketplace listings"
             />
             {searchTerm && (
-              <button className="search-clear-btn" onClick={() => setSearchTerm('')}>✕</button>
+              <button className="search-clear-btn" onClick={() => setSearchTerm('')} aria-label="Clear search">✕</button>
             )}
           </div>
         </div>
 
-        {/* Results summary */}
         {!loading && searchTerm.trim() && (
           <p className="search-results-summary">
             {items.length === 0
@@ -315,15 +308,9 @@ export default function Marketplace() {
           ) : items.length === 0 ? (
             <div className="no-items">
               {searchTerm.trim() ? (
-                <>
-                  <h3>No items found</h3>
-                  <p>Try a different keyword or clear the search.</p>
-                </>
+                <><h3>No items found</h3><p>Try a different keyword or clear the search.</p></>
               ) : (
-                <>
-                  <h3>No items available</h3>
-                  <p>Be the first to list an item!</p>
-                </>
+                <><h3>No items available</h3><p>Be the first to list an item!</p></>
               )}
             </div>
           ) : (
@@ -335,22 +322,46 @@ export default function Marketplace() {
                   className="marketplace-card"
                   role="button"
                   tabIndex={0}
+                  aria-label={`View listing: ${item.title}, $${parseFloat(item.price).toFixed(2)}`}
                   onClick={() => setDetailItem(item)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailItem(item); } }}
                 >
                   {images.length > 0 ? (
-                    <ImageCarousel images={images} alt={item.title} className="marketplace-image" />
+                    /* ✅ alt describes the item + condition */
+                    <ImageCarousel
+                      images={images}
+                      alt={`${item.title} – ${formatCondition(item.condition)} condition`}
+                      className="marketplace-image"
+                    />
                   ) : (
                     <div className="marketplace-image-placeholder">
-                      <span className="placeholder-icon">📦</span>
+                      {/* ✅ decorative emoji hidden from screen readers */}
+                      <span className="placeholder-icon" aria-hidden="true">📦</span>
                     </div>
                   )}
+
                   {user.id === item.sellerId && (
                     <div className="item-owner-actions" onClick={(e) => e.stopPropagation()}>
-                      <button className="edit-item-button" onClick={() => handleEditItem(item)} title="Edit this listing">✏️</button>
-                      <button className="delete-item-button" onClick={() => handleDeleteItem(item.id)} title="Delete this listing">🗑️</button>
+                      {/* ✅ aria-label on icon-only buttons */}
+                      <button
+                        className="edit-item-button"
+                        onClick={() => handleEditItem(item)}
+                        aria-label="Edit this listing"
+                        title="Edit this listing"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        className="delete-item-button"
+                        onClick={() => handleDeleteItem(item.id)}
+                        aria-label="Delete this listing"
+                        title="Delete this listing"
+                      >
+                        🗑️
+                      </button>
                     </div>
                   )}
+
                   <div className="marketplace-content">
                     <div className="item-header">
                       <h3>{item.title}</h3>
@@ -383,17 +394,24 @@ export default function Marketplace() {
         </div>
       </div>
 
+      {/* Create / Edit Modal */}
       {showCreateModal && (
         <div className="modal-overlay" onClick={handleCloseCreateModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingItemId ? 'Edit listing' : 'Create new listing'}
+          >
             <div className="modal-header">
               <h2>{editingItemId ? 'Edit Listing' : 'List an Item for Sale'}</h2>
-              <button className="close-modal" onClick={handleCloseCreateModal}>×</button>
+              <button className="close-modal" onClick={handleCloseCreateModal} aria-label="Close">×</button>
             </div>
 
             {profilePrivacy && profilePrivacy !== 'PUBLIC' && (
               <div className="privacy-warning-banner">
-                ⚠️ Your profile is currently set to <strong>{profilePrivacy === 'FRIENDS_ONLY' ? 'Friends Only' : 'Private'}</strong>. 
+                ⚠️ Your profile is currently set to <strong>{profilePrivacy === 'FRIENDS_ONLY' ? 'Friends Only' : 'Private'}</strong>.
                 Buyers won't be able to view your profile. Consider switching to <strong>Public</strong> in your profile settings so people can contact you.
               </div>
             )}
@@ -401,50 +419,20 @@ export default function Marketplace() {
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label htmlFor="title">Item Title *</label>
-                <input
-                  type="text"
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="e.g., Chemistry Textbook 10th Edition"
-                  required
-                />
+                <input type="text" id="title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="e.g., Chemistry Textbook 10th Edition" required />
               </div>
-
               <div className="form-group">
                 <label htmlFor="description">Description *</label>
-                <textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Provide details about the item..."
-                  rows="4"
-                  required
-                />
+                <textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Provide details about the item..." rows="4" required />
               </div>
-
               <div className="form-row">
                 <div className="form-group">
                   <label htmlFor="price">Price ($) *</label>
-                  <input
-                    type="number"
-                    id="price"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    required
-                  />
+                  <input type="number" id="price" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} placeholder="0.00" min="0" step="0.01" required />
                 </div>
                 <div className="form-group">
                   <label htmlFor="category">Category *</label>
-                  <select
-                    id="category"
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    required
-                  >
+                  <select id="category" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} required>
                     <option value="TEXTBOOKS">Textbooks</option>
                     <option value="ELECTRONICS">Electronics</option>
                     <option value="FURNITURE">Furniture</option>
@@ -454,23 +442,16 @@ export default function Marketplace() {
                   </select>
                 </div>
               </div>
-
               <div className="form-group">
                 <label>Condition *</label>
                 <div className="condition-selector">
                   {['NEW', 'LIKE_NEW', 'GOOD', 'FAIR'].map(c => (
-                    <button
-                      key={c}
-                      type="button"
-                      className={`condition-option ${formData.condition === c ? 'selected' : ''}`}
-                      onClick={() => setFormData({ ...formData, condition: c })}
-                    >
+                    <button key={c} type="button" className={`condition-option ${formData.condition === c ? 'selected' : ''}`} onClick={() => setFormData({ ...formData, condition: c })}>
                       {formatCondition(c)}
                     </button>
                   ))}
                 </div>
               </div>
-
               <div className="form-group">
                 <label htmlFor="image">Add Images (Optional, up to 5)</label>
                 <p className="image-size-hint">Each image must be 5MB or smaller.</p>
@@ -479,14 +460,13 @@ export default function Marketplace() {
                   <div className="image-previews-grid">
                     {formData.imageUrls.map((src, index) => (
                       <div key={index} className="image-preview-item">
-                        <img src={src} alt={`Preview ${index + 1}`} className="image-preview" />
-                        <button type="button" onClick={() => handleRemoveImage(index)} className="remove-image-button" aria-label="Remove image">×</button>
+                        <img src={src} alt={`Listing image preview ${index + 1} of ${formData.imageUrls.length}`} className="image-preview" />
+                        <button type="button" onClick={() => handleRemoveImage(index)} className="remove-image-button" aria-label={`Remove image ${index + 1}`}>×</button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-
               <div className="modal-actions">
                 <button type="button" onClick={handleCloseCreateModal} className="cancel-btn">Cancel</button>
                 <button type="submit" className="submit-btn">{editingItemId ? 'Save Changes' : 'List Item'}</button>
@@ -496,20 +476,28 @@ export default function Marketplace() {
         </div>
       )}
 
+      {/* Detail Modal */}
       {detailItem && (
         <div className="detail-modal-overlay" onClick={() => setDetailItem(null)}>
-          <div className="detail-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="detail-modal-close" onClick={() => setDetailItem(null)} aria-label="Close">×</button>
+          <div
+            className="detail-modal-content"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Listing detail: ${detailItem.title}`}
+          >
+            <button type="button" className="detail-modal-close" onClick={() => setDetailItem(null)} aria-label="Close listing detail">×</button>
             <div className="detail-modal-carousel">
               {(detailItem.imageUrls?.length > 0 || detailItem.imageUrl) ? (
+                /* ✅ descriptive alt for detail view */
                 <ImageCarousel
                   images={detailItem.imageUrls?.length > 0 ? detailItem.imageUrls : [detailItem.imageUrl]}
-                  alt={detailItem.title}
+                  alt={`${detailItem.title} – marketplace listing`}
                   className="detail-carousel"
                 />
               ) : (
                 <div className="detail-modal-image-placeholder">
-                  <span className="placeholder-icon">📦</span>
+                  <span className="placeholder-icon" aria-hidden="true">📦</span>
                 </div>
               )}
             </div>
@@ -526,29 +514,17 @@ export default function Marketplace() {
               <div className="detail-modal-seller">
                 <span className="detail-seller-label">Sold by {detailItem.sellerName || 'Anonymous'}</span>
                 {detailItem.sellerId && (
-                  <button
-                    type="button"
-                    className="detail-view-profile-btn"
-                    onClick={() => { setDetailItem(null); navigate(`/profile-view/${detailItem.sellerId}`); }}
-                  >
+                  <button type="button" className="detail-view-profile-btn" onClick={() => { setDetailItem(null); navigate(`/profile-view/${detailItem.sellerId}`); }}>
                     View seller profile
                   </button>
                 )}
                 {detailItem.sellerId && detailItem.sellerId !== user.id && (
-                  <button
-                    type="button"
-                    className="message-button"
-                    onClick={() => { setDetailItem(null); handleMessageSeller(detailItem); }}
-                  >
+                  <button type="button" className="message-button" onClick={() => { setDetailItem(null); handleMessageSeller(detailItem); }}>
                     Message seller
                   </button>
                 )}
                 {detailItem.sellerId && detailItem.sellerId !== user.id && (
-                  <button
-                    type="button"
-                    className="detail-report-listing-btn"
-                    onClick={() => setReportListingId(detailItem.id)}
-                  >
+                  <button type="button" className="detail-report-listing-btn" onClick={() => setReportListingId(detailItem.id)}>
                     Report listing
                   </button>
                 )}
