@@ -817,3 +817,342 @@
 [data-theme="dark"] .guidelines-card ul { color: #94a3b8; }
 
 [data-theme="dark"] .guidelines-footer-note { color: #64748b; }
+
+/* ================================================================
+   CREATE POST PAGE
+   ================================================================ */
+[data-theme="dark"] .create-post-page {
+  background-color: #0f1117;
+}
+
+[data-theme="dark"] .create-post-container {
+  background-color: #0f1117;
+}
+
+[data-theme="dark"] .create-post-box {
+  background-color: #1e2130;
+  border-color: #2d3148;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+[data-theme="dark"] .create-post-title { color: #f87171; }
+
+[data-theme="dark"] .form-group label { color: #94a3b8; }
+
+[data-theme="dark"] .form-group input[type="text"],
+[data-theme="dark"] .form-group textarea,
+[data-theme="dark"] .form-group input[type="datetime-local"],
+[data-theme="dark"] .poll-option-input-row input {
+  background-color: #242736;
+  border-color: #2d3148;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .form-group input[type="text"]:focus,
+[data-theme="dark"] .form-group textarea:focus,
+[data-theme="dark"] .form-group input[type="datetime-local"]:focus,
+[data-theme="dark"] .poll-option-input-row input:focus {
+  border-color: #f87171;
+  box-shadow: 0 0 0 3px rgba(248,113,113,0.15);
+}
+
+[data-theme="dark"] .form-group input[type="text"]::placeholder,
+[data-theme="dark"] .form-group textarea::placeholder { color: #64748b; }
+
+/* Post type toggle buttons */
+[data-theme="dark"] .create-post-kind-buttons button {
+  background: #242736;
+  border-color: #2d3148;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .create-post-kind-buttons button.kind-active {
+  border-color: #f87171;
+  background: rgba(248,113,113,0.1);
+  color: #f87171;
+}
+
+/* Image upload area */
+[data-theme="dark"] .image-upload-label {
+  background-color: #242736;
+  border-color: #2d3148;
+}
+
+[data-theme="dark"] .image-upload-label:hover {
+  border-color: #f87171;
+  background-color: rgba(248,113,113,0.06);
+}
+
+[data-theme="dark"] .upload-main-text { color: #e2e8f0; }
+[data-theme="dark"] .upload-sub-text { color: #64748b; }
+
+[data-theme="dark"] .upload-label-disabled {
+  opacity: 0.35;
+}
+
+[data-theme="dark"] .image-preview-item {
+  border-color: #2d3148;
+}
+
+/* Poll options */
+[data-theme="dark"] .poll-remove-opt {
+  background: #242736;
+  border-color: #2d3148;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .poll-remove-opt:hover {
+  background: #2d3148;
+}
+
+[data-theme="dark"] .poll-add-opt { color: #f87171; }
+
+/* Cancel / Submit buttons */
+[data-theme="dark"] .cancel-button {
+  background-color: #242736;
+  color: #e2e8f0;
+  border-color: #2d3148;
+}
+
+[data-theme="dark"] .cancel-button:hover {
+  background-color: #2d3148;
+}
+
+/* Video preview */
+[data-theme="dark"] .video-preview-wrapper {
+  background: #242736;
+  border-color: #2d3148;
+}
+
+[data-theme="dark"] .video-preview-name { color: #e2e8f0; }
+[data-theme="dark"] .video-preview-size { color: #64748b; }
+
+[data-theme="dark"] .video-upload-progress-wrapper {
+  background: #2d3148;
+}
+
+[data-theme="dark"] .video-upload-success { color: #86efac; }
+
+/* Caption upload */
+[data-theme="dark"] .caption-upload-section {
+  border-top-color: #2d3148;
+}
+
+[data-theme="dark"] .caption-upload-label { color: #94a3b8; }
+[data-theme="dark"] .caption-upload-hint { color: #64748b; }
+
+[data-theme="dark"] .caption-file-selected {
+  background: #1a2d1a;
+  border-color: #166534;
+}
+
+[data-theme="dark"] .caption-file-name { color: #86efac; }
+
+[data-theme="dark"] .caption-remove-btn { color: #64748b; }
+[data-theme="dark"] .caption-remove-btn:hover { color: #ef4444; }
+
+[data-theme="dark"] .caption-uploading { color: #64748b; }
+[data-theme="dark"] .caption-upload-success { color: #86efac; }
+
+/* Error hint */
+[data-theme="dark"] .create-post-image-error {
+  background-color: #2d1515;
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .create-post-image-hint { color: #64748b; }
+
+/* ================================================================
+   PROFILE VIEW PAGE
+   ================================================================ */
+[data-theme="dark"] .profile-view-container {
+  background-color: #0f1117;
+}
+
+[data-theme="dark"] .profile-view-card {
+  background: #1e2130;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+/* Profile header banner — keep the maroon gradient, just darken slightly */
+[data-theme="dark"] .profile-header {
+  background: linear-gradient(135deg, #6b0000 0%, #8a0000 100%);
+}
+
+[data-theme="dark"] .profile-name-row h1 { color: #ffffff; }
+[data-theme="dark"] .pronouns { color: rgba(255,255,255,0.85); }
+[data-theme="dark"] .email { color: rgba(255,255,255,0.75); }
+
+/* Sections */
+[data-theme="dark"] .profile-section {
+  border-bottom-color: #2d3148;
+}
+
+[data-theme="dark"] .profile-section h2 { color: #f87171; }
+[data-theme="dark"] .bio-text,
+[data-theme="dark"] .clubs-text { color: #94a3b8; }
+
+[data-theme="dark"] .info-label { color: #64748b; }
+[data-theme="dark"] .info-value { color: #e2e8f0; }
+
+/* Social links */
+[data-theme="dark"] .social-link.instagram {
+  background: #2d1f2f;
+  color: #f87171;
+}
+[data-theme="dark"] .social-link.instagram:hover { background: #3d1f2f; }
+
+[data-theme="dark"] .social-link.linkedin {
+  background: #1e2d3d;
+  color: #93c5fd;
+}
+[data-theme="dark"] .social-link.linkedin:hover { background: #1e3a5f; }
+
+[data-theme="dark"] .social-link.facebook {
+  background: #1e2540;
+  color: #93c5fd;
+}
+[data-theme="dark"] .social-link.facebook:hover { background: #1e2d5f; }
+
+/* Privacy notice banner */
+[data-theme="dark"] .privacy-notice-section {
+  background-color: #2d2000;
+  border-bottom-color: #d97706;
+}
+[data-theme="dark"] .privacy-notice { color: #fcd34d; }
+
+/* No profile card */
+[data-theme="dark"] .no-profile-card {
+  background: #1e2130;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+[data-theme="dark"] .no-profile-card h2 { color: #f87171; }
+[data-theme="dark"] .no-profile-card p { color: #64748b; }
+
+/* Posts grid tiles */
+[data-theme="dark"] .profile-post-tile {
+  background: #242736;
+}
+[data-theme="dark"] .profile-post-tile-text-only {
+  background: linear-gradient(145deg, #242736 0%, #1e2130 100%);
+  color: #94a3b8;
+}
+
+/* Full post overlay */
+[data-theme="dark"] .profile-post-enhanced-overlay {
+  background: rgba(0,0,0,0.75);
+}
+[data-theme="dark"] .profile-post-enhanced-panel {
+  background: #1e2130;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6);
+}
+[data-theme="dark"] .profile-post-enhanced-header {
+  background: #161824;
+  border-bottom-color: #2d3148;
+}
+[data-theme="dark"] .profile-post-enhanced-heading { color: #e2e8f0; }
+[data-theme="dark"] .profile-post-enhanced-close { color: #94a3b8; }
+[data-theme="dark"] .profile-post-enhanced-close:hover {
+  background: #242736;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .profile-post-enhanced-body { background: #1e2130; }
+
+/* Report / Block buttons on profile */
+[data-theme="dark"] .profile-report-button {
+  border-color: #f87171;
+  color: #f87171;
+  background: transparent;
+}
+[data-theme="dark"] .profile-report-button:hover {
+  background: rgba(248,113,113,0.1);
+}
+
+/* ================================================================
+   PROFILE EDIT PAGE
+   ================================================================ */
+[data-theme="dark"] .profile-edit-container {
+  background-color: #0f1117;
+}
+
+[data-theme="dark"] .profile-edit-card {
+  background: #1e2130;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+[data-theme="dark"] .profile-edit-card h1 { color: #f87171; }
+
+[data-theme="dark"] .profile-picture-section {
+  border-bottom-color: #2d3148;
+}
+
+[data-theme="dark"] .profile-picture-preview {
+  border-color: #f87171;
+  background-color: #242736;
+}
+
+[data-theme="dark"] .section-header {
+  color: #f87171;
+  border-bottom-color: #2d3148;
+}
+
+[data-theme="dark"] .form-group label { color: #94a3b8; }
+
+[data-theme="dark"] .form-group input,
+[data-theme="dark"] .form-group select,
+[data-theme="dark"] .form-group textarea {
+  background-color: #242736;
+  border-color: #2d3148;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .form-group input:focus,
+[data-theme="dark"] .form-group select:focus,
+[data-theme="dark"] .form-group textarea:focus {
+  border-color: #f87171;
+}
+
+[data-theme="dark"] .form-group input::placeholder,
+[data-theme="dark"] .form-group textarea::placeholder { color: #64748b; }
+
+[data-theme="dark"] .form-group select {
+  background-color: #242736;
+  color: #e2e8f0;
+}
+
+/* @handle prefix inputs */
+[data-theme="dark"] .input-with-prefix {
+  border-color: #2d3148;
+}
+[data-theme="dark"] .input-with-prefix:focus-within {
+  border-color: #f87171;
+}
+[data-theme="dark"] .input-prefix {
+  background-color: #1e2130;
+  color: #64748b;
+  border-right-color: #2d3148;
+}
+[data-theme="dark"] .input-with-prefix input {
+  background-color: #242736;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .character-count { color: #64748b; }
+
+/* Form actions */
+[data-theme="dark"] .form-actions {
+  border-top-color: #2d3148;
+}
+
+[data-theme="dark"] .cancel-button {
+  background-color: #242736;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .cancel-button:hover { background-color: #2d3148; }
+
+[data-theme="dark"] .save-button {
+  background-color: #c0392b;
+  color: white;
+}
+[data-theme="dark"] .save-button:hover { background-color: #a93226; }
