@@ -42,7 +42,6 @@ export default function LostFound() {
     }
   }, [navigate]);
 
-  // Debounced search — re-runs whenever searchTerm or filter changes
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoading(true);
@@ -59,9 +58,7 @@ export default function LostFound() {
         if (data.profile?.profilePictureUrl) setProfilePicture(data.profile.profilePictureUrl);
         setProfilePrivacy(data.profile?.privacy || 'PUBLIC');
       }
-    } catch (error) {
-      console.error('Error fetching profile picture:', error);
-    }
+    } catch (error) { console.error('Error fetching profile picture:', error); }
   };
 
   const fetchItems = async (category = null, search = '') => {
@@ -71,29 +68,20 @@ export default function LostFound() {
       if (search && search.trim()) params.set('search', search.trim());
       const query = params.toString();
       const url = `${API_URL}/api/lostfound${query ? `?${query}` : ''}`;
-
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setItems(data.items || []);
       }
-    } catch (error) {
-      console.error('Error fetching lost/found items:', error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error('Error fetching lost/found items:', error); }
+    finally { setLoading(false); }
   };
 
   const handleBackClick = () => navigate('/main');
 
   const hasUnsavedChanges = () => !!(
-    formData.title?.trim() ||
-    formData.description?.trim() ||
-    formData.location?.trim() ||
-    formData.date ||
-    formData.contactInfo?.trim() ||
-    (formData.imageUrls?.length > 0) ||
-    formData.category !== 'LOST'
+    formData.title?.trim() || formData.description?.trim() || formData.location?.trim() ||
+    formData.date || formData.contactInfo?.trim() || (formData.imageUrls?.length > 0) || formData.category !== 'LOST'
   );
 
   const handleCloseCreateModal = () => {
@@ -126,29 +114,15 @@ export default function LostFound() {
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     const validTypes = files.filter(f => allowedTypes.includes(f.type));
-    if (validTypes.length !== files.length) {
-      alert('Only image files are accepted (JPEG, PNG, GIF, WebP).');
-      e.target.value = '';
-      return;
-    }
-
+    if (validTypes.length !== files.length) { alert('Only image files are accepted (JPEG, PNG, GIF, WebP).'); e.target.value = ''; return; }
     const overSize = validTypes.filter(f => f.size > MAX_IMAGE_SIZE_BYTES);
-    if (overSize.length > 0) {
-      alert(`Each image must be ${MAX_IMAGE_SIZE_MB}MB or smaller. ${overSize.length} image(s) were not added.`);
-      e.target.value = '';
-      return;
-    }
-
+    if (overSize.length > 0) { alert(`Each image must be ${MAX_IMAGE_SIZE_MB}MB or smaller. ${overSize.length} image(s) were not added.`); e.target.value = ''; return; }
     const current = formData.imageUrls || [];
     const remaining = MAX_IMAGES - current.length;
     const toAdd = validTypes.slice(0, remaining);
-    if (toAdd.length < validTypes.length) {
-      alert(`Maximum ${MAX_IMAGES} images per listing. ${validTypes.length - toAdd.length} image(s) not added.`);
-    }
-
+    if (toAdd.length < validTypes.length) alert(`Maximum ${MAX_IMAGES} images per listing. ${validTypes.length - toAdd.length} image(s) not added.`);
     Promise.all(toAdd.map(file => new Promise(resolve => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result);
@@ -176,13 +150,10 @@ export default function LostFound() {
         try { data = await response.json(); } catch (_) {}
         if (response.ok) {
           alert('Item updated successfully!');
-          setShowCreateModal(false);
-          setEditingItemId(null);
+          setShowCreateModal(false); setEditingItemId(null);
           setFormData({ title: '', description: '', category: 'LOST', location: '', date: '', contactInfo: '', imageUrls: [] });
           fetchItems(filter === 'all' ? null : filter, searchTerm);
-        } else {
-          alert(data.message || `Failed to update item (${response.status})`);
-        }
+        } else { alert(data.message || `Failed to update item (${response.status})`); }
       } else {
         const response = await fetch(API_URL + '/api/lostfound/create', {
           method: 'POST',
@@ -195,14 +166,9 @@ export default function LostFound() {
           setShowCreateModal(false);
           setFormData({ title: '', description: '', category: 'LOST', location: '', date: '', contactInfo: '', imageUrls: [] });
           fetchItems(filter === 'all' ? null : filter, searchTerm);
-        } else {
-          alert(data.message || 'Failed to post item');
-        }
+        } else { alert(data.message || 'Failed to post item'); }
       }
-    } catch (error) {
-      console.error('Error saving item:', error);
-      alert('An error occurred while saving the item');
-    }
+    } catch (error) { console.error('Error saving item:', error); alert('An error occurred while saving the item'); }
   };
 
   const handleDeleteItem = async (itemId) => {
@@ -214,16 +180,9 @@ export default function LostFound() {
         body: JSON.stringify({ userId: user.id })
       });
       const data = await response.json();
-      if (response.ok) {
-        alert('Item deleted successfully!');
-        fetchItems(filter === 'all' ? null : filter, searchTerm);
-      } else {
-        alert(data.message || 'Failed to delete item');
-      }
-    } catch (error) {
-      console.error('Error deleting item:', error);
-      alert('An error occurred while deleting the item');
-    }
+      if (response.ok) { alert('Item deleted successfully!'); fetchItems(filter === 'all' ? null : filter, searchTerm); }
+      else { alert(data.message || 'Failed to delete item'); }
+    } catch (error) { console.error('Error deleting item:', error); alert('An error occurred while deleting the item'); }
   };
 
   const handleContactPoster = (item) => {
@@ -250,13 +209,8 @@ export default function LostFound() {
         fetchItems(filter === 'all' ? null : filter, searchTerm);
         if (detailItem?.id === itemId) setDetailItem(prev => ({ ...prev, resolved }));
         if (resolved) window.dispatchEvent(new Event('notificationsUpdated'));
-      } else {
-        alert(data.message || `Failed to update item (${response.status})`);
-      }
-    } catch (error) {
-      console.error('Error updating resolved status:', error);
-      alert('An error occurred while updating the item');
-    }
+      } else { alert(data.message || `Failed to update item (${response.status})`); }
+    } catch (error) { console.error('Error updating resolved status:', error); alert('An error occurred while updating the item'); }
   };
 
   const handleFilterChange = (newFilter) => {
@@ -278,23 +232,10 @@ export default function LostFound() {
         </div>
 
         <div className="lostfound-actions">
-          <button className="post-item-button" onClick={() => setShowCreateModal(true)}>
-            + Post Item
-          </button>
-
+          <button className="post-item-button" onClick={() => setShowCreateModal(true)}>+ Post Item</button>
           <div className="filter-buttons">
-            {[
-              { key: 'all', label: 'All Items' },
-              { key: 'lost', label: 'Lost' },
-              { key: 'found', label: 'Found' }
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                className={`filter-btn ${filter === key ? 'active' : ''}`}
-                onClick={() => handleFilterChange(key)}
-              >
-                {label}
-              </button>
+            {[{ key: 'all', label: 'All Items' }, { key: 'lost', label: 'Lost' }, { key: 'found', label: 'Found' }].map(({ key, label }) => (
+              <button key={key} className={`filter-btn ${filter === key ? 'active' : ''}`} onClick={() => handleFilterChange(key)}>{label}</button>
             ))}
           </div>
         </div>
@@ -302,26 +243,22 @@ export default function LostFound() {
         {/* Search Bar */}
         <div className="search-bar-wrapper" style={{ marginBottom: '24px' }}>
           <div className="search-bar">
-            <span className="search-icon">🔍</span>
+            <span className="search-icon" aria-hidden="true">🔍</span>
             <input
               type="text"
               className="search-input"
               placeholder="Search by title, description, or location…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Search lost and found items"
             />
-            {searchTerm && (
-              <button className="search-clear-btn" onClick={() => setSearchTerm('')}>✕</button>
-            )}
+            {searchTerm && <button className="search-clear-btn" onClick={() => setSearchTerm('')} aria-label="Clear search">✕</button>}
           </div>
         </div>
 
-        {/* Results summary */}
         {!loading && searchTerm.trim() && (
           <p className="search-results-summary">
-            {items.length === 0
-              ? `No results for "${searchTerm}"`
-              : `${items.length} result${items.length !== 1 ? 's' : ''} for "${searchTerm}"`}
+            {items.length === 0 ? `No results for "${searchTerm}"` : `${items.length} result${items.length !== 1 ? 's' : ''} for "${searchTerm}"`}
           </p>
         )}
 
@@ -330,62 +267,61 @@ export default function LostFound() {
             <div className="loading">Loading items...</div>
           ) : items.length === 0 ? (
             <div className="no-items">
-              {searchTerm.trim() ? (
-                <>
-                  <h3>No items found</h3>
-                  <p>Try a different keyword or clear the search.</p>
-                </>
-              ) : (
-                <>
-                  <h3>No items to display</h3>
-                  <p>Be the first to post a lost or found item!</p>
-                </>
-              )}
+              {searchTerm.trim() ? (<><h3>No items found</h3><p>Try a different keyword or clear the search.</p></>) : (<><h3>No items to display</h3><p>Be the first to post a lost or found item!</p></>)}
             </div>
           ) : (
             items.map(item => {
               const images = item.imageUrls?.length > 0 ? item.imageUrls : (item.imageUrl ? [item.imageUrl] : []);
+              const categoryLabel = item.category === 'LOST' ? 'Lost' : 'Found';
               return (
                 <div
                   key={item.id}
                   className="item-card"
                   role="button"
                   tabIndex={0}
+                  aria-label={`View ${categoryLabel} item: ${item.title}`}
                   onClick={() => setDetailItem(item)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailItem(item); } }}
                 >
                   <div className="item-card-badges">
                     <div className={`item-badge ${item.category.toLowerCase()}`}>
-                      {item.category === 'LOST' ? '🔍 Lost' : '✨ Found'}
+                      {/* ✅ emoji hidden, text label is enough */}
+                      <span aria-hidden="true">{item.category === 'LOST' ? '🔍' : '✨'}</span>
+                      {' '}{categoryLabel}
                     </div>
                     {item.resolved && <span className="item-resolved-badge">✓ Resolved</span>}
                   </div>
+
                   {user.id === item.userId && (
                     <div className="item-owner-actions" onClick={(e) => e.stopPropagation()}>
-                      <button className="edit-item-button" onClick={() => handleEditItem(item)} title="Edit this item">✏️</button>
-                      <button className="delete-item-button" onClick={() => handleDeleteItem(item.id)} title="Delete this item">🗑️</button>
+                      {/* ✅ aria-label on icon-only buttons */}
+                      <button className="edit-item-button" onClick={() => handleEditItem(item)} aria-label="Edit this item" title="Edit this item">✏️</button>
+                      <button className="delete-item-button" onClick={() => handleDeleteItem(item.id)} aria-label="Delete this item" title="Delete this item">🗑️</button>
                     </div>
                   )}
+
                   {images.length > 0 ? (
-                    <ImageCarousel images={images} alt={item.title} className="item-image" />
+                    /* ✅ alt describes Lost/Found status + title */
+                    <ImageCarousel images={images} alt={`${categoryLabel}: ${item.title}`} className="item-image" />
                   ) : (
                     <div className="item-image-placeholder">
-                      <span className="placeholder-icon">📷</span>
+                      <span className="placeholder-icon" aria-hidden="true">📷</span>
                     </div>
                   )}
+
                   <div className="item-content">
                     <h3>{item.title}</h3>
                     <p className="item-description">{item.description}</p>
                     <div className="item-details">
                       {item.location && (
                         <div className="detail-item">
-                          <span className="detail-icon">📍</span>
+                          <span className="detail-icon" aria-hidden="true">📍</span>
                           <span>{item.location}</span>
                         </div>
                       )}
                       {item.date && (
                         <div className="detail-item">
-                          <span className="detail-icon">📅</span>
+                          <span className="detail-icon" aria-hidden="true">📅</span>
                           <span>{new Date(item.date).toLocaleDateString()}</span>
                         </div>
                       )}
@@ -393,13 +329,7 @@ export default function LostFound() {
                     <div className="item-footer">
                       <span className="posted-by">Posted by {item.userName || 'Anonymous'}</span>
                       {item.userId !== user.id && (
-                        <button
-                          type="button"
-                          className="contact-button"
-                          onClick={(e) => { e.stopPropagation(); handleContactPoster(item); }}
-                        >
-                          Contact
-                        </button>
+                        <button type="button" className="contact-button" onClick={(e) => { e.stopPropagation(); handleContactPoster(item); }}>Contact</button>
                       )}
                     </div>
                   </div>
@@ -410,17 +340,24 @@ export default function LostFound() {
         </div>
       </div>
 
+      {/* Create / Edit Modal */}
       {showCreateModal && (
         <div className="modal-overlay" onClick={handleCloseCreateModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingItemId ? 'Edit item' : 'Post lost or found item'}
+          >
             <div className="modal-header">
               <h2>{editingItemId ? 'Edit Item' : 'Post Lost or Found Item'}</h2>
-              <button className="close-modal" onClick={handleCloseCreateModal}>×</button>
+              <button className="close-modal" onClick={handleCloseCreateModal} aria-label="Close">×</button>
             </div>
 
             {profilePrivacy && profilePrivacy !== 'PUBLIC' && (
               <div className="privacy-warning-banner">
-                ⚠️ Your profile is currently set to <strong>{profilePrivacy === 'FRIENDS_ONLY' ? 'Friends Only' : 'Private'}</strong>. 
+                ⚠️ Your profile is currently set to <strong>{profilePrivacy === 'FRIENDS_ONLY' ? 'Friends Only' : 'Private'}</strong>.
                 People trying to contact you about this item won't be able to view your profile. Consider switching to <strong>Public</strong> in your profile settings.
               </div>
             )}
@@ -430,94 +367,49 @@ export default function LostFound() {
                 <label>Category</label>
                 <div className="category-selector">
                   {['LOST', 'FOUND'].map(c => (
-                    <button
-                      key={c}
-                      type="button"
-                      className={`category-option ${formData.category === c ? 'selected' : ''}`}
-                      onClick={() => setFormData({ ...formData, category: c })}
-                    >
+                    <button key={c} type="button" className={`category-option ${formData.category === c ? 'selected' : ''}`} onClick={() => setFormData({ ...formData, category: c })}>
                       {c === 'LOST' ? '🔍 Lost' : '✨ Found'}
                     </button>
                   ))}
                 </div>
               </div>
-
               <div className="form-group">
-                <label htmlFor="title">Item Name *</label>
-                <input
-                  type="text"
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="e.g., Blue Backpack, iPhone 13"
-                  required
-                />
+                <label htmlFor="lf-title">Item Name *</label>
+                <input type="text" id="lf-title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="e.g., Blue Backpack, iPhone 13" required />
               </div>
-
               <div className="form-group">
-                <label htmlFor="description">Description *</label>
-                <textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Provide details about the item..."
-                  rows="4"
-                  required
-                />
+                <label htmlFor="lf-description">Description *</label>
+                <textarea id="lf-description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Provide details about the item..." rows="4" required />
               </div>
-
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="location">Location *</label>
-                  <input
-                    type="text"
-                    id="location"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="e.g., Library, Commons"
-                    required
-                  />
+                  <label htmlFor="lf-location">Location *</label>
+                  <input type="text" id="lf-location" value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} placeholder="e.g., Library, Commons" required />
                 </div>
                 <div className="form-group">
-                  <label htmlFor="date">Date *</label>
-                  <input
-                    type="date"
-                    id="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    required
-                  />
+                  <label htmlFor="lf-date">Date *</label>
+                  <input type="date" id="lf-date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} required />
                 </div>
               </div>
-
               <div className="form-group">
-                <label htmlFor="contactInfo">Contact Info *</label>
-                <input
-                  type="text"
-                  id="contactInfo"
-                  value={formData.contactInfo}
-                  onChange={(e) => setFormData({ ...formData, contactInfo: e.target.value })}
-                  placeholder="Email or phone number"
-                  required
-                />
+                <label htmlFor="lf-contactInfo">Contact Info *</label>
+                <input type="text" id="lf-contactInfo" value={formData.contactInfo} onChange={(e) => setFormData({ ...formData, contactInfo: e.target.value })} placeholder="Email or phone number" required />
               </div>
-
               <div className="form-group">
-                <label htmlFor="image">Add Images (Optional, up to 5)</label>
+                <label htmlFor="lf-image">Add Images (Optional, up to 5)</label>
                 <p className="image-size-hint">Each image must be 5MB or smaller.</p>
-                <input type="file" id="image" accept="image/*" multiple onChange={handleImageChange} className="file-input" />
+                <input type="file" id="lf-image" accept="image/*" multiple onChange={handleImageChange} className="file-input" />
                 {formData.imageUrls?.length > 0 && (
                   <div className="image-previews-grid">
                     {formData.imageUrls.map((src, index) => (
                       <div key={index} className="image-preview-item">
-                        <img src={src} alt={`Preview ${index + 1}`} className="image-preview" />
-                        <button type="button" onClick={() => handleRemoveImage(index)} className="remove-image-button" aria-label="Remove image">×</button>
+                        <img src={src} alt={`Item image preview ${index + 1} of ${formData.imageUrls.length}`} className="image-preview" />
+                        <button type="button" onClick={() => handleRemoveImage(index)} className="remove-image-button" aria-label={`Remove image ${index + 1}`}>×</button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-
               <div className="modal-actions">
                 <button type="button" onClick={handleCloseCreateModal} className="cancel-btn">Cancel</button>
                 <button type="submit" className="submit-btn">{editingItemId ? 'Save Changes' : 'Post Item'}</button>
@@ -527,34 +419,43 @@ export default function LostFound() {
         </div>
       )}
 
+      {/* Detail Modal */}
       {detailItem && (
         <div className="detail-modal-overlay" onClick={() => setDetailItem(null)}>
-          <div className="detail-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="detail-modal-close" onClick={() => setDetailItem(null)} aria-label="Close">×</button>
+          <div
+            className="detail-modal-content"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${detailItem.category === 'LOST' ? 'Lost' : 'Found'} item detail: ${detailItem.title}`}
+          >
+            <button type="button" className="detail-modal-close" onClick={() => setDetailItem(null)} aria-label="Close item detail">×</button>
             <div className="detail-modal-badges">
               <div className={`detail-modal-badge ${detailItem.category?.toLowerCase()}`}>
-                {detailItem.category === 'LOST' ? '🔍 Lost' : '✨ Found'}
+                <span aria-hidden="true">{detailItem.category === 'LOST' ? '🔍' : '✨'}</span>
+                {' '}{detailItem.category === 'LOST' ? 'Lost' : 'Found'}
               </div>
               {detailItem.resolved && <span className="detail-resolved-badge">✓ Resolved</span>}
             </div>
             <div className="detail-modal-carousel">
               {(detailItem.imageUrls?.length > 0 || detailItem.imageUrl) ? (
+                /* ✅ descriptive alt for detail view */
                 <ImageCarousel
                   images={detailItem.imageUrls?.length > 0 ? detailItem.imageUrls : [detailItem.imageUrl]}
-                  alt={detailItem.title}
+                  alt={`${detailItem.category === 'LOST' ? 'Lost' : 'Found'}: ${detailItem.title}`}
                   className="detail-carousel"
                 />
               ) : (
                 <div className="detail-modal-image-placeholder">
-                  <span className="placeholder-icon">📷</span>
+                  <span className="placeholder-icon" aria-hidden="true">📷</span>
                 </div>
               )}
             </div>
             <div className="detail-modal-info">
               <h2 className="detail-modal-title">{detailItem.title}</h2>
               <p className="detail-modal-description">{detailItem.description}</p>
-              {detailItem.location && <p className="detail-modal-meta-item"><span className="detail-icon">📍</span> {detailItem.location}</p>}
-              {detailItem.date && <p className="detail-modal-meta-item"><span className="detail-icon">📅</span> {new Date(detailItem.date).toLocaleDateString()}</p>}
+              {detailItem.location && <p className="detail-modal-meta-item"><span className="detail-icon" aria-hidden="true">📍</span> {detailItem.location}</p>}
+              {detailItem.date && <p className="detail-modal-meta-item"><span className="detail-icon" aria-hidden="true">📅</span> {new Date(detailItem.date).toLocaleDateString()}</p>}
               {detailItem.contactInfo && <p className="detail-modal-contact-info">Contact: {detailItem.contactInfo}</p>}
               {detailItem.userId === user.id && (
                 <div className="detail-modal-resolve-actions">
@@ -568,31 +469,13 @@ export default function LostFound() {
               <div className="detail-modal-poster">
                 <span className="detail-posted-by">Posted by {detailItem.userName || 'Anonymous'}</span>
                 {detailItem.userId && (
-                  <button
-                    type="button"
-                    className="detail-view-profile-btn"
-                    onClick={() => { setDetailItem(null); navigate(`/profile-view/${detailItem.userId}`); }}
-                  >
-                    View poster profile
-                  </button>
+                  <button type="button" className="detail-view-profile-btn" onClick={() => { setDetailItem(null); navigate(`/profile-view/${detailItem.userId}`); }}>View poster profile</button>
                 )}
                 {detailItem.userId && detailItem.userId !== user.id && (
-                  <button
-                    type="button"
-                    className="contact-button"
-                    onClick={() => { setDetailItem(null); handleContactPoster(detailItem); }}
-                  >
-                    Contact
-                  </button>
+                  <button type="button" className="contact-button" onClick={() => { setDetailItem(null); handleContactPoster(detailItem); }}>Contact</button>
                 )}
                 {detailItem.userId && detailItem.userId !== user.id && (
-                  <button
-                    type="button"
-                    className="detail-report-lostfound-btn"
-                    onClick={() => setReportItemId(detailItem.id)}
-                  >
-                    Report entry
-                  </button>
+                  <button type="button" className="detail-report-lostfound-btn" onClick={() => setReportItemId(detailItem.id)}>Report entry</button>
                 )}
               </div>
             </div>

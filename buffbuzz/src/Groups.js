@@ -7,19 +7,16 @@ import Footer from './Footer';
 import ImageCarousel from './ImageCarousel';
 import { getValidUser } from './sessionUtils';
 import ReportModal from './ReportModal';
-import PollBlock from './PollBlock';
 
 const POST_TYPES = [
   { value: 'POST',         label: '📝 Post',         desc: 'Share something with the group' },
   { value: 'ANNOUNCEMENT', label: '📣 Announcement',  desc: 'Important update for all members' },
   { value: 'EVENT',        label: '📅 Event',         desc: 'Invite members to an event' },
-  { value: 'POLL',         label: '📊 Poll',          desc: 'Ask the group a question' },
 ];
 
 const postTypeBadge = (type) => {
   if (type === 'ANNOUNCEMENT') return <span className="post-type-badge announcement">📣 Announcement</span>;
   if (type === 'EVENT')        return <span className="post-type-badge event">📅 Event</span>;
-  if (type === 'POLL')         return <span className="post-type-badge poll">📊 Poll</span>;
   return null;
 };
 
@@ -51,14 +48,7 @@ export default function Groups() {
   // ── Group post state ─────────────────────────────────────────────
   const [showGroupPostModal, setShowGroupPostModal] = useState(false);
   const [postingToGroup, setPostingToGroup] = useState(null);
-  const [groupPostForm, setGroupPostForm] = useState({
-    title: '',
-    content: '',
-    postType: 'POST',
-    pollOptions: ['', ''],
-    anonymousVoting: false,
-    expiresAt: ''
-  });
+  const [groupPostForm, setGroupPostForm] = useState({ title: '', content: '', postType: 'POST' });
   const [groupPostLoading, setGroupPostLoading] = useState(false);
 
   // ── Group posts feed state ───────────────────────────────────────
@@ -70,11 +60,6 @@ export default function Groups() {
   const [postComments, setPostComments] = useState({});
   const [commentInputs, setCommentInputs] = useState({});
   const [commentLoading, setCommentLoading] = useState({});
-
-  // ── Comment edit state ───────────────────────────────────────────
-  const [editingCommentId, setEditingCommentId] = useState(null);
-  const [editCommentContent, setEditCommentContent] = useState('');
-  const [editCommentLoading, setEditCommentLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -118,7 +103,9 @@ export default function Groups() {
         const data = await response.json();
         if (data.profile?.profilePictureUrl) setProfilePicture(data.profile.profilePictureUrl);
       }
-    } catch (error) { console.error('Error fetching profile picture:', error); }
+    } catch (error) {
+      console.error('Error fetching profile picture:', error);
+    }
   };
 
   const fetchGroups = async (search = '') => {
@@ -132,8 +119,11 @@ export default function Groups() {
         const data = await response.json();
         setGroups(data.groups || []);
       }
-    } catch (error) { console.error('Error fetching groups:', error); }
-    finally { setLoading(false); }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchGroupPosts = async (groupId) => {
@@ -147,8 +137,11 @@ export default function Groups() {
         setPostComments({});
         setCommentInputs({});
       }
-    } catch (error) { console.error('Error fetching group posts:', error); }
-    finally { setGroupPostsLoading(false); }
+    } catch (error) {
+      console.error('Error fetching group posts:', error);
+    } finally {
+      setGroupPostsLoading(false);
+    }
   };
 
   // ── Like handler ─────────────────────────────────────────────────
@@ -158,22 +151,26 @@ export default function Groups() {
     const url = isLiked
       ? `${API_URL}/api/posts/${postId}/unlike`
       : `${API_URL}/api/posts/${postId}/like`;
+    const method = isLiked ? 'DELETE' : 'POST';
     try {
       const response = await fetch(url, {
-        method: isLiked ? 'DELETE' : 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
       });
       if (response.ok) {
         const data = await response.json();
         setGroupPosts(prev =>
-          prev.map(p => p.id === postId
-            ? { ...p, isLiked: !isLiked, _count: { ...p._count, likes: data.likeCount } }
-            : p
+          prev.map(p =>
+            p.id === postId
+              ? { ...p, isLiked: !isLiked, _count: { ...p._count, likes: data.likeCount } }
+              : p
           )
         );
       }
-    } catch (error) { console.error('Error toggling like:', error); }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
   };
 
   // ── Comment handlers ─────────────────────────────────────────────
@@ -193,7 +190,9 @@ export default function Groups() {
         const data = await response.json();
         setPostComments(prev => ({ ...prev, [postId]: data.comments || [] }));
       }
-    } catch (error) { console.error('Error fetching comments:', error); }
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+    }
   };
 
   const handleSubmitComment = async (e, postId) => {
@@ -214,9 +213,10 @@ export default function Groups() {
           [postId]: [data.comment, ...(prev[postId] || [])]
         }));
         setGroupPosts(prev =>
-          prev.map(p => p.id === postId
-            ? { ...p, _count: { ...p._count, comments: data.commentCount } }
-            : p
+          prev.map(p =>
+            p.id === postId
+              ? { ...p, _count: { ...p._count, comments: data.commentCount } }
+              : p
           )
         );
         setCommentInputs(prev => ({ ...prev, [postId]: '' }));
@@ -280,8 +280,11 @@ export default function Groups() {
         const data = await response.json();
         setGroupMembers(data.group?.members || []);
       }
-    } catch (error) { console.error('Error fetching group members:', error); }
-    finally { setMembersLoading(false); }
+    } catch (error) {
+      console.error('Error fetching group members:', error);
+    } finally {
+      setMembersLoading(false);
+    }
   };
 
   const handleOpenMembersModal = (group, e) => {
@@ -306,8 +309,11 @@ export default function Groups() {
         const data = await response.json();
         setJoinRequests(data.requests || []);
       }
-    } catch (err) { console.error('Error fetching join requests:', err); }
-    finally { setJoinRequestsLoading(false); }
+    } catch (err) {
+      console.error('Error fetching join requests:', err);
+    } finally {
+      setJoinRequestsLoading(false);
+    }
   };
 
   const handleApproveJoinRequest = async (requestId) => {
@@ -464,6 +470,7 @@ export default function Groups() {
     setPostingToGroup(null);
   };
 
+  // ── Existing handlers ────────────────────────────────────────────
   const handleBackClick = () => navigate('/main');
 
   const hasUnsavedChanges = () => !!(
@@ -592,7 +599,6 @@ export default function Groups() {
     setExpandedComments({});
     setPostComments({});
     setCommentInputs({});
-    setEditingCommentId(null);
   };
 
   if (!user) return null;
@@ -774,7 +780,14 @@ export default function Groups() {
               <button
                 type="button"
                 className="group-detail-report-link"
-                onClick={(e) => { e.stopPropagation(); setReportTarget({ targetType: 'GROUP', targetId: detailGroup.id, subjectLabel: 'this group' }); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReportTarget({
+                    targetType: 'GROUP',
+                    targetId: detailGroup.id,
+                    subjectLabel: 'this group',
+                  });
+                }}
               >
                 Report group
               </button>
@@ -803,13 +816,12 @@ export default function Groups() {
                   ) : (
                     <div className="group-posts-list">
                       {groupPosts.map(post => (
-                        <div
-                          key={post.id}
-                          className={`group-post-card ${post.postType === 'ANNOUNCEMENT' ? 'post-announcement' : post.postType === 'EVENT' ? 'post-event' : post.postType === 'POLL' ? 'post-poll' : ''}`}
-                        >
+                        <div key={post.id} className={`group-post-card ${post.postType === 'ANNOUNCEMENT' ? 'post-announcement' : post.postType === 'EVENT' ? 'post-event' : ''}`}>
 
+                          {/* Post type badge */}
                           {postTypeBadge(post.postType)}
 
+                          {/* Author row */}
                           <div className="group-post-author">
                             {post.author?.profile?.profilePictureUrl ? (
                               <img src={post.author.profile.profilePictureUrl} alt="" className="group-post-avatar" />
@@ -822,23 +834,11 @@ export default function Groups() {
                             </div>
                           </div>
 
-                          {post.postType === 'POLL' && post.poll ? (
-                            <PollBlock
-                              post={post}
-                              currentUserId={user?.id}
-                              onPollUpdate={(nextPoll) => {
-                                setGroupPosts((prev) =>
-                                  prev.map((p) => (p.id === post.id ? { ...p, poll: nextPoll } : p))
-                                );
-                              }}
-                            />
-                          ) : (
-                            <>
-                              <h4 className="group-post-title">{post.title}</h4>
-                              <p className="group-post-content">{post.content}</p>
-                            </>
-                          )}
+                          {/* Post content */}
+                          <h4 className="group-post-title">{post.title}</h4>
+                          <p className="group-post-content">{post.content}</p>
 
+                          {/* Like / Comment action bar */}
                           <div className="group-post-actions" onClick={(e) => e.stopPropagation()}>
                             <button
                               className={`group-post-action-btn ${post.isLiked ? 'liked' : ''}`}
@@ -856,7 +856,14 @@ export default function Groups() {
                               <button
                                 type="button"
                                 className="group-post-action-btn group-post-report-btn"
-                                onClick={(e) => { e.stopPropagation(); setReportTarget({ targetType: 'POST', targetId: post.id, subjectLabel: 'this post' }); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReportTarget({
+                                    targetType: 'POST',
+                                    targetId: post.id,
+                                    subjectLabel: 'this post',
+                                  });
+                                }}
                               >
                                 Report
                               </button>
@@ -866,7 +873,6 @@ export default function Groups() {
                           {/* Comments section */}
                           {expandedComments[post.id] && (
                             <div className="group-post-comments" onClick={(e) => e.stopPropagation()}>
-                              {/* Comment input */}
                               <div className="group-comment-input-row">
                                 <input
                                   type="text"
@@ -885,8 +891,6 @@ export default function Groups() {
                                   {commentLoading[post.id] ? '…' : 'Post'}
                                 </button>
                               </div>
-
-                              {/* Comments list */}
                               {!postComments[post.id] ? (
                                 <div className="group-comments-loading">Loading comments…</div>
                               ) : postComments[post.id].length === 0 ? (
@@ -900,62 +904,25 @@ export default function Groups() {
                                       <div className="group-comment-avatar-placeholder">{comment.author?.firstName?.[0]}{comment.author?.lastName?.[0]}</div>
                                     )}
                                     <div className="group-comment-body">
-                                      <div className="group-comment-header">
-                                        <span className="group-comment-author">{comment.author?.firstName} {comment.author?.lastName}</span>
-                                        <span className="group-comment-time">{formatTimeAgo(comment.createdAt)}</span>
-                                        {/* Edit & Report buttons — only show for comment author */}
-                                        {comment.author?.id === user?.id ? (
-                                          <button
-                                            type="button"
-                                            className="group-comment-edit-btn"
-                                            onClick={(e) => handleStartEditComment(e, comment)}
-                                          >
-                                            ✏️ Edit
-                                          </button>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            className="group-comment-report"
-                                            onClick={(e) => { e.stopPropagation(); setReportTarget({ targetType: 'COMMENT', targetId: comment.id, subjectLabel: 'this comment' }); }}
-                                          >
-                                            Report
-                                          </button>
-                                        )}
-                                      </div>
-
-                                      {/* Inline edit or normal text */}
-                                      {editingCommentId === comment.id ? (
-                                        <div className="group-comment-edit-row" onClick={(e) => e.stopPropagation()}>
-                                          <input
-                                            type="text"
-                                            className="group-comment-input"
-                                            value={editCommentContent}
-                                            onClick={(e) => e.stopPropagation()}
-                                            onChange={(e) => { e.stopPropagation(); setEditCommentContent(e.target.value); }}
-                                            onKeyDown={(e) => {
-                                              e.stopPropagation();
-                                              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEditComment(e, comment.id, post.id); }
-                                              if (e.key === 'Escape') handleCancelEditComment(e);
-                                            }}
-                                            autoFocus
-                                          />
-                                          <button
-                                            className="group-comment-submit"
-                                            onClick={(e) => handleSaveEditComment(e, comment.id, post.id)}
-                                            disabled={editCommentLoading || !editCommentContent.trim()}
-                                          >
-                                            {editCommentLoading ? '…' : 'Save'}
-                                          </button>
-                                          <button
-                                            className="group-comment-cancel-edit"
-                                            onClick={handleCancelEditComment}
-                                          >
-                                            Cancel
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <p className="group-comment-text">{comment.content}</p>
+                                      <span className="group-comment-author">{comment.author?.firstName} {comment.author?.lastName}</span>
+                                      <span className="group-comment-time">{formatTimeAgo(comment.createdAt)}</span>
+                                      {comment.author?.id && comment.author.id !== user?.id && (
+                                        <button
+                                          type="button"
+                                          className="group-comment-report"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setReportTarget({
+                                              targetType: 'COMMENT',
+                                              targetId: comment.id,
+                                              subjectLabel: 'this comment',
+                                            });
+                                          }}
+                                        >
+                                          Report
+                                        </button>
                                       )}
+                                      <p className="group-comment-text">{comment.content}</p>
                                     </div>
                                   </div>
                                 ))
@@ -1059,6 +1026,8 @@ export default function Groups() {
               <button className="close-modal" onClick={handleCloseGroupPostModal}>×</button>
             </div>
             <form onSubmit={handleCreateGroupPost} style={{ padding: '24px' }}>
+
+              {/* Post type selector */}
               <div className="form-group">
                 <label>Post Type</label>
                 <div className="post-type-selector">
@@ -1067,15 +1036,7 @@ export default function Groups() {
                       key={value}
                       type="button"
                       className={`post-type-option ${groupPostForm.postType === value ? 'selected' : ''}`}
-                      onClick={() =>
-                        setGroupPostForm((prev) => ({
-                          ...prev,
-                          postType: value,
-                          pollOptions: value === 'POLL' && (!prev.pollOptions || prev.pollOptions.length < 2)
-                            ? ['', '']
-                            : prev.pollOptions
-                        }))
-                      }
+                      onClick={() => setGroupPostForm(prev => ({ ...prev, postType: value }))}
                     >
                       <span className="post-type-label">{label}</span>
                       <span className="post-type-desc">{desc}</span>
@@ -1083,8 +1044,9 @@ export default function Groups() {
                   ))}
                 </div>
               </div>
+
               <div className="form-group">
-                <label htmlFor="postTitle">{groupPostForm.postType === 'POLL' ? 'Poll question *' : 'Title *'}</label>
+                <label htmlFor="postTitle">Title *</label>
                 <input
                   type="text"
                   id="postTitle"
@@ -1093,14 +1055,13 @@ export default function Groups() {
                   placeholder={
                     groupPostForm.postType === 'ANNOUNCEMENT' ? 'e.g., Meeting rescheduled to Friday' :
                     groupPostForm.postType === 'EVENT' ? 'e.g., Study session – Thursday 6PM' :
-                    groupPostForm.postType === 'POLL' ? 'What do you want to ask?' :
                     'Post title'
                   }
                   required
                 />
               </div>
               <div className="form-group">
-                <label htmlFor="postContent">{groupPostForm.postType === 'POLL' ? 'Description (optional)' : 'Content *'}</label>
+                <label htmlFor="postContent">Content *</label>
                 <textarea
                   id="postContent"
                   value={groupPostForm.content}
@@ -1108,96 +1069,24 @@ export default function Groups() {
                   placeholder={
                     groupPostForm.postType === 'ANNOUNCEMENT' ? 'Share an important update with the group…' :
                     groupPostForm.postType === 'EVENT' ? 'Add event details, location, and what to bring…' :
-                    groupPostForm.postType === 'POLL' ? 'Optional context for your poll…' :
                     'What do you want to share with the group?'
                   }
-                  rows={groupPostForm.postType === 'POLL' ? 3 : 5}
-                  required={groupPostForm.postType !== 'POLL'}
+                  rows="5"
+                  required
                 />
               </div>
-              {groupPostForm.postType === 'POLL' && (
-                <>
-                  <div className="form-group">
-                    <label>Poll options (2–5)</label>
-                    {groupPostForm.pollOptions.map((opt, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                        <input
-                          type="text"
-                          value={opt}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setGroupPostForm((prev) => {
-                              const next = [...prev.pollOptions];
-                              next[i] = v;
-                              return { ...prev, pollOptions: next };
-                            });
-                          }}
-                          placeholder={`Option ${i + 1}`}
-                          style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid #ccc' }}
-                        />
-                        {groupPostForm.pollOptions.length > 2 && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setGroupPostForm((prev) => ({
-                                ...prev,
-                                pollOptions: prev.pollOptions.filter((_, j) => j !== i)
-                              }))
-                            }
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {groupPostForm.pollOptions.length < 5 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setGroupPostForm((prev) => ({
-                            ...prev,
-                            pollOptions: [...prev.pollOptions, '']
-                          }))
-                        }
-                        style={{ marginTop: 4, background: 'none', border: 'none', color: '#800000', fontWeight: 600, cursor: 'pointer' }}
-                      >
-                        + Add option
-                      </button>
-                    )}
-                  </div>
-                  <div className="form-group">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={groupPostForm.anonymousVoting}
-                        onChange={(e) => setGroupPostForm((prev) => ({ ...prev, anonymousVoting: e.target.checked }))}
-                      />{' '}
-                      Anonymous voting (hide names on results)
-                    </label>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="groupPollExpires">End date (optional)</label>
-                    <input
-                      type="datetime-local"
-                      id="groupPollExpires"
-                      value={groupPostForm.expiresAt}
-                      onChange={(e) => setGroupPostForm((prev) => ({ ...prev, expiresAt: e.target.value }))}
-                      style={{ width: '100%', maxWidth: 280, padding: '8px 10px' }}
-                    />
-                  </div>
-                </>
-              )}
-              <div className={`group-post-notice ${groupPostForm.postType === 'ANNOUNCEMENT' ? 'notice-announcement' : groupPostForm.postType === 'EVENT' ? 'notice-event' : groupPostForm.postType === 'POLL' ? 'notice-poll' : ''}`}>
+
+              <div className={`group-post-notice ${groupPostForm.postType === 'ANNOUNCEMENT' ? 'notice-announcement' : groupPostForm.postType === 'EVENT' ? 'notice-event' : ''}`}>
                 {groupPostForm.postType === 'ANNOUNCEMENT' && '📣 '}
                 {groupPostForm.postType === 'EVENT' && '📅 '}
                 {groupPostForm.postType === 'POST' && '📝 '}
-                {groupPostForm.postType === 'POLL' && '📊 '}
                 All members of <strong>{postingToGroup.name}</strong> will be notified.
               </div>
+
               <div className="modal-actions">
                 <button type="button" className="cancel-btn" onClick={handleCloseGroupPostModal}>Cancel</button>
                 <button type="submit" className="submit-btn" disabled={groupPostLoading}>
-                  {groupPostLoading ? 'Posting...' : `Post ${groupPostForm.postType === 'ANNOUNCEMENT' ? 'Announcement' : groupPostForm.postType === 'EVENT' ? 'Event' : groupPostForm.postType === 'POLL' ? 'Poll' : 'to Group'}`}
+                  {groupPostLoading ? 'Posting...' : `Post ${groupPostForm.postType === 'ANNOUNCEMENT' ? 'Announcement' : groupPostForm.postType === 'EVENT' ? 'Event' : 'to Group'}`}
                 </button>
               </div>
             </form>
