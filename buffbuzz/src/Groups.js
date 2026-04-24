@@ -225,52 +225,6 @@ export default function Groups() {
     finally { setCommentLoading(prev => ({ ...prev, [postId]: false })); }
   };
 
-  // ── Comment edit handlers ────────────────────────────────────────
-  const handleStartEditComment = (e, comment) => {
-    e.stopPropagation();
-    setEditingCommentId(comment.id);
-    setEditCommentContent(comment.content);
-  };
-
-  const handleCancelEditComment = (e) => {
-    e.stopPropagation();
-    setEditingCommentId(null);
-    setEditCommentContent('');
-  };
-
-  const handleSaveEditComment = async (e, commentId, postId) => {
-    e.stopPropagation();
-    if (!editCommentContent.trim()) return;
-    setEditCommentLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/api/comments/${commentId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, content: editCommentContent.trim() })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Update the comment in postComments state
-        setPostComments(prev => ({
-          ...prev,
-          [postId]: (prev[postId] || []).map(c =>
-            c.id === commentId ? { ...c, content: data.comment.content } : c
-          )
-        }));
-        setEditingCommentId(null);
-        setEditCommentContent('');
-      } else {
-        const data = await response.json();
-        alert(data.message || 'Failed to update comment');
-      }
-    } catch (error) {
-      console.error('Error editing comment:', error);
-      alert('An error occurred while editing the comment');
-    } finally {
-      setEditCommentLoading(false);
-    }
-  };
-
   // ── Member management handlers ───────────────────────────────────
   const fetchGroupMembers = async (groupId) => {
     setMembersLoading(true);
