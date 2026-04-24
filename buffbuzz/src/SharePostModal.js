@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import './SharePostModal.css';
 import { serializeSharedPost } from './sharedPostMessageUtils';
@@ -17,7 +18,7 @@ export default function SharePostModal({ isOpen, onClose, post, currentUserId })
     setFetchError(null);
     setLastSentName(null);
 
-    fetch(`http://localhost:5000/api/friends/${currentUserId}`)
+    fetch(`${API_URL}/api/friends/${currentUserId}`)
       .then((res) => {
         if (!res.ok) throw new Error('Could not load friends');
         return res.json();
@@ -54,7 +55,7 @@ export default function SharePostModal({ isOpen, onClose, post, currentUserId })
     setLastSentName(null);
 
     try {
-      const convRes = await fetch('http://localhost:5000/api/conversations/get-or-create', {
+      const convRes = await fetch(API_URL + '/api/conversations/get-or-create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,7 +72,7 @@ export default function SharePostModal({ isOpen, onClose, post, currentUserId })
       const { conversation } = await convRes.json();
       const content = serializeSharedPost(post);
 
-      const msgRes = await fetch('http://localhost:5000/api/messages/send', {
+      const msgRes = await fetch(API_URL + '/api/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,7 +88,7 @@ export default function SharePostModal({ isOpen, onClose, post, currentUserId })
         throw new Error(err.message || 'Could not send message');
       }
 
-      await fetch(`http://localhost:5000/api/posts/${post.id}/share`, {
+      await fetch(`${API_URL}/api/posts/${post.id}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId }),

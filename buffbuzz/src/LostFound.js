@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LostFound.css';
@@ -52,7 +53,7 @@ export default function LostFound() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      const response = await fetch(`${API_URL}/api/profile/${userId}`);
       if (response.ok) {
         const data = await response.json();
         if (data.profile?.profilePictureUrl) setProfilePicture(data.profile.profilePictureUrl);
@@ -69,7 +70,7 @@ export default function LostFound() {
       if (category && category !== 'all') params.set('category', category.toUpperCase());
       if (search && search.trim()) params.set('search', search.trim());
       const query = params.toString();
-      const url = `http://localhost:5000/api/lostfound${query ? `?${query}` : ''}`;
+      const url = `${API_URL}/api/lostfound${query ? `?${query}` : ''}`;
 
       const response = await fetch(url);
       if (response.ok) {
@@ -166,7 +167,7 @@ export default function LostFound() {
     e.preventDefault();
     try {
       if (editingItemId) {
-        const response = await fetch(`http://localhost:5000/api/lostfound/${editingItemId}`, {
+        const response = await fetch(`${API_URL}/api/lostfound/${editingItemId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...formData, imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined, userId: user.id })
@@ -183,7 +184,7 @@ export default function LostFound() {
           alert(data.message || `Failed to update item (${response.status})`);
         }
       } else {
-        const response = await fetch('http://localhost:5000/api/lostfound/create', {
+        const response = await fetch(API_URL + '/api/lostfound/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...formData, imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined, userId: user.id })
@@ -207,7 +208,7 @@ export default function LostFound() {
   const handleDeleteItem = async (itemId) => {
     if (!window.confirm('Are you sure you want to delete this item?')) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/lostfound/${itemId}`, {
+      const response = await fetch(`${API_URL}/api/lostfound/${itemId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
@@ -238,7 +239,7 @@ export default function LostFound() {
 
   const handleMarkResolved = async (itemId, resolved) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/lostfound/${itemId}`, {
+      const response = await fetch(`${API_URL}/api/lostfound/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, resolved })

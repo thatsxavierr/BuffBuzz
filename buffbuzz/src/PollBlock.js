@@ -1,7 +1,8 @@
+import { API_URL } from './config';
 import React, { useState } from 'react';
 import './PollBlock.css';
 
-const API = 'http://localhost:5000';
+const API = API_URL;
 
 /**
  * Renders a feed/group poll using the enriched `post.poll` shape from the API

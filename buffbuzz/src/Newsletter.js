@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import './Newsletter.css';
@@ -8,7 +9,7 @@ import { getValidUser } from './sessionUtils';
 import LinkifiedText, { countWords } from './LinkifiedText';
 import NewsletterShareModal from './NewsletterShareModal';
 
-const API = 'http://localhost:5000';
+const API = API_URL;
 const MAX_WORDS = 500;
 
 export default function Newsletter() {

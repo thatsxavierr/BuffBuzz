@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./ResetPage.css";
@@ -16,7 +17,7 @@ export default function RequestResetPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/request-reset', {
+      const response = await fetch(API_URL + '/api/request-reset', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

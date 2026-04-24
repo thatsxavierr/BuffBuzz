@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './ProfileEdit.css';
@@ -74,7 +75,7 @@ export default function ProfileEdit() {
 
     const fetchProfile = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/profile/${userData.id}`);
+        const response = await fetch(`${API_URL}/api/profile/${userData.id}`);
         
         if (response.ok) {
           const data = await response.json();
@@ -201,7 +202,7 @@ export default function ProfileEdit() {
         privacy: formData.privacy
       };
       
-      const response = await fetch('http://localhost:5000/api/profile/update', {
+      const response = await fetch(API_URL + '/api/profile/update', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

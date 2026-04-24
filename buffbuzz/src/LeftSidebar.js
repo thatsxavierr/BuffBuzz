@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LeftSidebar.css';
@@ -14,7 +15,7 @@ export default function LeftSidebar() {
 
       const userId = user.id;
       try {
-        const response = await fetch(`http://localhost:5000/api/notifications/${userId}/unread-count`);
+        const response = await fetch(`${API_URL}/api/notifications/${userId}/unread-count`);
         if (response.ok) {
           const data = await response.json();
           const count = typeof data.unreadCount === 'number' ? data.unreadCount : 0;
@@ -22,7 +23,7 @@ export default function LeftSidebar() {
           return;
         }
         // Fallback: if unread-count endpoint missing or fails, use full list
-        const listRes = await fetch(`http://localhost:5000/api/notifications/${userId}`);
+        const listRes = await fetch(`${API_URL}/api/notifications/${userId}`);
         if (listRes.ok) {
           const listData = await listRes.json();
           const list = listData.notifications || [];

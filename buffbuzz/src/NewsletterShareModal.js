@@ -1,7 +1,8 @@
+import { API_URL } from './config';
 import React, { useEffect, useState } from 'react';
 import './NewsletterShareModal.css';
 
-const API = 'http://localhost:5000';
+const API = API_URL;
 
 export default function NewsletterShareModal({ open, onClose, currentUserId, newsletterId, newsletterTitle }) {
   const [friends, setFriends] = useState([]);

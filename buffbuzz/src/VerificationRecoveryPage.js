@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "./VerificationRecoveryPage.css";
@@ -20,7 +21,7 @@ export default function VerificationRecoveryPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/resend-code", {
+      const response = await fetch(API_URL + "/api/resend-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -54,7 +55,7 @@ export default function VerificationRecoveryPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/verify", {
+      const response = await fetch(API_URL + "/api/verify", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

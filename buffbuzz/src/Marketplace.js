@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Marketplace.css';
@@ -51,7 +52,7 @@ export default function Marketplace() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      const response = await fetch(`${API_URL}/api/profile/${userId}`);
       if (response.ok) {
         const data = await response.json();
         if (data.profile?.profilePictureUrl) setProfilePicture(data.profile.profilePictureUrl);
@@ -68,7 +69,7 @@ export default function Marketplace() {
       if (category && category !== 'all') params.set('category', category.toUpperCase());
       if (search && search.trim()) params.set('search', search.trim());
       const query = params.toString();
-      const url = `http://localhost:5000/api/marketplace${query ? `?${query}` : ''}`;
+      const url = `${API_URL}/api/marketplace${query ? `?${query}` : ''}`;
 
       const response = await fetch(url);
       if (response.ok) {
@@ -162,7 +163,7 @@ export default function Marketplace() {
     e.preventDefault();
     try {
       if (editingItemId) {
-        const response = await fetch(`http://localhost:5000/api/marketplace/${editingItemId}`, {
+        const response = await fetch(`${API_URL}/api/marketplace/${editingItemId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...formData, imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined, userId: user.id })
@@ -179,7 +180,7 @@ export default function Marketplace() {
           alert(data.message || `Failed to update item (${response.status})`);
         }
       } else {
-        const response = await fetch('http://localhost:5000/api/marketplace/create', {
+        const response = await fetch(API_URL + '/api/marketplace/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...formData, imageUrls: formData.imageUrls?.length > 0 ? formData.imageUrls : undefined, sellerId: user.id })
@@ -203,7 +204,7 @@ export default function Marketplace() {
   const handleDeleteItem = async (itemId) => {
     if (!window.confirm('Are you sure you want to delete this listing?')) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/marketplace/${itemId}`, {
+      const response = await fetch(`${API_URL}/api/marketplace/${itemId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })

@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Groups.css';
@@ -112,7 +113,7 @@ export default function Groups() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      const response = await fetch(`${API_URL}/api/profile/${userId}`);
       if (response.ok) {
         const data = await response.json();
         if (data.profile?.profilePictureUrl) setProfilePicture(data.profile.profilePictureUrl);
@@ -125,7 +126,7 @@ export default function Groups() {
       const params = new URLSearchParams();
       if (search && search.trim()) params.set('search', search.trim());
       const query = params.toString();
-      const url = `http://localhost:5000/api/groups${query ? `?${query}` : ''}`;
+      const url = `${API_URL}/api/groups${query ? `?${query}` : ''}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -138,7 +139,7 @@ export default function Groups() {
   const fetchGroupPosts = async (groupId) => {
     setGroupPostsLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/groups/${groupId}/posts?userId=${user.id}`);
+      const response = await fetch(`${API_URL}/api/groups/${groupId}/posts?userId=${user.id}`);
       if (response.ok) {
         const data = await response.json();
         setGroupPosts(data.posts || []);
@@ -155,8 +156,8 @@ export default function Groups() {
     e.stopPropagation();
     if (!user) return;
     const url = isLiked
-      ? `http://localhost:5000/api/posts/${postId}/unlike`
-      : `http://localhost:5000/api/posts/${postId}/like`;
+      ? `${API_URL}/api/posts/${postId}/unlike`
+      : `${API_URL}/api/posts/${postId}/like`;
     try {
       const response = await fetch(url, {
         method: isLiked ? 'DELETE' : 'POST',
@@ -187,7 +188,7 @@ export default function Groups() {
 
   const fetchComments = async (postId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/posts/${postId}/comments`);
+      const response = await fetch(`${API_URL}/api/posts/${postId}/comments`);
       if (response.ok) {
         const data = await response.json();
         setPostComments(prev => ({ ...prev, [postId]: data.comments || [] }));
@@ -201,7 +202,7 @@ export default function Groups() {
     if (!content) return;
     setCommentLoading(prev => ({ ...prev, [postId]: true }));
     try {
-      const response = await fetch(`http://localhost:5000/api/posts/${postId}/comment`, {
+      const response = await fetch(`${API_URL}/api/posts/${postId}/comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, content })
@@ -242,7 +243,7 @@ export default function Groups() {
     if (!editCommentContent.trim()) return;
     setEditCommentLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/comments/${commentId}`, {
+      const response = await fetch(`${API_URL}/api/comments/${commentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, content: editCommentContent.trim() })
@@ -274,7 +275,7 @@ export default function Groups() {
   const fetchGroupMembers = async (groupId) => {
     setMembersLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/groups/${groupId}`);
+      const response = await fetch(`${API_URL}/api/groups/${groupId}`);
       if (response.ok) {
         const data = await response.json();
         setGroupMembers(data.group?.members || []);
@@ -299,7 +300,7 @@ export default function Groups() {
     setJoinRequestsLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:5000/api/groups/${groupId}/join-requests?userId=${encodeURIComponent(user.id)}`
+        `${API_URL}/api/groups/${groupId}/join-requests?userId=${encodeURIComponent(user.id)}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -312,7 +313,7 @@ export default function Groups() {
   const handleApproveJoinRequest = async (requestId) => {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/groups/${managingGroup.id}/join-requests/${requestId}/approve`,
+        `${API_URL}/api/groups/${managingGroup.id}/join-requests/${requestId}/approve`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) }
       );
       const data = await response.json();
@@ -327,7 +328,7 @@ export default function Groups() {
   const handleDenyJoinRequest = async (requestId) => {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/groups/${managingGroup.id}/join-requests/${requestId}/deny`,
+        `${API_URL}/api/groups/${managingGroup.id}/join-requests/${requestId}/deny`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) }
       );
       const data = await response.json();
@@ -348,7 +349,7 @@ export default function Groups() {
     if (!window.confirm(`Remove ${memberName} from the group?`)) return;
     try {
       const response = await fetch(
-        `http://localhost:5000/api/groups/${managingGroup.id}/members/${memberId}`,
+        `${API_URL}/api/groups/${managingGroup.id}/members/${memberId}`,
         { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId: user.id }) }
       );
       const data = await response.json();
@@ -365,7 +366,7 @@ export default function Groups() {
     if (!window.confirm(`Are you sure you want to ${label}?`)) return;
     try {
       const response = await fetch(
-        `http://localhost:5000/api/groups/${managingGroup.id}/members/${memberId}/role`,
+        `${API_URL}/api/groups/${managingGroup.id}/members/${memberId}/role`,
         { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId: user.id, role: newRole }) }
       );
       const data = await response.json();
@@ -411,7 +412,7 @@ export default function Groups() {
             : undefined
         };
       }
-      const response = await fetch('http://localhost:5000/api/posts/create', {
+      const response = await fetch(API_URL + '/api/posts/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -498,7 +499,7 @@ export default function Groups() {
     e.preventDefault();
     try {
       if (editingGroupId) {
-        const response = await fetch(`http://localhost:5000/api/groups/${editingGroupId}`, {
+        const response = await fetch(`${API_URL}/api/groups/${editingGroupId}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...formData, userId: user.id })
         });
@@ -510,7 +511,7 @@ export default function Groups() {
           fetchGroups(searchTerm);
         } else { alert(data.message || 'Failed to update group'); }
       } else {
-        const response = await fetch('http://localhost:5000/api/groups/create', {
+        const response = await fetch(API_URL + '/api/groups/create', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...formData, creatorId: user.id })
         });
@@ -528,7 +529,7 @@ export default function Groups() {
   const handleJoinGroup = async (group) => {
     const groupId = group?.id ?? group;
     const isPrivate = group?.privacy === 'PRIVATE';
-    const url = isPrivate ? `http://localhost:5000/api/groups/${groupId}/request-join` : `http://localhost:5000/api/groups/${groupId}/join`;
+    const url = isPrivate ? `${API_URL}/api/groups/${groupId}/request-join` : `${API_URL}/api/groups/${groupId}/join`;
     try {
       const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) });
       const data = await response.json();
@@ -542,7 +543,7 @@ export default function Groups() {
   const handleLeaveGroup = async (groupId) => {
     if (!window.confirm('Are you sure you want to leave this group?')) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/groups/${groupId}/leave`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) });
+      const response = await fetch(`${API_URL}/api/groups/${groupId}/leave`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) });
       const data = await response.json();
       if (response.ok) { alert('Successfully left the group!'); fetchGroups(searchTerm); }
       else { alert(data.message || 'Failed to leave group'); }
@@ -552,7 +553,7 @@ export default function Groups() {
   const handleDeleteGroup = async (groupId) => {
     if (!window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/groups/${groupId}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) });
+      const response = await fetch(`${API_URL}/api/groups/${groupId}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id }) });
       const data = await response.json();
       if (response.ok) { alert('Group deleted successfully!'); fetchGroups(searchTerm); }
       else { alert(data.message || 'Failed to delete group'); }

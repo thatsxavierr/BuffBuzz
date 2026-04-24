@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 // AdminPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -56,7 +57,7 @@ export default function AdminPage() {
   const fetchAnnouncements = async () => {
     setAnnouncementsLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/announcements');
+      const res = await fetch(API_URL + '/api/announcements');
       if (res.ok) {
         const data = await res.json();
         setAnnouncements(data.announcements || []);
@@ -75,7 +76,7 @@ export default function AdminPage() {
       return;
     }
     try {
-      const res = await fetch('http://localhost:5000/api/admin/announcements', {
+      const res = await fetch(API_URL + '/api/admin/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,7 +108,7 @@ export default function AdminPage() {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/stats');
+      const res = await fetch(API_URL + '/api/admin/stats');
       if (res.ok) setStats((await res.json()).stats);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -117,7 +118,7 @@ export default function AdminPage() {
     setUsersLoading(true);
     try {
       const q = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
-      const res = await fetch(`http://localhost:5000/api/admin/users${q}`);
+      const res = await fetch(`${API_URL}/api/admin/users${q}`);
       if (res.ok) setUsers((await res.json()).users || []);
     } catch (e) { console.error(e); }
     finally { setUsersLoading(false); }
@@ -126,7 +127,7 @@ export default function AdminPage() {
   const fetchPosts = async () => {
     setPostsLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/posts');
+      const res = await fetch(API_URL + '/api/admin/posts');
       if (res.ok) setPosts((await res.json()).posts || []);
     } catch (e) { console.error(e); }
     finally { setPostsLoading(false); }
@@ -135,7 +136,7 @@ export default function AdminPage() {
   const fetchReports = async () => {
     setReportsLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/reports?status=${reportFilter}`);
+      const res = await fetch(`${API_URL}/api/admin/reports?status=${reportFilter}`);
       if (res.ok) setReports((await res.json()).reports || []);
     } catch (e) { console.error(e); }
     finally { setReportsLoading(false); }
@@ -148,7 +149,7 @@ export default function AdminPage() {
     const action = currentlySuspended ? 'unsuspend' : 'suspend';
     if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${userId}/suspend`, {
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}/suspend`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ suspended: !currentlySuspended })
@@ -164,7 +165,7 @@ export default function AdminPage() {
   const handleDeleteUser = async (userId, userName) => {
     if (!window.confirm(`Permanently delete ${userName}'s account? This cannot be undone.`)) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${userId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, { method: 'DELETE' });
       const data = await res.json();
       if (res.ok) {
         setUsers(prev => prev.filter(u => u.id !== userId));
@@ -178,7 +179,7 @@ export default function AdminPage() {
   const handleDeletePost = async (postId) => {
     if (!window.confirm('Delete this post? This cannot be undone.')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/posts/${postId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/api/admin/posts/${postId}`, { method: 'DELETE' });
       const data = await res.json();
       if (res.ok) {
         setPosts(prev => prev.filter(p => p.id !== postId));
@@ -191,7 +192,7 @@ export default function AdminPage() {
   // ── Report actions ────────────────────────────────────────────────
   const handleUpdateReport = async (reportId, status) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/reports/${reportId}`, {
+      const res = await fetch(`${API_URL}/api/admin/reports/${reportId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -207,8 +208,8 @@ export default function AdminPage() {
  const handleDeleteReportedPost = async (reportId, postId) => {
   if (!window.confirm('Delete this reported post? This cannot be undone.')) return;
   try {
-    await fetch(`http://localhost:5000/api/admin/posts/${postId}`, { method: 'DELETE' });
-    await fetch(`http://localhost:5000/api/admin/reports/${reportId}`, {
+    await fetch(`${API_URL}/api/admin/posts/${postId}`, { method: 'DELETE' });
+    await fetch(`${API_URL}/api/admin/reports/${reportId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'ACTION_TAKEN' })

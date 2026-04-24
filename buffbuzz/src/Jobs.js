@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Jobs.css';
@@ -53,7 +54,7 @@ export default function Jobs() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      const response = await fetch(`${API_URL}/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -73,7 +74,7 @@ export default function Jobs() {
       if (category && category !== 'all') params.set('category', category.toUpperCase());
       if (search && search.trim()) params.set('search', search.trim());
       const query = params.toString();
-      const url = `http://localhost:5000/api/jobs${query ? `?${query}` : ''}`;
+      const url = `${API_URL}/api/jobs${query ? `?${query}` : ''}`;
       
       const response = await fetch(url);
       
@@ -154,7 +155,7 @@ export default function Jobs() {
     
     try {
       if (editingJobId) {
-        const response = await fetch(`http://localhost:5000/api/jobs/${editingJobId}`, {
+        const response = await fetch(`${API_URL}/api/jobs/${editingJobId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -192,7 +193,7 @@ export default function Jobs() {
           alert(data.message || `Failed to update job (${response.status})`);
         }
       } else {
-        const response = await fetch('http://localhost:5000/api/jobs/create', {
+        const response = await fetch(API_URL + '/api/jobs/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -251,7 +252,7 @@ export default function Jobs() {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
+      const response = await fetch(`${API_URL}/api/jobs/${jobId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

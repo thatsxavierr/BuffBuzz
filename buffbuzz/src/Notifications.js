@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Notifications.css';
@@ -26,7 +27,7 @@ export default function Notifications() {
 
   const fetchProfilePicture = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/profile/${userId}`);
+      const response = await fetch(`${API_URL}/api/profile/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -41,7 +42,7 @@ export default function Notifications() {
 
   const fetchNotifications = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${userId}`);
+      const response = await fetch(`${API_URL}/api/notifications/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -60,7 +61,7 @@ export default function Notifications() {
 
   const markAsRead = async (notificationId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
+      const response = await fetch(`${API_URL}/api/notifications/${notificationId}/read`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -79,7 +80,7 @@ export default function Notifications() {
 
   const markAllAsRead = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${user.id}/read-all`, {
+      const response = await fetch(`${API_URL}/api/notifications/${user.id}/read-all`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -97,7 +98,7 @@ export default function Notifications() {
 
   const deleteNotification = async (notificationId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}`, {
+      const response = await fetch(`${API_URL}/api/notifications/${notificationId}`, {
         method: 'DELETE'
       });
 
@@ -156,7 +157,7 @@ export default function Notifications() {
     if (!groupId || !groupJoinRequestId) return;
     try {
       const response = await fetch(
-        `http://localhost:5000/api/groups/${groupId}/join-requests/${groupJoinRequestId}/approve`,
+        `${API_URL}/api/groups/${groupId}/join-requests/${groupJoinRequestId}/approve`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -182,7 +183,7 @@ export default function Notifications() {
     if (!groupId || !groupJoinRequestId) return;
     try {
       const response = await fetch(
-        `http://localhost:5000/api/groups/${groupId}/join-requests/${groupJoinRequestId}/deny`,
+        `${API_URL}/api/groups/${groupId}/join-requests/${groupJoinRequestId}/deny`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './CommentModel.css';
@@ -23,7 +24,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     const fetchComments = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`http://localhost:5000/api/posts/${post.id}/comments`);
+        const response = await fetch(`${API_URL}/api/posts/${post.id}/comments`);
         if (response.ok) {
           const data = await response.json();
           setComments(data.comments);
@@ -76,7 +77,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     }
     const searchUsers = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/search-users?query=${encodeURIComponent(query)}`);
+        const res = await fetch(`${API_URL}/api/search-users?query=${encodeURIComponent(query)}`);
         const data = await res.json();
         const users = (data.users || []).filter(u => u.id !== currentUserId);
         setMentionUsers(users);
@@ -108,7 +109,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
 
     try {
       if (replyingTo) {
-        const response = await fetch(`http://localhost:5000/api/comments/${replyingTo.id}/reply`, {
+        const response = await fetch(`${API_URL}/api/comments/${replyingTo.id}/reply`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -133,7 +134,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
           setComments(addReplyToComments(comments, replyingTo.id, data.reply));
         }
       } else {
-        const response = await fetch(`http://localhost:5000/api/posts/${post.id}/comment`, {
+        const response = await fetch(`${API_URL}/api/posts/${post.id}/comment`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -173,7 +174,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     if (!editCommentText.trim()) return;
     setEditCommentLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/comments/${commentId}`, {
+      const response = await fetch(`${API_URL}/api/comments/${commentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId, content: editCommentText.trim() })

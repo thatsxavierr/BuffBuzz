@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './MainPage.css';
@@ -26,9 +27,9 @@ export default function MainPage() {
       setUser(userData);
       // Run fetches in parallel instead of sequentially
       Promise.all([
-        fetch(`http://localhost:5000/api/profile/${userData.id}`).then(r => r.ok ? r.json() : null),
-        fetch(`http://localhost:5000/api/posts?userId=${userData.id}`).then(r => r.ok ? r.json() : null),
-        fetch(`http://localhost:5000/api/friends/${userData.id}`).then(r => r.ok ? r.json() : null)
+        fetch(`${API_URL}/api/profile/${userData.id}`).then(r => r.ok ? r.json() : null),
+        fetch(`${API_URL}/api/posts?userId=${userData.id}`).then(r => r.ok ? r.json() : null),
+        fetch(`${API_URL}/api/friends/${userData.id}`).then(r => r.ok ? r.json() : null)
       ]).then(([profileRes, postsRes, friendsRes]) => {
         if (profileRes?.profile?.profilePictureUrl) setProfilePicture(profileRes.profile.profilePictureUrl);
         if (postsRes?.posts) setPosts(postsRes.posts);

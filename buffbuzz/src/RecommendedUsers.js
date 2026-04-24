@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 // RecommendedUsers.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -19,7 +20,7 @@ export default function RecommendedUsers({ currentUserId }) {
     setLoading(true);
     try {
       const res = await fetch(
-        `http://localhost:5000/api/users/recommendations/${currentUserId}?limit=6`
+        `${API_URL}/api/users/recommendations/${currentUserId}?limit=6`
       );
       if (res.ok) {
         const data = await res.json();
@@ -35,7 +36,7 @@ export default function RecommendedUsers({ currentUserId }) {
   const handleAddFriend = async (e, userId) => {
     e.stopPropagation();
     try {
-      const res = await fetch('http://localhost:5000/api/friends/request', {
+      const res = await fetch(API_URL + '/api/friends/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ senderId: currentUserId, receiverId: userId })
