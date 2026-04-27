@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "postinstall": "prisma generate",
+    "start": "prisma migrate deploy && node server.js"
   },
   "keywords": [],
   "author": "",
@@ -18,9 +19,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "nodemailer": "^7.0.10",
+    "prisma": "^6.19.2",
     "react-easy-crop": "^5.5.6"
-  },
-  "devDependencies": {
-    "prisma": "^6.19.2"
   }
 }
