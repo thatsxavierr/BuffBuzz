@@ -134,8 +134,13 @@ export default function SignupPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Navigate to verification page with email
-        navigate('/verification', { state: { email: fullEmail } });
+        // If email didn’t send (e.g. Railway + Gmail), API may return verificationCode in the body — pass it to the next screen
+        navigate('/verification', {
+          state: {
+            email: fullEmail,
+            ...(data.verificationCode ? { verificationCode: String(data.verificationCode) } : {})
+          }
+        });
       } else {
         setErrorMessage(data.message || 'Registration failed. Please try again.');
       }

@@ -20,25 +20,36 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Email transporter configuration
+// Email transporter configuration (short timeouts so signup doesn’t hang when SMTP is blocked, e.g. on Railway)
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
   secure: false,
+  connectionTimeout: 15_000,
+  greetingTimeout: 15_000,
+  socketTimeout: 15_000,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
 });
 
-// Verify email configuration on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Email configuration error:', error);
-  } else {
-    console.log('Email server is ready to send messages');
-  }
-});
+// Optional SMTP check on startup. Many hosts (e.g. Railway) block or throttle outbound
+// port 587 to smtp.gmail.com, so verify() times out even when the API is fine.
+// Set EMAIL_VERIFY_ON_START=true only when debugging mail; sending still uses the transporter on demand.
+if (process.env.EMAIL_VERIFY_ON_START === 'true' && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+  transporter.verify((error) => {
+    if (error) {
+      console.error('Email configuration error:', error);
+    } else {
+      console.log('Email server is ready to send messages');
+    }
+  });
+} else if (process.env.EMAIL_USER) {
+  console.log(
+    'Email: startup SMTP verify skipped. Mail features need working SMTP; from cloud, prefer an HTTP provider (e.g. Resend, SendGrid) or set EMAIL_VERIFY_ON_START=true to test verify.'
+  );
+}
 
 // Generate 6-digit verification code
 function generateVerificationCode() {
@@ -204,6 +215,9 @@ async function shouldNotify(userId, type) {
 
 // Send verification email
 async function sendVerificationEmail(email, verificationCode, firstName) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    throw new Error('Email not configured');
+  }
   const mailOptions = {
     from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to: email,

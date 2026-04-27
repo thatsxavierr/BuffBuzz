@@ -13,12 +13,22 @@ function VerificationPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const email = location.state?.email;
+  const prefilledCode = location.state?.verificationCode;
 
   useEffect(() => {
     if (!email) {
       navigate('/signup');
     }
   }, [email, navigate]);
+
+  // Pre-fill code when server returned it (email not configured or send failed)
+  useEffect(() => {
+    if (!prefilledCode) return;
+    const digits = String(prefilledCode).replace(/\D/g, '').slice(0, 6);
+    if (digits.length === 6) {
+      setCode(digits.split(''));
+    }
+  }, [prefilledCode]);
 
   const handleChange = (index, value) => {
     if (value.length > 1) return;
