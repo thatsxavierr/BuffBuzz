@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './BlockedUsers.css';
@@ -24,7 +25,7 @@ const BlockedUsers = () => {
   const fetchBlockedUsers = async (userId) => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:5000/api/blocked/${userId}`);
+      const response = await fetch(`${API_URL}/api/blocked/${userId}`);
       const data = await response.json();
 
       if (response.ok) {
@@ -47,7 +48,7 @@ const BlockedUsers = () => {
     if (!currentUser) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/unblock/${userId}`, {
+      const response = await fetch(`${API_URL}/api/unblock/${userId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ blockerId: currentUser.id })

@@ -571,6 +571,17 @@
   color: #1d4ed8;
 }
 
+.nl-delete-channel {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.nl-delete-channel .nl-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .nl-past-heading {
   color: #374151;
   margin: 8px 0 14px;

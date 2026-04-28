@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import './Newsletter.css';
@@ -8,7 +9,7 @@ import { getValidUser } from './sessionUtils';
 import LinkifiedText, { countWords } from './LinkifiedText';
 import NewsletterShareModal from './NewsletterShareModal';
 
-const API = 'http://localhost:5000';
+const API = API_URL;
 const MAX_WORDS = 500;
 
 export default function Newsletter() {
@@ -311,6 +312,45 @@ export default function Newsletter() {
       }
     } catch (err) {
       showMsg('error', 'Could not delete');
+    }
+  };
+
+  const handleDeleteNewsletter = async () => {
+    if (!myNewsletter) return;
+    const posts = myNewsletter.posts || [];
+    if (posts.length > 0) {
+      showMsg('error', 'Delete all issues first, then you can delete your newsletter.');
+      return;
+    }
+    const subCount = myNewsletter._count?.subscriptions ?? 0;
+    const confirmMsg =
+      subCount > 0
+        ? `Delete your newsletter? ${subCount} subscriber(s) will be removed automatically and will not be notified. This cannot be undone.`
+        : 'Delete your newsletter permanently? You can create a new one later. This cannot be undone.';
+    if (!window.confirm(confirmMsg)) return;
+    try {
+      const delUrl = `${API}/api/newsletters/${encodeURIComponent(myNewsletter.id)}?${new URLSearchParams({
+        userId: user.id
+      })}`;
+      const res = await fetch(delUrl, { method: 'DELETE' });
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        /* empty */
+      }
+      if (res.ok) {
+        setMyNewsletter(null);
+        setEditNl({ title: '', description: '', coverImageUrl: null });
+        showMsg('success', 'Newsletter deleted.');
+        await loadFeed(user.id);
+        loadDiscover(user.id, search);
+        window.dispatchEvent(new Event('notificationsUpdated'));
+      } else {
+        showMsg('error', data.message || 'Could not delete newsletter');
+      }
+    } catch (err) {
+      showMsg('error', 'Something went wrong');
     }
   };
 
@@ -756,6 +796,25 @@ export default function Newsletter() {
                           </div>
                         ))
                       )}
+
+                      <div className="nl-delete-channel">
+                        <h3 className="nl-past-heading">Delete newsletter</h3>
+                        <p className="nl-explainer">
+                          You can remove your channel only after every issue is deleted. If you have
+                          subscribers, deleting the newsletter removes their subscription automatically—they
+                          will not get a separate alert.
+                        </p>
+                        <button
+                          type="button"
+                          className="nl-btn nl-btn-danger"
+                          disabled={(myNewsletter.posts || []).length > 0}
+                          onClick={handleDeleteNewsletter}
+                        >
+                          {(myNewsletter.posts || []).length > 0
+                            ? 'Delete all issues first'
+                            : 'Delete my newsletter'}
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>

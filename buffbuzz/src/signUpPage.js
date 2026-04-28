@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./signUpPage.css";
@@ -122,7 +123,7 @@ export default function SignupPage() {
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/register', {
+      const response = await fetch(API_URL + '/api/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -133,8 +134,13 @@ export default function SignupPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Navigate to verification page with email
-        navigate('/verification', { state: { email: fullEmail } });
+        // If email didn’t send (e.g. Railway + Gmail), API may return verificationCode in the body — pass it to the next screen
+        navigate('/verification', {
+          state: {
+            email: fullEmail,
+            ...(data.verificationCode ? { verificationCode: String(data.verificationCode) } : {})
+          }
+        });
       } else {
         setErrorMessage(data.message || 'Registration failed. Please try again.');
       }

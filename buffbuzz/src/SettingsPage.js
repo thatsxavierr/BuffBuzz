@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 // SettingsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -80,7 +81,7 @@ const SettingsPage = () => {
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
-    fetch(`http://localhost:5000/api/settings/notifications/${user.id}`)
+    fetch(`${API_URL}/api/settings/notifications/${user.id}`)
       .then(res => res.json())
       .then(data => {
         if (data.preferences) {
@@ -116,7 +117,7 @@ const SettingsPage = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/settings/password', {
+      const response = await fetch(API_URL + '/api/settings/password', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, currentPassword: passwordData.currentPassword, newPassword: passwordData.newPassword })
@@ -137,7 +138,7 @@ const SettingsPage = () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
-      const response = await fetch('http://localhost:5000/api/settings/notifications', {
+      const response = await fetch(API_URL + '/api/settings/notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, ...notifications })
@@ -156,7 +157,7 @@ const SettingsPage = () => {
   const handleTemporaryMute = async (hours) => {
     setMuteLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/settings/notifications/mute', {
+      const response = await fetch(API_URL + '/api/settings/notifications/mute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, hours })
@@ -186,7 +187,7 @@ const SettingsPage = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/settings/delete-account', {
+      const response = await fetch(API_URL + '/api/settings/delete-account', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, password: deleteAccountData.password })

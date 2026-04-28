@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './CommentModel.css';
@@ -14,7 +15,6 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
   const [replyingTo, setReplyingTo] = useState(null);
   const [reportComment, setReportComment] = useState(null);
 
-  // ── Edit state ───────────────────────────────────────────────────
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
   const [editCommentLoading, setEditCommentLoading] = useState(false);
@@ -23,7 +23,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     const fetchComments = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`http://localhost:5000/api/posts/${post.id}/comments`);
+        const response = await fetch(`${API_URL}/api/posts/${post.id}/comments`);
         if (response.ok) {
           const data = await response.json();
           setComments(data.comments);
@@ -37,7 +37,6 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
 
     if (isOpen) {
       fetchComments();
-      // Reset edit state when modal opens
       setEditingCommentId(null);
       setEditCommentText('');
     }
@@ -50,7 +49,6 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     const diffInMins = Math.floor(diffInMs / 60000);
     const diffInHours = Math.floor(diffInMs / 3600000);
     const diffInDays = Math.floor(diffInMs / 86400000);
-
     if (diffInMins < 1) return 'Just now';
     if (diffInMins < 60) return `${diffInMins}m`;
     if (diffInHours < 24) return `${diffInHours}h`;
@@ -58,32 +56,21 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     return date.toLocaleDateString();
   };
 
-  // ── Mention handlers ─────────────────────────────────────────────
   useEffect(() => {
     const lastAtIndex = commentText.lastIndexOf('@');
-    if (lastAtIndex === -1) {
-      setShowMentionDropdown(false);
-      setMentionUsers([]);
-      return;
-    }
+    if (lastAtIndex === -1) { setShowMentionDropdown(false); setMentionUsers([]); return; }
     const afterAt = commentText.slice(lastAtIndex + 1);
     const query = (afterAt.split(/\s/)[0] || '').trim();
     if (query.includes('@')) return;
-    if (query.length < 1) {
-      setShowMentionDropdown(false);
-      setMentionUsers([]);
-      return;
-    }
+    if (query.length < 1) { setShowMentionDropdown(false); setMentionUsers([]); return; }
     const searchUsers = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/search-users?query=${encodeURIComponent(query)}`);
+        const res = await fetch(`${API_URL}/api/search-users?query=${encodeURIComponent(query)}`);
         const data = await res.json();
         const users = (data.users || []).filter(u => u.id !== currentUserId);
         setMentionUsers(users);
         setShowMentionDropdown(users.length > 0);
-      } catch (err) {
-        setMentionUsers([]);
-      }
+      } catch (err) { setMentionUsers([]); }
     };
     const t = setTimeout(searchUsers, 200);
     return () => clearTimeout(t);
@@ -95,92 +82,66 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
     const afterAt = commentText.slice(lastAtIndex + 1);
     const query = afterAt.split(/\s/)[0];
     const afterQuery = afterAt.slice(query.length);
-    const newText = `${beforeAt}@${user.fullName} ${afterQuery}`;
-    setCommentText(newText);
+    setCommentText(`${beforeAt}@${user.fullName} ${afterQuery}`);
     setMentionedUserIds(prev => prev.includes(user.id) ? prev : [...prev, user.id]);
     setShowMentionDropdown(false);
     setMentionUsers([]);
   };
 
-  // ── Post / reply comment ─────────────────────────────────────────
   const handleComment = async () => {
     if (!commentText.trim()) return;
-
     try {
       if (replyingTo) {
-        const response = await fetch(`http://localhost:5000/api/comments/${replyingTo.id}/reply`, {
+        const response = await fetch(`${API_URL}/api/comments/${replyingTo.id}/reply`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: currentUserId,
-            content: commentText,
-            mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
-          })
+          body: JSON.stringify({ userId: currentUserId, content: commentText, mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined })
         });
         const data = await response.json();
         if (response.ok && data.reply) {
-          const addReplyToComments = (list, parentId, newReply) => {
-            return list.map(item => {
-              if (item.id === parentId) {
-                return { ...item, replies: [...(item.replies || []), newReply] };
-              }
-              if (item.replies?.length) {
-                return { ...item, replies: addReplyToComments(item.replies, parentId, newReply) };
-              }
+          const addReplyToComments = (list, parentId, newReply) =>
+            list.map(item => {
+              if (item.id === parentId) return { ...item, replies: [...(item.replies || []), newReply] };
+              if (item.replies?.length) return { ...item, replies: addReplyToComments(item.replies, parentId, newReply) };
               return item;
             });
-          };
           setComments(addReplyToComments(comments, replyingTo.id, data.reply));
         }
       } else {
-        const response = await fetch(`http://localhost:5000/api/posts/${post.id}/comment`, {
+        const response = await fetch(`${API_URL}/api/posts/${post.id}/comment`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: currentUserId,
-            content: commentText,
-            mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined
-          })
+          body: JSON.stringify({ userId: currentUserId, content: commentText, mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined })
         });
         const data = await response.json();
-        if (response.ok && data.comment) {
-          setComments([{ ...data.comment, replies: [] }, ...comments]);
-        }
+        if (response.ok && data.comment) setComments([{ ...data.comment, replies: [] }, ...comments]);
       }
       setCommentText('');
       setMentionedUserIds([]);
       setReplyingTo(null);
       if (onCommentAdded) onCommentAdded();
-    } catch (error) {
-      console.error('Error adding comment:', error);
-    }
+    } catch (error) { console.error('Error adding comment:', error); }
   };
 
-  // ── Edit handlers ────────────────────────────────────────────────
   const handleStartEdit = (comment) => {
     setEditingCommentId(comment.id);
     setEditCommentText(comment.content);
-    // Cancel any active reply
     setReplyingTo(null);
   };
 
-  const handleCancelEdit = () => {
-    setEditingCommentId(null);
-    setEditCommentText('');
-  };
+  const handleCancelEdit = () => { setEditingCommentId(null); setEditCommentText(''); };
 
   const handleSaveEdit = async (commentId) => {
     if (!editCommentText.trim()) return;
     setEditCommentLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/comments/${commentId}`, {
+      const response = await fetch(`${API_URL}/api/comments/${commentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId, content: editCommentText.trim() })
       });
       const data = await response.json();
       if (response.ok) {
-        // Update content in nested comment tree
         const updateContentInTree = (list) =>
           list.map(c => {
             if (c.id === commentId) return { ...c, content: data.comment.content };
@@ -190,21 +151,20 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
         setComments(prev => updateContentInTree(prev));
         setEditingCommentId(null);
         setEditCommentText('');
-      } else {
-        alert(data.message || 'Failed to update comment');
-      }
+      } else { alert(data.message || 'Failed to update comment'); }
     } catch (error) {
       console.error('Error editing comment:', error);
       alert('An error occurred while editing the comment');
-    } finally {
-      setEditCommentLoading(false);
-    }
+    } finally { setEditCommentLoading(false); }
   };
 
-  // ── Render a single comment row (used for all levels) ─────────────
   const renderComment = (comment, isReply = false, isNested = false) => {
     const isOwn = comment.author?.id === currentUserId;
     const isEditing = editingCommentId === comment.id;
+    const authorFullName = comment.author
+      ? `${comment.author.firstName ?? ''} ${comment.author.lastName ?? ''}`.trim()
+      : 'Unknown';
+    const avatarAlt = `${authorFullName}'s profile picture`;
 
     return (
       <div
@@ -216,11 +176,14 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
           onClick={() => !isReply && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
           role={!isReply ? 'button' : undefined}
           tabIndex={!isReply ? 0 : undefined}
+          aria-label={!isReply ? `View ${authorFullName}'s profile` : undefined}
           onKeyDown={(e) => !isReply && e.key === 'Enter' && comment.author?.id && (onClose(), navigate('/profile', { state: { userId: comment.author.id } }))}
         >
           {comment.author?.profile?.profilePictureUrl ? (
-            <img src={comment.author.profile.profilePictureUrl} alt={comment.author.firstName} />
-          ) : '👤'}
+            <img src={comment.author.profile.profilePictureUrl} alt={avatarAlt} />
+          ) : (
+            <span aria-hidden="true">👤</span>
+          )}
         </div>
 
         <div className="modal-comment-content">
@@ -235,7 +198,6 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
               {comment.author ? `${comment.author.firstName?.toLowerCase() ?? ''}${comment.author.lastName?.toLowerCase() ?? ''}` : 'Unknown'}
             </span>
 
-            {/* Show inline edit input OR comment text */}
             {isEditing ? (
               <div className="modal-comment-edit-row">
                 <input
@@ -243,6 +205,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
                   className="modal-comment-edit-input"
                   value={editCommentText}
                   onChange={(e) => setEditCommentText(e.target.value)}
+                  aria-label="Edit comment text"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSaveEdit(comment.id);
                     if (e.key === 'Escape') handleCancelEdit();
@@ -258,18 +221,12 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
           <div className="modal-comment-footer">
             <span className="modal-comment-time">{formatDate(comment.createdAt)}</span>
 
-            {/* Edit button — only for own comments, not while editing */}
             {isOwn && !isEditing && (
-              <button
-                type="button"
-                className="modal-comment-edit-btn"
-                onClick={() => handleStartEdit(comment)}
-              >
+              <button type="button" className="modal-comment-edit-btn" onClick={() => handleStartEdit(comment)}>
                 Edit
               </button>
             )}
 
-            {/* Save / Cancel buttons — only while editing */}
             {isEditing && (
               <>
                 <button
@@ -280,33 +237,29 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
                 >
                   {editCommentLoading ? '…' : 'Save'}
                 </button>
-                <button
-                  type="button"
-                  className="modal-comment-cancel-btn"
-                  onClick={handleCancelEdit}
-                >
+                <button type="button" className="modal-comment-cancel-btn" onClick={handleCancelEdit}>
                   Cancel
                 </button>
               </>
             )}
 
-            {/* Report — only for others' comments */}
             {!isOwn && (
               <button
                 type="button"
                 className="modal-comment-reply-btn"
                 onClick={() => setReportComment(comment)}
+                aria-label={`Report ${authorFullName}'s comment`}
               >
                 Report
               </button>
             )}
 
-            {/* Reply — only when not editing */}
             {!isEditing && (
               <button
                 type="button"
                 className="modal-comment-reply-btn"
                 onClick={() => setReplyingTo(replyingTo?.id === comment.id ? null : comment)}
+                aria-label={replyingTo?.id === comment.id ? 'Cancel reply' : `Reply to ${authorFullName}`}
               >
                 Reply
               </button>
@@ -319,13 +272,23 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
 
   if (!isOpen) return null;
 
+  const postAuthorName = post?.author
+    ? `${post.author.firstName ?? ''} ${post.author.lastName ?? ''}`.trim()
+    : 'Unknown';
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-content"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Post comments"
+      >
         {/* Modal Header */}
         <div className="modal-header">
           <h3>Comments</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose} aria-label="Close comments">×</button>
         </div>
 
         {/* Post Preview */}
@@ -335,12 +298,18 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
             onClick={() => post?.author?.id && (onClose(), navigate('/profile', { state: { userId: post.author.id } }))}
             role="button"
             tabIndex={0}
+            aria-label={`View ${postAuthorName}'s profile`}
             onKeyDown={(e) => e.key === 'Enter' && post?.author?.id && (onClose(), navigate('/profile', { state: { userId: post.author.id } }))}
           >
             <div className="preview-avatar">
               {post?.author?.profile?.profilePictureUrl ? (
-                <img src={post.author.profile.profilePictureUrl} alt={post.author.firstName} />
-              ) : '👤'}
+                <img
+                  src={post.author.profile.profilePictureUrl}
+                  alt={`${postAuthorName}'s profile picture`}
+                />
+              ) : (
+                <span aria-hidden="true">👤</span>
+              )}
             </div>
             <div className="preview-info">
               <span className="preview-username">
@@ -392,6 +361,7 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
               placeholder={replyingTo
                 ? `Reply to ${replyingTo.author?.firstName || 'comment'}... (type @ to mention)`
                 : 'Add a comment... (type @ to mention)'}
+              aria-label={replyingTo ? `Reply to ${replyingTo.author?.firstName || 'comment'}` : 'Add a comment'}
               onKeyPress={(e) => e.key === 'Enter' && !showMentionDropdown && handleComment()}
             />
             {replyingTo && (
@@ -408,23 +378,25 @@ export default function CommentModel({ post, currentUserId, isOpen, onClose, onC
               className="modal-post-btn"
               onClick={handleComment}
               disabled={!commentText.trim()}
+              aria-label="Post comment"
             >
               Post
             </button>
           </div>
           {showMentionDropdown && mentionUsers.length > 0 && (
-            <div className="mention-dropdown">
+            <div className="mention-dropdown" role="listbox" aria-label="Mention suggestions">
               {mentionUsers.map((user) => (
                 <button
                   key={user.id}
                   type="button"
                   className="mention-dropdown-item"
                   onClick={() => handleSelectMention(user)}
+                  aria-label={`Mention ${user.fullName}`}
                 >
                   {user.profilePictureUrl ? (
                     <img src={user.profilePictureUrl} alt="" className="mention-avatar" />
                   ) : (
-                    <span className="mention-avatar-placeholder">👤</span>
+                    <span className="mention-avatar-placeholder" aria-hidden="true">👤</span>
                   )}
                   <span className="mention-name">{user.fullName}</span>
                 </button>

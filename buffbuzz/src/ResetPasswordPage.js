@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import "./ResetPage.css";
@@ -58,7 +59,7 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/reset-password', {
+      const response = await fetch(API_URL + '/api/reset-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

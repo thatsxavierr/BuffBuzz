@@ -20,25 +20,36 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Email transporter configuration
+// Email transporter configuration (short timeouts so signup doesn’t hang when SMTP is blocked, e.g. on Railway)
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
   secure: false,
+  connectionTimeout: 15_000,
+  greetingTimeout: 15_000,
+  socketTimeout: 15_000,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
 });
 
-// Verify email configuration on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Email configuration error:', error);
-  } else {
-    console.log('Email server is ready to send messages');
-  }
-});
+// Optional SMTP check on startup. Many hosts (e.g. Railway) block or throttle outbound
+// port 587 to smtp.gmail.com, so verify() times out even when the API is fine.
+// Set EMAIL_VERIFY_ON_START=true only when debugging mail; sending still uses the transporter on demand.
+if (process.env.EMAIL_VERIFY_ON_START === 'true' && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+  transporter.verify((error) => {
+    if (error) {
+      console.error('Email configuration error:', error);
+    } else {
+      console.log('Email server is ready to send messages');
+    }
+  });
+} else if (process.env.EMAIL_USER) {
+  console.log(
+    'Email: startup SMTP verify skipped. Mail features need working SMTP; from cloud, prefer an HTTP provider (e.g. Resend, SendGrid) or set EMAIL_VERIFY_ON_START=true to test verify.'
+  );
+}
 
 // Generate 6-digit verification code
 function generateVerificationCode() {
@@ -204,6 +215,9 @@ async function shouldNotify(userId, type) {
 
 // Send verification email
 async function sendVerificationEmail(email, verificationCode, firstName) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    throw new Error('Email not configured');
+  }
   const mailOptions = {
     from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to: email,
@@ -5623,8 +5637,22 @@ async function assertNewsletterAdminUser(adminUserId) {
   if (!adminUserId) return null;
   const u = await prisma.user.findUnique({ where: { id: adminUserId } });
   if (!u) return null;
-  const adminEmail = (process.env.ADMIN_EMAIL || 'buffbuzz@wtamu.edu').trim().toLowerCase();
-  if (normalizeEmail(u.email) !== adminEmail) return null;
+  // Admin access is controlled by env var(s). This is intentionally email-based because
+  // the UserType enum is only STUDENT/PROFESSOR in this project.
+  //
+  // Supports:
+  // - ADMIN_EMAILS="a@b.com,c@d.com"
+  // - ADMIN_EMAIL="a@b.com" (fallback)
+  //
+  // Default matches the frontend AdminPage default so local dev "just works".
+  const fallbackAdminEmail = 'buffbuzz2025@gmail.com';
+  const rawList = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || fallbackAdminEmail;
+  const adminEmails = String(rawList)
+    .split(',')
+    .map((s) => normalizeEmail(s))
+    .filter(Boolean);
+
+  if (!adminEmails.includes(normalizeEmail(u.email))) return null;
   return u;
 }
 
@@ -5964,6 +5992,36 @@ app.put('/api/newsletters/:newsletterId', async (req, res) => {
   } catch (error) {
     console.error('Update newsletter error:', error);
     res.status(500).json({ message: 'Failed to update newsletter' });
+  }
+});
+
+app.delete('/api/newsletters/:newsletterId', async (req, res) => {
+  try {
+    const { newsletterId } = req.params;
+    // Prefer query: many proxies/clients omit JSON bodies on DELETE.
+    const userId = req.query.userId || req.body?.userId;
+    if (!userId) return res.status(400).json({ message: 'userId is required' });
+
+    const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
+    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed.' });
+
+    const postCount = await prisma.newsletterPost.count({ where: { newsletterId } });
+    if (postCount > 0) {
+      return res.status(400).json({
+        message: 'Delete all issues before you can delete your newsletter.'
+      });
+    }
+
+    // Remove subscriptions first so delete works even if the DB FK predates ON DELETE CASCADE.
+    await prisma.$transaction([
+      prisma.newsletterSubscription.deleteMany({ where: { newsletterId } }),
+      prisma.newsletter.delete({ where: { id: newsletterId } })
+    ]);
+
+    res.status(200).json({ message: 'Newsletter deleted' });
+  } catch (error) {
+    console.error('Delete newsletter error:', error);
+    res.status(500).json({ message: 'Failed to delete newsletter' });
   }
 });
 

@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Header.css';
@@ -35,7 +36,7 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
       const user = getValidUser();
       if (!user) return;
       try {
-        const response = await fetch(`http://localhost:5000/api/friends/requests/${user.id}`);
+        const response = await fetch(`${API_URL}/api/friends/requests/${user.id}`);
         const data = await response.json();
         if (response.ok) setPendingRequestsCount(data.requests.length);
       } catch (err) {
@@ -82,7 +83,7 @@ export default function Header({ onBackClick, profilePictureUrl, currentUserId }
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          `http://localhost:5000/api/search-users?query=${encodeURIComponent(value)}`
+          `${API_URL}/api/search-users?query=${encodeURIComponent(value)}`
         );
         const data = await response.json();
         const users = Array.isArray(data) ? data : data.users || [];

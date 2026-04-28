@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './verificationPage.css';
@@ -12,12 +13,22 @@ function VerificationPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const email = location.state?.email;
+  const prefilledCode = location.state?.verificationCode;
 
   useEffect(() => {
     if (!email) {
       navigate('/signup');
     }
   }, [email, navigate]);
+
+  // Pre-fill code when server returned it (email not configured or send failed)
+  useEffect(() => {
+    if (!prefilledCode) return;
+    const digits = String(prefilledCode).replace(/\D/g, '').slice(0, 6);
+    if (digits.length === 6) {
+      setCode(digits.split(''));
+    }
+  }, [prefilledCode]);
 
   const handleChange = (index, value) => {
     if (value.length > 1) return;
@@ -70,7 +81,7 @@ function VerificationPage() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/verify', {
+      const response = await fetch(API_URL + '/api/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +121,7 @@ function VerificationPage() {
     setSuccess('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/resend-code', {
+      const response = await fetch(API_URL + '/api/resend-code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

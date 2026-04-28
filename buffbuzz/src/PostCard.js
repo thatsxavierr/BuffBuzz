@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './PostCard.css';
@@ -40,8 +41,6 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
   const editSlotsLeft = () =>
     MAX_EDIT_IMAGES - editPreviewsLenRef.current - editCropQueueLenRef.current;
 
-  // Debug: Log the post data
-
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -49,7 +48,6 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
     const diffInMins = Math.floor(diffInMs / 60000);
     const diffInHours = Math.floor(diffInMs / 3600000);
     const diffInDays = Math.floor(diffInMs / 86400000);
-
     if (diffInMins < 1) return 'Just now';
     if (diffInMins < 60) return `${diffInMins}m ago`;
     if (diffInHours < 24) return `${diffInHours}h ago`;
@@ -64,7 +62,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
   const handleLike = async () => {
     try {
       if (isLiked) {
-        const response = await fetch(`http://localhost:5000/api/posts/${post.id}/unlike`, {
+        const response = await fetch(`${API_URL}/api/posts/${post.id}/unlike`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentUserId })
@@ -73,7 +71,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
         setIsLiked(false);
         setLikeCount(data.likeCount);
       } else {
-        const response = await fetch(`http://localhost:5000/api/posts/${post.id}/like`, {
+        const response = await fetch(`${API_URL}/api/posts/${post.id}/like`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentUserId })
@@ -87,38 +85,25 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
     }
   };
 
-  const handleSave = () => {
-    setIsSaved(!isSaved);
-  };
+  const handleSave = () => setIsSaved(!isSaved);
 
-  // FIXED: Navigate to user's profile instead of showing alert
   const handleAdd = () => {
     navigate('/profile', { state: { userId: post.author.id } });
   };
 
   const handleDelete = async () => {
     const confirmDelete = window.confirm('Are you sure you want to delete this post? This action cannot be undone.');
-    
-    if (!confirmDelete) {
-      return;
-    }
-
+    if (!confirmDelete) return;
     setIsDeleting(true);
-    
     try {
-      const response = await fetch(`http://localhost:5000/api/posts/${post.id}`, {
+      const response = await fetch(`${API_URL}/api/posts/${post.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUserId })
       });
-
       const data = await response.json();
-
       if (response.ok) {
-        // Call the onDelete callback to remove the post from the feed
-        if (onDelete) {
-          onDelete(post.id);
-        }
+        if (onDelete) onDelete(post.id);
       } else {
         alert(data.message || 'Failed to delete post');
         setIsDeleting(false);
@@ -130,9 +115,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
     }
   };
 
-  const handleCommentAdded = () => {
-    setCommentCount(commentCount + 1);
-  };
+  const handleCommentAdded = () => setCommentCount(commentCount + 1);
 
   const closeEditModal = () => {
     setEditCropQueue([]);
@@ -162,12 +145,11 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
 
   const processEditFiles = (files, e) => {
     const readers = files.map(
-      (file) =>
-        new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(file);
-        })
+      (file) => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      })
     );
     Promise.all(readers).then((results) => enqueueEditCrops(results));
     if (e) e.target.value = '';
@@ -212,31 +194,24 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
       e.target.value = '';
       return;
     }
-
     const slots = editSlotsLeft();
     if (slots <= 0) {
       alert(`Maximum ${MAX_EDIT_IMAGES} images per post. Remove an image or finish cropping first.`);
       e.target.value = '';
       return;
     }
-
     const MAX_SIZE_MB = 5;
     const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
     const oversized = validFiles.filter((f) => f.size > MAX_SIZE_BYTES);
     if (oversized.length > 0) {
-      alert(
-        `Some file(s) exceed the ${MAX_SIZE_MB}MB limit and were skipped.`
-      );
+      alert(`Some file(s) exceed the ${MAX_SIZE_MB}MB limit and were skipped.`);
     }
     const sizeOk = validFiles.filter((f) => f.size <= MAX_SIZE_BYTES);
     const toProcess = sizeOk.slice(0, slots);
     if (toProcess.length < sizeOk.length) {
       alert(`Only ${slots} more image slot(s) available. Extra file(s) were not added.`);
     }
-    if (toProcess.length === 0) {
-      e.target.value = '';
-      return;
-    }
+    if (toProcess.length === 0) { e.target.value = ''; return; }
     processEditFiles(toProcess, e);
   };
 
@@ -256,7 +231,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
     }
     setIsUpdating(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/posts/${post.id}`, {
+      const response = await fetch(`${API_URL}/api/posts/${post.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -281,6 +256,11 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
     }
   };
 
+  // Descriptive alt for post images
+  const postImageAlt = `Post by ${post.author.firstName} ${post.author.lastName}`;
+  // Full name for author avatar
+  const authorAlt = `${post.author.firstName} ${post.author.lastName}'s profile picture`;
+
   return (
     <>
       <div className="post-card">
@@ -289,9 +269,9 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
           <div className="author-section" onClick={handleAuthorClick} style={{ cursor: 'pointer' }}>
             <div className="author-avatar">
               {post.author.profile?.profilePictureUrl ? (
-                <img src={post.author.profile.profilePictureUrl} alt={post.author.firstName} />
+                <img src={post.author.profile.profilePictureUrl} alt={authorAlt} />
               ) : (
-                <div className="avatar-placeholder">👤</div>
+                <div className="avatar-placeholder" aria-hidden="true">👤</div>
               )}
             </div>
             <div className="author-info">
@@ -299,11 +279,12 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
                 <span className="author-username" style={{ color: '#800000', fontWeight: '600' }}>
                   {post.author.firstName.toLowerCase()}{post.author.lastName.toLowerCase()}
                 </span>
-                <span className="post-time-dot">•</span>
+                <span className="post-time-dot" aria-hidden="true">•</span>
                 <span className="post-time">{formatDate(post.createdAt)}</span>
               </div>
             </div>
           </div>
+
           <div className="header-actions">
             {post.author.id !== currentUserId && !friendIds.has(post.author.id) && (
               <button className="add-button" onClick={handleAdd}>
@@ -315,6 +296,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
                 type="button"
                 className="report-inline-btn"
                 onClick={() => setShowReportModal(true)}
+                aria-label="Report this post"
                 title="Report post"
               >
                 Report
@@ -322,29 +304,31 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
             )}
             {post.author.id === currentUserId && post.postType !== 'POLL' && (
               <div className="post-owner-actions">
-                <button 
-                  className="edit-button" 
+                <button
+                  className="edit-button"
                   onClick={handleEditClick}
+                  aria-label="Edit post"
                   title="Edit post"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
                 </button>
-                <button 
-                  className="delete-button" 
+                <button
+                  className="delete-button"
                   onClick={handleDelete}
                   disabled={isDeleting}
+                  aria-label={isDeleting ? 'Deleting post…' : 'Delete post'}
                   title="Delete post"
                 >
                   {isDeleting ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="12" cy="12" r="10"/>
                       <path d="M12 6v6M12 18h.01"/>
                     </svg>
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                     </svg>
                   )}
@@ -354,12 +338,12 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
           </div>
         </div>
 
-        {/* Post Image - Fixed to handle base64 properly */}
+        {/* Post Images */}
         {(post.imageUrls?.length > 0 || post.imageUrl) && (
           <div className="post-image-container">
             <ImageCarousel
               images={post.imageUrls?.length > 0 ? post.imageUrls : [post.imageUrl]}
-              alt="Post content"
+              alt={postImageAlt}
               className="post-image"
             />
           </div>
@@ -378,70 +362,88 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
         {/* Post Actions */}
         <div className="post-actions">
           <div className="actions-left">
-            <button 
-              className={`action-btn ${isLiked ? 'liked' : ''}`} 
+            <button
+              className={`action-btn ${isLiked ? 'liked' : ''}`}
               onClick={handleLike}
+              aria-label={isLiked ? 'Unlike post' : 'Like post'}
+              aria-pressed={isLiked}
             >
               {isLiked ? (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="#800000">
+                <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="#800000">
                   <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
               ) : (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
               )}
             </button>
-            <button className="action-btn" onClick={() => setIsCommentsOpen(true)}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <button
+              className="action-btn"
+              onClick={() => setIsCommentsOpen(true)}
+              aria-label="View comments"
+            >
+              <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
               </svg>
             </button>
-            <button type="button" className="action-btn" onClick={() => setShowShareModal(true)} title="Share to a friend">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <button
+              type="button"
+              className="action-btn"
+              onClick={() => setShowShareModal(true)}
+              aria-label="Share post with a friend"
+              title="Share to a friend"
+            >
+              <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
               </svg>
             </button>
           </div>
-          <button className={`action-btn save-btn ${isSaved ? 'saved' : ''}`} onClick={handleSave}>
+          <button
+            className={`action-btn save-btn ${isSaved ? 'saved' : ''}`}
+            onClick={handleSave}
+            aria-label={isSaved ? 'Unsave post' : 'Save post'}
+            aria-pressed={isSaved}
+          >
             {isSaved ? (
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="#800000">
+              <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="#800000">
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
               </svg>
             ) : (
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
               </svg>
             )}
           </button>
         </div>
 
-        {/* Likes Count - clickable to see who liked */}
+        {/* Likes Count */}
         <div className="likes-section">
           <span
             className={`likes-count ${likeCount > 0 ? 'likes-count-clickable' : ''}`}
             onClick={() => likeCount > 0 && setIsLikesOpen(true)}
             role={likeCount > 0 ? 'button' : undefined}
             tabIndex={likeCount > 0 ? 0 : undefined}
+            aria-label={likeCount > 0 ? `${likeCount} ${likeCount === 1 ? 'like' : 'likes'}, click to see who liked this` : undefined}
             onKeyDown={(e) => likeCount > 0 && e.key === 'Enter' && setIsLikesOpen(true)}
           >
             {likeCount} {likeCount === 1 ? 'like' : 'likes'}
           </span>
         </div>
 
-        {/* Post Content (poll question/description shown inside PollBlock) */}
+        {/* Post Content */}
         {post.postType !== 'POLL' && (
-        <div className="post-content">
-          <span 
-            className="content-username" 
-            onClick={handleAuthorClick}
-            style={{ cursor: 'pointer', color: '#800000', fontWeight: '600' }}
-          >
-            {post.author.firstName.toLowerCase()}{post.author.lastName.toLowerCase()}
-          </span>
-          <span className="content-title"> {post.title}</span>
-          {post.content && <p className="content-text">{post.content}</p>}
-        </div>
+          <div className="post-content">
+            <span
+              className="content-username"
+              onClick={handleAuthorClick}
+              style={{ cursor: 'pointer', color: '#800000', fontWeight: '600' }}
+            >
+              {post.author.firstName.toLowerCase()}{post.author.lastName.toLowerCase()}
+            </span>
+            <span className="content-title"> {post.title}</span>
+            {post.content && <p className="content-text">{post.content}</p>}
+          </div>
         )}
 
         {/* View Comments */}
@@ -451,13 +453,14 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
           </button>
         )}
 
-        {/* Add Comment - Clicking opens modal */}
+        {/* Add Comment */}
         <div className="add-comment" onClick={() => setIsCommentsOpen(true)}>
           <input
             type="text"
             placeholder="Add a comment..."
             readOnly
             style={{ cursor: 'pointer' }}
+            aria-label="Add a comment"
           />
         </div>
       </div>
@@ -465,12 +468,19 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
       {/* Edit Post Modal */}
       {showEditModal && (
         <div className="post-edit-modal-overlay" onClick={closeEditModal}>
-          <div className="post-edit-modal-content" onClick={e => e.stopPropagation()}>
+          <div
+            className="post-edit-modal-content"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit post"
+          >
             <h3>Edit Post</h3>
             <form onSubmit={handleUpdatePost}>
               <div className="post-edit-form-group">
-                <label>Title</label>
+                <label htmlFor="edit-title">Title</label>
                 <input
+                  id="edit-title"
                   type="text"
                   value={editTitle}
                   onChange={e => setEditTitle(e.target.value)}
@@ -478,8 +488,9 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
                 />
               </div>
               <div className="post-edit-form-group">
-                <label>Content</label>
+                <label htmlFor="edit-content">Content</label>
                 <textarea
+                  id="edit-content"
                   value={editContent}
                   onChange={e => setEditContent(e.target.value)}
                   rows={4}
@@ -487,8 +498,9 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
                 />
               </div>
               <div className="post-edit-form-group">
-                <label>Images (optional)</label>
+                <label htmlFor="edit-images">Images (optional)</label>
                 <input
+                  id="edit-images"
                   type="file"
                   accept="image/*"
                   multiple
@@ -499,13 +511,13 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
                   <div className="post-edit-image-previews">
                     {editImagePreviews.map((src, i) => (
                       <div key={i} className="post-edit-preview-item">
-                        <img src={src} alt={`Preview ${i + 1}`} />
+                        <img src={src} alt={`Post image preview ${i + 1} of ${editImagePreviews.length}`} />
                         <button
                           type="button"
                           className="post-edit-crop-img"
                           onClick={() => handleEditAdjustCrop(i)}
                           disabled={isUpdating || editCropQueue.length > 0}
-                          title="Adjust crop"
+                          aria-label={`Adjust crop for image ${i + 1}`}
                         >
                           Crop
                         </button>
@@ -513,7 +525,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
                           type="button"
                           className="post-edit-remove-img"
                           onClick={() => handleRemoveEditImage(i)}
-                          aria-label="Remove image"
+                          aria-label={`Remove image ${i + 1}`}
                         >
                           ×
                         </button>
@@ -533,8 +545,7 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
         </div>
       )}
 
-      {/* Comment Modal */}
-      <CommentModel 
+      <CommentModel
         post={post}
         currentUserId={currentUserId}
         isOpen={isCommentsOpen}
@@ -551,7 +562,6 @@ export default function PostCard({ post, currentUserId, onDelete, onUpdate, frie
         subjectLabel="this post"
       />
 
-      {/* Likes Modal */}
       <LikesModal
         postId={post.id}
         likeCount={likeCount}

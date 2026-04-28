@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LikesModal.css';
@@ -18,7 +19,7 @@ export default function LikesModal({ postId, likeCount, isOpen, onClose }) {
     const fetchLikers = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`http://localhost:5000/api/posts/${postId}/likes`);
+        const response = await fetch(`${API_URL}/api/posts/${postId}/likes`);
         const data = await response.json();
         if (response.ok) {
           setLikers(Array.isArray(data.likers) ? data.likers : []);

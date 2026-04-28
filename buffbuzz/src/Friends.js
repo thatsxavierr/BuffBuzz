@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Friends.css';
@@ -24,7 +25,7 @@ const Friends = () => {
     setCurrentUserId(currentUser.id);
 
     // Fetch current user's profile for the header using the CORRECT endpoint
-    fetch(`http://localhost:5000/api/profile/${currentUser.id}?viewerId=${currentUser.id}`)
+    fetch(`${API_URL}/api/profile/${currentUser.id}?viewerId=${currentUser.id}`)
       .then(res => res.json())
       .then(data => {
         if (data.profile?.profilePictureUrl) {
@@ -39,7 +40,7 @@ const Friends = () => {
   const fetchFriends = async (userId) => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:5000/api/friends/${userId}`);
+      const response = await fetch(`${API_URL}/api/friends/${userId}`);
       const data = await response.json();
 
       if (response.ok) {
@@ -62,7 +63,7 @@ const Friends = () => {
     if (!currentUser) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/friends/remove/${friendshipId}`, {
+      const response = await fetch(`${API_URL}/api/friends/remove/${friendshipId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id })

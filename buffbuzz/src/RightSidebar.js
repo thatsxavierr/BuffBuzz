@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './RightSidebar.css';
@@ -58,7 +59,7 @@ export default function RightSidebar({ initialOpenChat, initialOpenConversationI
   const fetchMessageNotifications = async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${user.id}`);
+      const response = await fetch(`${API_URL}/api/notifications/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         const unreadDms = (data.notifications || []).filter(
@@ -103,7 +104,7 @@ export default function RightSidebar({ initialOpenChat, initialOpenConversationI
       let conv = allConversations.find(c => c.id === openConversationId);
       if (!conv) {
         try {
-          const res = await fetch(`http://localhost:5000/api/conversations/${user.id}`);
+          const res = await fetch(`${API_URL}/api/conversations/${user.id}`);
           const data = await res.json();
           const list = data.conversations || [];
           setAllConversations(list);
@@ -122,7 +123,7 @@ export default function RightSidebar({ initialOpenChat, initialOpenConversationI
   const fetchFriends = async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/friends/${user.id}`);
+      const response = await fetch(`${API_URL}/api/friends/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         setFriends(data.friends || []);
@@ -135,7 +136,7 @@ export default function RightSidebar({ initialOpenChat, initialOpenConversationI
   const fetchAllConversations = async () => {
   if (!user?.id) return;
   try {
-    const response = await fetch(`http://localhost:5000/api/conversations/${user.id}`);
+    const response = await fetch(`${API_URL}/api/conversations/${user.id}`);
     if (response.ok) {
       const data = await response.json();
       setAllConversations(data.conversations || []);
@@ -194,7 +195,7 @@ const openConversation = async (conversation) => {
   }
 
   try {
-    const response = await fetch('http://localhost:5000/api/conversations/get-or-create', {
+    const response = await fetch(API_URL + '/api/conversations/get-or-create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -226,7 +227,7 @@ const openConversation = async (conversation) => {
   const openConversationByIdAndMarkRead = async (conversationId, notificationIds) => {
     let conv = allConversations.find(c => c.id === conversationId);
     if (!conv) {
-      const res = await fetch(`http://localhost:5000/api/conversations/${user.id}`);
+      const res = await fetch(`${API_URL}/api/conversations/${user.id}`);
       const data = await res.json();
       conv = (data.conversations || []).find(c => c.id === conversationId);
     }
@@ -236,7 +237,7 @@ const openConversation = async (conversation) => {
     setMessageNotifications(prev => prev.filter(n => n.conversationId !== conversationId));
     for (const nid of notificationIds) {
       try {
-        await fetch(`http://localhost:5000/api/notifications/${nid}/read`, {
+        await fetch(`${API_URL}/api/notifications/${nid}/read`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -246,7 +247,7 @@ const openConversation = async (conversation) => {
 
   const fetchMessages = async (conversationId, friendId) => {
   try {
-    const response = await fetch(`http://localhost:5000/api/conversations/${conversationId}/messages`);
+    const response = await fetch(`${API_URL}/api/conversations/${conversationId}/messages`);
     if (response.ok) {
       const data = await response.json();
       
@@ -274,7 +275,7 @@ const openConversation = async (conversation) => {
 
   const markAsRead = async (conversationId) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/conversations/${conversationId}/read`, {
+      const res = await fetch(`${API_URL}/api/conversations/${conversationId}/read`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
@@ -299,7 +300,7 @@ const openConversation = async (conversation) => {
   }
 
   try {
-    const response = await fetch('http://localhost:5000/api/messages/send', {
+    const response = await fetch(API_URL + '/api/messages/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -338,7 +339,7 @@ const openConversation = async (conversation) => {
 
   const editMessage = async (friendId, messageId, newContent) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/messages/${messageId}/edit`, {
+      const response = await fetch(`${API_URL}/api/messages/${messageId}/edit`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -367,7 +368,7 @@ const openConversation = async (conversation) => {
 
   const deleteMessage = async (friendId, messageId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/messages/${messageId}`, {
+      const response = await fetch(`${API_URL}/api/messages/${messageId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
@@ -389,7 +390,7 @@ const openConversation = async (conversation) => {
 
   const createGroupChat = async (groupName, selectedFriendIds, imageUrl) => {
   try {
-    const response = await fetch('http://localhost:5000/api/conversations/group/create', {
+    const response = await fetch(API_URL + '/api/conversations/group/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -437,7 +438,7 @@ const openConversation = async (conversation) => {
 
   const reactToMessage = async (friendId, messageId, emoji) => {
   try {
-    const response = await fetch(`http://localhost:5000/api/messages/${messageId}/react`, {
+    const response = await fetch(`${API_URL}/api/messages/${messageId}/react`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -958,7 +959,7 @@ function ChatBox({ friend, conversation, messages, initialDraft, onClose, onSend
   }
 
   try {
-    const response = await fetch(`http://localhost:5000/api/conversations/${conversation.id}/leave`, {
+    const response = await fetch(`${API_URL}/api/conversations/${conversation.id}/leave`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUserId })
@@ -984,7 +985,7 @@ const handleDeleteGroup = async () => {
   }
 
   try {
-    const response = await fetch(`http://localhost:5000/api/conversations/${conversation.id}`, {
+    const response = await fetch(`${API_URL}/api/conversations/${conversation.id}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUserId })
