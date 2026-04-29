@@ -26,6 +26,7 @@ export default function Newsletter() {
   const [feed, setFeed] = useState([]);
   const [myNewsletter, setMyNewsletter] = useState(null);
   const [discover, setDiscover] = useState([]);
+  const [discoverLoading, setDiscoverLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [msg, setMsg] = useState({ type: '', text: '' });
   const [lightboxUrl, setLightboxUrl] = useState(null);
@@ -95,6 +96,7 @@ export default function Newsletter() {
 
   const loadDiscover = useCallback(async (uid, q) => {
     const gen = ++loadDiscoverGenRef.current;
+    setDiscoverLoading(true);
     try {
       const params = new URLSearchParams({ userId: uid });
       if (q && q.trim()) params.set('search', q.trim());
@@ -112,6 +114,8 @@ export default function Newsletter() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      if (gen === loadDiscoverGenRef.current) setDiscoverLoading(false);
     }
   }, []);
 
@@ -158,11 +162,11 @@ export default function Newsletter() {
   const readImageFile = (file) =>
     new Promise((resolve, reject) => {
       if (!file || !file.type.startsWith('image/')) {
-        reject(new Error('Please choose an image file'));
+        reject(new Error('Please choose an image file.'));
         return;
       }
       if (file.size > 6 * 1024 * 1024) {
-        reject(new Error('Image must be 6MB or smaller'));
+        reject(new Error('Image must be 6MB or smaller.'));
         return;
       }
       const reader = new FileReader();
@@ -181,7 +185,7 @@ export default function Newsletter() {
     }
     const desc = createNl.description.trim();
     if (desc && countWords(desc) > MAX_WORDS) {
-      showMsg('error', `Description must be ${MAX_WORDS} words or fewer`);
+      showMsg('error', `Description must be ${MAX_WORDS} words or fewer.`);
       return;
     }
     try {
@@ -225,7 +229,7 @@ export default function Newsletter() {
     if (!myNewsletter) return;
     const desc = (editNl.description || '').trim();
     if (desc && countWords(desc) > MAX_WORDS) {
-      showMsg('error', `Description must be ${MAX_WORDS} words or fewer`);
+      showMsg('error', `Description must be ${MAX_WORDS} words or fewer.`);
       return;
     }
     try {
@@ -246,7 +250,7 @@ export default function Newsletter() {
           ...nl,
           posts: Array.isArray(nl.posts) ? nl.posts : []
         });
-        showMsg('success', 'Newsletter updated');
+        showMsg('success', 'Newsletter updated.');
         loadDiscover(user.id, search);
       } else {
         showMsg('error', data.message || 'Update failed');
@@ -259,12 +263,12 @@ export default function Newsletter() {
   const handlePublishPost = async (e) => {
     e.preventDefault();
     if (!myNewsletter || !newPost.title.trim() || !newPost.content.trim()) {
-      showMsg('error', 'Title and body are required');
+      showMsg('error', 'Title and body are required.');
       return;
     }
     const bodyText = newPost.content.trim();
     if (countWords(bodyText) > MAX_WORDS) {
-      showMsg('error', `Each issue must be ${MAX_WORDS} words or fewer`);
+      showMsg('error', `Each issue must be ${MAX_WORDS} words or fewer.`);
       return;
     }
     try {
@@ -283,7 +287,7 @@ export default function Newsletter() {
         setNewPost({ title: '', content: '', imageUrl: null });
         await loadMine(user.id);
         await loadFeed(user.id);
-        showMsg('success', 'Post published — subscribers were notified');
+        showMsg('success', 'Issue published successfully. Subscribers were notified.');
         window.dispatchEvent(new Event('notificationsUpdated'));
       } else {
         showMsg('error', data.message || 'Could not publish');
@@ -294,7 +298,7 @@ export default function Newsletter() {
   };
 
   const handleDeletePost = async (postId) => {
-    if (!myNewsletter || !window.confirm('Delete this post?')) return;
+    if (!myNewsletter || !window.confirm('Delete this issue?')) return;
     try {
       const res = await fetch(`${API}/api/newsletters/${myNewsletter.id}/posts/${postId}`, {
         method: 'DELETE',
@@ -304,10 +308,49 @@ export default function Newsletter() {
       if (res.ok) {
         await loadMine(user.id);
         await loadFeed(user.id);
-        showMsg('success', 'Post removed');
+        showMsg('success', 'Issue deleted successfully.');
       }
     } catch (err) {
       showMsg('error', 'Could not delete');
+    }
+  };
+
+  const handleDeleteNewsletter = async () => {
+    if (!myNewsletter) return;
+    const posts = myNewsletter.posts || [];
+    if (posts.length > 0) {
+      showMsg('error', 'Delete all issues first, then you can delete your newsletter.');
+      return;
+    }
+    const subCount = myNewsletter._count?.subscriptions ?? 0;
+    const confirmMsg =
+      subCount > 0
+        ? `Delete your newsletter? ${subCount} subscriber(s) will be removed automatically and will not be notified. This cannot be undone.`
+        : 'Delete your newsletter permanently? You can create a new one later. This cannot be undone.';
+    if (!window.confirm(confirmMsg)) return;
+    try {
+      const delUrl = `${API}/api/newsletters/${encodeURIComponent(myNewsletter.id)}?${new URLSearchParams({
+        userId: user.id
+      })}`;
+      const res = await fetch(delUrl, { method: 'DELETE' });
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        /* empty */
+      }
+      if (res.ok) {
+        setMyNewsletter(null);
+        setEditNl({ title: '', description: '', coverImageUrl: null });
+        showMsg('success', 'Newsletter deleted.');
+        await loadFeed(user.id);
+        loadDiscover(user.id, search);
+        window.dispatchEvent(new Event('notificationsUpdated'));
+      } else {
+        showMsg('error', data.message || 'Could not delete newsletter');
+      }
+    } catch (err) {
+      showMsg('error', 'Something went wrong');
     }
   };
 
@@ -320,7 +363,7 @@ export default function Newsletter() {
       });
       const data = await res.json();
       if (res.ok) {
-        showMsg('success', 'You are subscribed');
+        showMsg('success', 'You are subscribed.');
         loadDiscover(user.id, search);
         loadFeed(user.id);
       } else {
@@ -339,7 +382,7 @@ export default function Newsletter() {
         body: JSON.stringify({ subscriberId: user.id })
       });
       if (res.ok) {
-        showMsg('success', 'Unsubscribed');
+        showMsg('success', 'Unsubscribed.');
         loadDiscover(user.id, search);
         loadFeed(user.id);
       }
@@ -382,12 +425,8 @@ export default function Newsletter() {
 
           {msg.text && (
             <div
-              className="nl-card"
-              style={{
-                marginBottom: 16,
-                borderColor: msg.type === 'error' ? '#fecaca' : '#bbf7d0',
-                background: msg.type === 'error' ? '#fef2f2' : '#f0fdf4'
-              }}
+              className={`nl-flash ${msg.type === 'error' ? 'nl-flash-error' : 'nl-flash-success'}`}
+              role="status"
             >
               {msg.text}
             </div>
@@ -535,6 +574,7 @@ export default function Newsletter() {
                         </p>
                         <label className="nl-file-label">
                           Optional cover image (shown beside your newsletter in Discover)
+                          <span className="nl-file-hint">Images only · 6 MB max</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -610,6 +650,7 @@ export default function Newsletter() {
                         </p>
                         <label className="nl-file-label">
                           Cover image (optional)
+                          <span className="nl-file-hint">Images only · 6 MB max</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -676,6 +717,7 @@ export default function Newsletter() {
                         </p>
                         <label className="nl-file-label">
                           Optional image for this issue (shown beside the text)
+                          <span className="nl-file-hint">Images only · 6 MB max</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -754,14 +796,37 @@ export default function Newsletter() {
                           </div>
                         ))
                       )}
+
+                      <div className="nl-delete-channel">
+                        <h3 className="nl-past-heading">Delete newsletter</h3>
+                        <p className="nl-explainer">
+                          You can remove your channel only after every issue is deleted. If you have
+                          subscribers, deleting the newsletter removes their subscription automatically—they
+                          will not get a separate alert.
+                        </p>
+                        <button
+                          type="button"
+                          className="nl-btn nl-btn-danger"
+                          disabled={(myNewsletter.posts || []).length > 0}
+                          onClick={handleDeleteNewsletter}
+                        >
+                          {(myNewsletter.posts || []).length > 0
+                            ? 'Delete all issues first'
+                            : 'Delete my newsletter'}
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
               )}
 
               {tab === 'discover' && (
-                <div className="newsletter-panel">
+                <div
+                  className={`newsletter-panel nl-discover-panel ${discoverLoading ? 'nl-discover-busy' : ''}`}
+                  aria-busy={discoverLoading}
+                >
                   <div className="nl-search">
+                    <span className="nl-search-icon" aria-hidden="true" />
                     <input
                       type="search"
                       placeholder="Search by title, description, or author name…"
@@ -769,12 +834,38 @@ export default function Newsletter() {
                       onChange={(e) => setSearch(e.target.value)}
                       aria-label="Search newsletters"
                     />
+                    {discoverLoading && (
+                      <span className="nl-search-loading" aria-live="polite">
+                        Searching…
+                      </span>
+                    )}
                   </div>
 
-                  {discover.length === 0 ? (
-                    <div className="nl-empty">
-                      <span>🔎</span>
-                      <p>No newsletters match your search yet, or none have been created.</p>
+                  {discoverLoading && discover.length === 0 ? (
+                    <div className="nl-discover-loading">
+                      <span className="nl-discover-spinner" aria-hidden="true" />
+                      <p>Loading newsletters…</p>
+                    </div>
+                  ) : !discoverLoading && discover.length === 0 ? (
+                    <div className="nl-empty nl-empty-discover">
+                      <span>{search.trim() ? '🔎' : '📰'}</span>
+                      {search.trim() ? (
+                        <>
+                          <h3>No matching newsletters</h3>
+                          <p>
+                            No newsletters match &ldquo;{search.trim()}&rdquo;. Try a different title,
+                            keyword, or author name.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <h3>No newsletters yet</h3>
+                          <p>
+                            When members create channels, they will appear here. Create yours from the{' '}
+                            <strong>My newsletter</strong> tab.
+                          </p>
+                        </>
+                      )}
                     </div>
                   ) : (
                     discover.map((n) => (

@@ -754,6 +754,9 @@
 [data-theme="dark"] .nl-stats { color: #64748b; }
 [data-theme="dark"] .nl-desc-block { color: #64748b; }
 [data-theme="dark"] .nl-past-stats { color: #64748b; }
+[data-theme="dark"] .nl-delete-channel {
+  border-top-color: rgba(148, 163, 184, 0.15);
+}
 [data-theme="dark"] .nl-past-heading { color: #94a3b8; }
 [data-theme="dark"] .nl-word-count { color: #64748b; }
 [data-theme="dark"] .nl-word-count-bad { color: #fca5a5; }

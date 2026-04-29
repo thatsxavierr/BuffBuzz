@@ -5641,8 +5641,22 @@ async function assertNewsletterAdminUser(adminUserId) {
   if (!adminUserId) return null;
   const u = await prisma.user.findUnique({ where: { id: adminUserId } });
   if (!u) return null;
-  const adminEmail = (process.env.ADMIN_EMAIL || 'buffbuzz@wtamu.edu').trim().toLowerCase();
-  if (normalizeEmail(u.email) !== adminEmail) return null;
+  // Admin access is controlled by env var(s). This is intentionally email-based because
+  // the UserType enum is only STUDENT/PROFESSOR in this project.
+  //
+  // Supports:
+  // - ADMIN_EMAILS="a@b.com,c@d.com"
+  // - ADMIN_EMAIL="a@b.com" (fallback)
+  //
+  // Default matches the frontend AdminPage default so local dev "just works".
+  const fallbackAdminEmail = 'buffbuzz2025@gmail.com';
+  const rawList = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || fallbackAdminEmail;
+  const adminEmails = String(rawList)
+    .split(',')
+    .map((s) => normalizeEmail(s))
+    .filter(Boolean);
+
+  if (!adminEmails.includes(normalizeEmail(u.email))) return null;
   return u;
 }
 
@@ -5786,6 +5800,19 @@ app.get('/api/newsletters/discover', async (req, res) => {
     if (!userId) return res.status(400).json({ message: 'userId is required' });
 
     const q = search && String(search).trim();
+    const nameParts = q ? q.split(/\s+/).filter(Boolean) : [];
+    const authorFullNameMatch =
+      nameParts.length >= 2
+        ? {
+            user: {
+              AND: [
+                { firstName: { contains: nameParts[0], mode: 'insensitive' } },
+                { lastName: { contains: nameParts[nameParts.length - 1], mode: 'insensitive' } }
+              ]
+            }
+          }
+        : null;
+
     const where = {
       ...(q
         ? {
@@ -5799,7 +5826,8 @@ app.get('/api/newsletters/discover', async (req, res) => {
                     { lastName: { contains: q, mode: 'insensitive' } }
                   ]
                 }
-              }
+              },
+              ...(authorFullNameMatch ? [authorFullNameMatch] : [])
             ]
           }
         : {})
@@ -5906,7 +5934,7 @@ app.post('/api/newsletters', async (req, res) => {
     }
     const descStr = description != null && String(description).trim() ? String(description).trim() : null;
     if (descStr && wordCount(descStr) > NEWSLETTER_MAX_WORDS) {
-      return res.status(400).json({ message: `Description must be ${NEWSLETTER_MAX_WORDS} words or fewer` });
+      return res.status(400).json({ message: `Description must be ${NEWSLETTER_MAX_WORDS} words or fewer.` });
     }
     const existing = await prisma.newsletter.findUnique({ where: { userId } });
     if (existing) return res.status(400).json({ message: 'You already have a newsletter' });
@@ -5938,12 +5966,12 @@ app.put('/api/newsletters/:newsletterId', async (req, res) => {
     if (!userId) return res.status(400).json({ message: 'userId is required' });
 
     const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
-    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed' });
+    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed.' });
 
     if (description !== undefined) {
       const descStr = description != null && String(description).trim() ? String(description).trim() : null;
       if (descStr && wordCount(descStr) > NEWSLETTER_MAX_WORDS) {
-        return res.status(400).json({ message: `Description must be ${NEWSLETTER_MAX_WORDS} words or fewer` });
+        return res.status(400).json({ message: `Description must be ${NEWSLETTER_MAX_WORDS} words or fewer.` });
       }
     }
 
@@ -5971,20 +5999,51 @@ app.put('/api/newsletters/:newsletterId', async (req, res) => {
   }
 });
 
+app.delete('/api/newsletters/:newsletterId', async (req, res) => {
+  try {
+    const { newsletterId } = req.params;
+    // Prefer query: many proxies/clients omit JSON bodies on DELETE.
+    const userId = req.query.userId || req.body?.userId;
+    if (!userId) return res.status(400).json({ message: 'userId is required' });
+
+    const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
+    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed.' });
+
+    const postCount = await prisma.newsletterPost.count({ where: { newsletterId } });
+    if (postCount > 0) {
+      return res.status(400).json({
+        message: 'Delete all issues before you can delete your newsletter.'
+      });
+    }
+
+    // Remove subscriptions first so delete works even if the DB FK predates ON DELETE CASCADE.
+    await prisma.$transaction([
+      prisma.newsletterSubscription.deleteMany({ where: { newsletterId } }),
+      prisma.newsletter.delete({ where: { id: newsletterId } })
+    ]);
+
+    res.status(200).json({ message: 'Newsletter deleted' });
+  } catch (error) {
+    console.error('Delete newsletter error:', error);
+    res.status(500).json({ message: 'Failed to delete newsletter' });
+  }
+});
+
 app.post('/api/newsletters/:newsletterId/posts', async (req, res) => {
   try {
     const { newsletterId } = req.params;
     const { userId, title, content, imageUrl } = req.body;
-    if (!userId || !String(title || '').trim() || !String(content || '').trim()) {
-      return res.status(400).json({ message: 'userId, title, and content are required' });
+    if (!userId) return res.status(400).json({ message: 'userId is required' });
+    if (!String(title || '').trim() || !String(content || '').trim()) {
+      return res.status(400).json({ message: 'Title and body are required.' });
     }
     const body = String(content).trim();
     if (wordCount(body) > NEWSLETTER_MAX_WORDS) {
-      return res.status(400).json({ message: `Each issue must be ${NEWSLETTER_MAX_WORDS} words or fewer` });
+      return res.status(400).json({ message: `Each issue must be ${NEWSLETTER_MAX_WORDS} words or fewer.` });
     }
 
     const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
-    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed' });
+    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed.' });
 
     const post = await prisma.newsletterPost.create({
       data: {
@@ -6023,7 +6082,7 @@ app.delete('/api/newsletters/:newsletterId/posts/:postId', async (req, res) => {
     if (!userId) return res.status(400).json({ message: 'userId is required' });
 
     const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
-    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed' });
+    if (!nl || nl.userId !== userId) return res.status(403).json({ message: 'Not allowed.' });
 
     const post = await prisma.newsletterPost.findFirst({
       where: { id: postId, newsletterId }
@@ -6047,7 +6106,7 @@ app.post('/api/newsletters/:newsletterId/subscribe', async (req, res) => {
     const nl = await prisma.newsletter.findUnique({ where: { id: newsletterId } });
     if (!nl) return res.status(404).json({ message: 'Newsletter not found' });
     if (nl.userId === subscriberId) {
-      return res.status(400).json({ message: 'You cannot subscribe to your own newsletter' });
+      return res.status(400).json({ message: 'You cannot subscribe to your own newsletter.' });
     }
 
     try {
@@ -6056,7 +6115,7 @@ app.post('/api/newsletters/:newsletterId/subscribe', async (req, res) => {
       });
     } catch (e) {
       if (e.code === 'P2002') {
-        return res.status(400).json({ message: 'Already subscribed' });
+        return res.status(400).json({ message: 'Already subscribed.' });
       }
       throw e;
     }
