@@ -20,31 +20,10 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-<<<<<<< HEAD
-// Quick check that this service is the API (useful for Railway / DNS / wrong-service debugging)
-app.get('/api/health', (_req, res) => {
-  res.status(200).json({ ok: true, service: 'buffbuzz-api' });
-});
-
-// Email transporter configuration (short timeouts so signup doesn’t hang when SMTP is blocked, e.g. on Railway)
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  connectionTimeout: 15_000,
-  greetingTimeout: 15_000,
-  socketTimeout: 15_000,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-});
-=======
 // Outbound mail: prefer Resend (HTTPS) on Railway — many hosts block SMTP to smtp.gmail.com.
 // Railway: set RESEND_API_KEY + EMAIL_FROM (e.g. "BuffBuzz <onboarding@resend.dev>" or your verified domain).
 // Local / SMTP: set EMAIL_USER + EMAIL_PASSWORD (Gmail app password) and omit RESEND_API_KEY.
 const useResend = Boolean(process.env.RESEND_API_KEY);
->>>>>>> upstream/main
 
 const transporter = useResend
   ? null
