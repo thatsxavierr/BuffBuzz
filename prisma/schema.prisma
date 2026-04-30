@@ -14,13 +14,17 @@ model User {
   firstName               String
   lastName                String
   userType                UserType
+  department              String?
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
   resetToken              String?
   resetTokenExpiry        DateTime?
   verificationAttempts    Int                       @default(0)
+  loginAttempts           Int                       @default(0)
+  lockUntil               DateTime?
   verificationCode        String?
   verificationStatus      VerificationStatus        @default(PENDING)
+  suspended               Boolean                   @default(false)
   blocksReceived          Block[]                   @relation("BlockedRelation")
   blocksMade              Block[]                   @relation("BlockerRelation")
   comments                Comment[]
