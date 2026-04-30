@@ -14,14 +14,11 @@ model User {
   firstName               String
   lastName                String
   userType                UserType
-  department              String?                   // ← ADD THIS
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
   resetToken              String?
   resetTokenExpiry        DateTime?
   verificationAttempts    Int                       @default(0)
-  loginAttempts           Int                       @default(0)
-  lockUntil               DateTime?
   verificationCode        String?
   verificationStatus      VerificationStatus        @default(PENDING)
   blocksReceived          Block[]                   @relation("BlockedRelation")
@@ -31,7 +28,6 @@ model User {
   receivedFriendships     Friendship[]              @relation("FriendshipReceiver")
   sentFriendships         Friendship[]              @relation("FriendshipSender")
   groupMemberships        GroupMember[]
-  groupJoinRequests       GroupJoinRequest[]
   createdGroups           Group[]                   @relation("GroupCreator")
   jobs                    Job[]
   likes                   Like[]
@@ -39,76 +35,12 @@ model User {
   marketplaceItems        MarketplaceItem[]
   messageReactions        MessageReaction[]
   messages                Message[]                 @relation("MessageSender")
-  notificationsReceived   Notification[]            @relation("NotificationRecipient")
-  notificationsSent      Notification[]            @relation("NotificationActor")
   notificationPreferences NotificationPreferences?
   posts                   Post[]
-  pollVotes               PollVote[]
   profile                 Profile?
   shares                  Share[]
-  reportsFiled            Report[]                  @relation("ReportReporter")
-  suspended               Boolean                    @default(false)
-  newsletter              Newsletter?
-  newsletterSubscriptions NewsletterSubscription[]  @relation("NewsletterSubscriber")
-  announcementsAuthored   PlatformAnnouncement[]    @relation("AnnouncementAuthor")
 
   @@map("users")
-}
-
-model PlatformAnnouncement {
-  id        String   @id @default(uuid())
-  title     String
-  content   String
-  authorId  String
-  createdAt DateTime @default(now())
-  author    User     @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-
-  @@index([createdAt])
-  @@map("platform_announcements")
-}
-
-model Newsletter {
-  id             String                   @id @default(uuid())
-  userId         String                   @unique
-  title          String
-  description    String?
-  coverImageUrl  String?
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
-  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  posts          NewsletterPost[]
-  subscriptions  NewsletterSubscription[]
-
-  @@map("newsletters")
-}
-
-model NewsletterPost {
-  id            String     @id @default(uuid())
-  newsletterId  String
-  title         String
-  content       String
-  imageUrl      String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  newsletter    Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
-
-  @@index([newsletterId])
-  @@index([createdAt])
-  @@map("newsletter_posts")
-}
-
-model NewsletterSubscription {
-  id             String     @id @default(uuid())
-  subscriberId   String
-  newsletterId   String
-  createdAt      DateTime   @default(now())
-  subscriber     User       @relation("NewsletterSubscriber", fields: [subscriberId], references: [id], onDelete: Cascade)
-  newsletter     Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
-
-  @@unique([subscriberId, newsletterId])
-  @@index([subscriberId])
-  @@index([newsletterId])
-  @@map("newsletter_subscriptions")
 }
 
 model Profile {
@@ -137,20 +69,10 @@ model Profile {
 model NotificationPreferences {
   id                 String   @id @default(uuid())
   userId             String   @unique
-  muteAll            Boolean  @default(false)
-  muteUntil          DateTime?
   emailNotifications Boolean  @default(true)
   pushNotifications  Boolean  @default(true)
   postLikes          Boolean  @default(true)
   comments           Boolean  @default(true)
-  mentions           Boolean  @default(true)
-  commentReplies     Boolean  @default(true)
-  groupJoinRequests  Boolean  @default(true)
-  groupJoinResponse  Boolean  @default(true)
-  groupNewPost       Boolean  @default(true)
-  lostFoundNew       Boolean  @default(false)
-  lostFoundContact   Boolean  @default(true)
-  lostFoundResolved  Boolean  @default(true)
   newFollowers       Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -159,68 +81,36 @@ model NotificationPreferences {
   @@map("notification_preferences")
 }
 
-model Notification {
-  id                    String   @id @default(uuid())
-  recipientId           String
-  actorId               String
-  type                  String   // 'like', 'comment', 'mention', 'reply', 'marketplace_listing', 'lostfound_listing', 'group_join_request', 'direct_message', etc.
-  postId                String?
-  commentId             String?
-  marketplaceItemId     String?
-  lostFoundItemId       String?
-  groupId               String?
-  groupJoinRequestId    String?
-  conversationId        String?
-  read                  Boolean  @default(false)
-  createdAt             DateTime @default(now())
-
-  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  actor       User     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
-
-  @@index([recipientId])
-  @@index([createdAt])
-  @@map("notifications")
-}
-
 model Post {
   id        String    @id @default(uuid())
   title     String
   content   String
   imageUrl  String?
   authorId  String
-  groupId   String?                          // ADD THIS
-  postType  String    @default("POST")   // ADD THIS: "POST" | "ANNOUNCEMENT" | "EVENT"
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   comments  Comment[]
   likes     Like[]
   author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  group     Group?    @relation(fields: [groupId], references: [id], onDelete: Cascade) // ADD THIS
   shares    Share[]
-  poll      Poll?
 
   @@index([authorId])
-  @@index([groupId])                         // ADD THIS
   @@index([createdAt])
   @@map("posts")
 }
 
 model Comment {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   content   String
   postId    String
   authorId  String
-  parentId  String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   Comment[] @relation("CommentReplies")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@index([postId])
   @@index([authorId])
-  @@index([parentId])
   @@map("comments")
 }
 
@@ -249,47 +139,6 @@ model Share {
   @@index([postId])
   @@index([userId])
   @@map("shares")
-}
-
-model Poll {
-  id              String       @id @default(uuid())
-  postId          String       @unique
-  anonymousVoting Boolean      @default(false)
-  expiresAt       DateTime?
-  post            Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
-  options         PollOption[]
-  votes           PollVote[]
-
-  @@map("polls")
-}
-
-model PollOption {
-  id        String     @id @default(uuid())
-  pollId    String
-  text      String
-  sortOrder Int        @default(0)
-  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  votes     PollVote[]
-
-  @@index([pollId])
-  @@map("poll_options")
-}
-
-model PollVote {
-  id        String     @id @default(uuid())
-  pollId    String
-  optionId  String
-  userId    String
-  createdAt DateTime   @default(now())
-  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([pollId, userId])
-  @@index([pollId])
-  @@index([optionId])
-  @@index([userId])
-  @@map("poll_votes")
 }
 
 model Friendship {
@@ -334,7 +183,6 @@ model Job {
   requirements    String
   salary          String?
   applicationLink String
-  applicationDeadline DateTime?
   posterId        String
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -376,7 +224,6 @@ model LostFoundItem {
   contactInfo String
   imageUrl    String?
   userId      String
-  resolved    Boolean           @default(false)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -388,42 +235,22 @@ model LostFoundItem {
 }
 
 model Group {
-  id            String             @id @default(uuid())
-  name          String
-  description   String
-  category      GroupCategory
-  privacy       GroupPrivacy       @default(PUBLIC)
-  imageUrl      String?
-  creatorId     String
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  members       GroupMember[]
-  joinRequests  GroupJoinRequest[]
-  posts         Post[]                        // ADD THIS
-  creator       User               @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  id          String        @id @default(uuid())
+  name        String
+  description String
+  category    GroupCategory
+  privacy     GroupPrivacy  @default(PUBLIC)
+  imageUrl    String?
+  creatorId   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  members     GroupMember[]
+  creator     User          @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
 
   @@index([creatorId])
   @@index([category])
   @@index([createdAt])
   @@map("groups")
-}
-
-model GroupJoinRequest {
-  id        String   @id @default(uuid())
-  groupId   String
-  userId    String
-  status    String   @default("PENDING") // PENDING, APPROVED, DENIED
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([groupId, userId])
-  @@index([groupId])
-  @@index([userId])
-  @@index([status])
-  @@map("group_join_requests")
 }
 
 model GroupMember {
@@ -580,49 +407,4 @@ enum GroupPrivacy {
 enum MessageType {
   TEXT
   IMAGE
-}
-
-enum ReportTargetType {
-  POST
-  COMMENT
-  MARKETPLACE_ITEM
-  LOST_FOUND_ITEM
-  GROUP
-  USER
-  JOB
-  MESSAGE
-}
-
-enum ReportCategory {
-  SPAM
-  HARASSMENT
-  INAPPROPRIATE_CONTENT
-  SCAM_OR_FRAUD
-  IMPERSONATION
-  OTHER
-}
-
-enum ReportStatus {
-  PENDING
-  REVIEWED
-  DISMISSED
-  ACTION_TAKEN
-}
-
-model Report {
-  id         String           @id @default(uuid())
-  reporterId String
-  targetType ReportTargetType
-  targetId   String
-  category   ReportCategory   @default(OTHER)
-  details    String?
-  status     ReportStatus     @default(PENDING)
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-  reporter   User             @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
-
-  @@unique([reporterId, targetType, targetId])
-  @@index([targetType, targetId])
-  @@index([status, createdAt])
-  @@map("reports")
 }
