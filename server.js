@@ -489,7 +489,7 @@ async function sendPasswordChangedEmail(email, firstName) {
 app.post('/api/register', async (req, res) => {
   try {
     console.log('Register request received:', req.body);
-    const { email, password, firstName, lastName, userType, department } = req.body;
+    const { email, password, firstName, lastName, userType } = req.body;
 
     if (!email || !password || !firstName || !lastName || !userType) {
       return res.status(400).json({ message: 'All fields are required' });
@@ -520,7 +520,6 @@ app.post('/api/register', async (req, res) => {
         firstName,
         lastName,
         userType: userType.toUpperCase(),
-        department,
         verificationCode,
         verificationStatus: 'PENDING'
       }
@@ -6182,13 +6181,6 @@ app.delete('/api/newsletters/:newsletterId/subscribe', async (req, res) => {
     console.error('Unsubscribe newsletter error:', error);
     res.status(500).json({ message: 'Failed to unsubscribe' });
   }
-});
-
-// ==================== HEALTH CHECK ====================
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'OK', message: 'Server is running' });
 });
 
 // ==================== START SERVER ====================

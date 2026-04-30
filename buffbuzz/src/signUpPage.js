@@ -123,7 +123,8 @@ export default function SignupPage() {
     };
 
     try {
-      const response = await fetch(API_URL + '/api/register', {
+      const url = `${API_URL}/api/register`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,7 +132,17 @@ export default function SignupPage() {
         body: JSON.stringify(userData)
       });
 
-      const data = await response.json();
+      const raw = await response.text();
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = {
+          message:
+            `Server returned non-JSON (${response.status}). Open DevTools → Network → register and check the request URL. ` +
+            `It must be your Railway host + /api/register, not your Vercel URL.`
+        };
+      }
 
       if (response.ok) {
         // If email didn’t send (e.g. Railway + Gmail), API may return verificationCode in the body — pass it to the next screen
@@ -142,7 +153,11 @@ export default function SignupPage() {
           }
         });
       } else {
-        setErrorMessage(data.message || 'Registration failed. Please try again.');
+        const extra =
+          response.status === 404
+            ? ' (404 usually means the request did not hit this API—wrong host or path.)'
+            : '';
+        setErrorMessage((data.message || 'Registration failed. Please try again.') + extra);
       }
     } catch (error) {
       console.error('Registration error:', error);
