@@ -20,25 +20,72 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Email transporter configuration
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-});
+// Outbound mail: prefer Resend (HTTPS) on Railway — many hosts block SMTP to smtp.gmail.com.
+// Railway: set RESEND_API_KEY + EMAIL_FROM (e.g. "BuffBuzz <onboarding@resend.dev>" or your verified domain).
+// Local / SMTP: set EMAIL_USER + EMAIL_PASSWORD (Gmail app password) and omit RESEND_API_KEY.
+const useResend = Boolean(process.env.RESEND_API_KEY);
 
-// Verify email configuration on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Email configuration error:', error);
+const transporter = useResend
+  ? null
+  : nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: false,
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
+      socketTimeout: 15_000,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+
+if (useResend) {
+  console.log('Email: using Resend API (recommended for Railway).');
+} else if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+  if (process.env.EMAIL_VERIFY_ON_START === 'true') {
+    transporter.verify((error) => {
+      if (error) console.error('Email SMTP verify failed:', error);
+      else console.log('Email SMTP is ready');
+    });
   } else {
-    console.log('Email server is ready to send messages');
+    console.log(
+      'Email: using SMTP. Startup verify skipped (Railway often blocks SMTP); set EMAIL_VERIFY_ON_START=true to test.'
+    );
   }
-});
+} else {
+  console.warn('Email: not configured — set RESEND_API_KEY + EMAIL_FROM, or EMAIL_USER + EMAIL_PASSWORD.');
+}
+
+async function sendHtmlEmail({ to, subject, html }) {
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  if (!from) {
+    throw new Error('Set EMAIL_FROM (and for SMTP, EMAIL_USER) for outbound mail');
+  }
+
+  if (useResend) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from, to: [to], subject, html }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error('Resend error:', res.status, data);
+      throw new Error(data.message || `Resend failed (${res.status})`);
+    }
+    return true;
+  }
+
+  if (!transporter || !process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    throw new Error('Configure RESEND_API_KEY + EMAIL_FROM, or EMAIL_USER + EMAIL_PASSWORD');
+  }
+  await transporter.sendMail({ from, to, subject, html });
+  return true;
+}
 
 // Generate 6-digit verification code
 function generateVerificationCode() {
@@ -48,6 +95,34 @@ function generateVerificationCode() {
 // Normalize email to lowercase for case-insensitive auth and consistent DB storage
 function normalizeEmail(email) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
+/** Base URL for links in emails (password reset). Prefer FRONTEND_URL (e.g. Vercel); fallback PUBLIC_APP_URL or Railway host. */
+function getPublicBaseUrl() {
+  const frontend = process.env.FRONTEND_URL?.trim();
+  if (frontend) {
+    try {
+      const u = new URL(frontend.includes('://') ? frontend : `https://${frontend}`);
+      return `${u.protocol}//${u.host}`.replace(/\/$/, '');
+    } catch {
+      return frontend.replace(/\/$/, '');
+    }
+  }
+  const explicit = process.env.PUBLIC_APP_URL?.trim();
+  if (explicit) {
+    try {
+      const u = new URL(explicit.includes('://') ? explicit : `https://${explicit}`);
+      return `${u.protocol}//${u.host}`.replace(/\/$/, '');
+    } catch {
+      return explicit.replace(/\/$/, '');
+    }
+  }
+  const railway = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  if (railway) {
+    const host = railway.replace(/^https?:\/\//, '').split('/')[0];
+    return `https://${host}`;
+  }
+  return `http://localhost:${PORT}`;
 }
 
 // Parse post imageUrl: supports JSON array (multiple images) or single URL
@@ -113,11 +188,8 @@ async function shouldNotify(userId, type) {
 
 // Send verification email
 async function sendVerificationEmail(email, verificationCode, firstName) {
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-    to: email,
-    subject: 'Verify Your BuffBuzz Account',
-    html: `
+  const subject = 'Verify Your BuffBuzz Account';
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -160,11 +232,10 @@ async function sendVerificationEmail(email, verificationCode, firstName) {
         </div>
       </body>
       </html>
-    `,
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendHtmlEmail({ to: email, subject, html });
     console.log(`Verification email sent to ${email}`);
     return true;
   } catch (error) {
@@ -175,13 +246,10 @@ async function sendVerificationEmail(email, verificationCode, firstName) {
 
 // Send password reset email
 async function sendPasswordResetEmail(email, resetToken, firstName) {
-  const resetLink = `http://localhost:5000/reset-password?token=${resetToken}`;
-  
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-    to: email,
-    subject: 'BuffBuzz - Password Reset Request',
-    html: `
+  const resetLink = `${getPublicBaseUrl()}/reset-password?token=${resetToken}`;
+
+  const subject = 'BuffBuzz - Password Reset Request';
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -227,11 +295,10 @@ async function sendPasswordResetEmail(email, resetToken, firstName) {
         </div>
       </body>
       </html>
-    `,
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendHtmlEmail({ to: email, subject, html });
     console.log(`Password reset email sent to ${email}`);
     return true;
   } catch (error) {
@@ -242,11 +309,8 @@ async function sendPasswordResetEmail(email, resetToken, firstName) {
 
 // Send account locked email (when too many failed login attempts)
 async function sendAccountLockedEmail(email, firstName, lockMinutes) {
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-    to: email,
-    subject: 'BuffBuzz - Account Temporarily Locked',
-    html: `
+  const subject = 'BuffBuzz - Account Temporarily Locked';
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -276,10 +340,9 @@ async function sendAccountLockedEmail(email, firstName, lockMinutes) {
         </div>
       </body>
       </html>
-    `,
-  };
+    `;
   try {
-    await transporter.sendMail(mailOptions);
+    await sendHtmlEmail({ to: email, subject, html });
     return true;
   } catch (error) {
     console.error('Error sending lock email:', error);
