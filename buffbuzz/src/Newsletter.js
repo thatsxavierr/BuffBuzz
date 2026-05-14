@@ -32,6 +32,7 @@ export default function Newsletter() {
   const [lightboxUrl, setLightboxUrl] = useState(null);
   const [shareTarget, setShareTarget] = useState(null);
   const [highlightNlId, setHighlightNlId] = useState(null);
+  const [dismissingAnnouncementId, setDismissingAnnouncementId] = useState(null);
 
   const [createNl, setCreateNl] = useState({ title: '', description: '', coverImageUrl: null });
   const [editNl, setEditNl] = useState({ title: '', description: '', coverImageUrl: null });
@@ -176,6 +177,31 @@ export default function Newsletter() {
     });
 
   const handleBack = () => navigate('/main');
+
+  const dismissAnnouncementFromFeed = async (announcementId) => {
+    if (!user?.id || dismissingAnnouncementId) return;
+    const id = String(announcementId);
+    const prevFeed = feed;
+    setDismissingAnnouncementId(id);
+    setFeed((prev) => prev.filter((it) => !(it.kind === 'announcement' && String(it.id) === id)));
+    try {
+      const res = await fetch(`${API}/api/newsletters/feed/dismiss-announcement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: String(user.id), announcementId: id })
+      });
+      if (!res.ok) {
+        setFeed(prevFeed);
+        const data = await res.json().catch(() => ({}));
+        showMsg('error', data.message || 'Could not remove this from your feed. Is the API running?');
+      }
+    } catch (e) {
+      setFeed(prevFeed);
+      showMsg('error', 'Could not reach the server. Check that the API URL matches your backend.');
+    } finally {
+      setDismissingAnnouncementId(null);
+    }
+  };
 
   const handleCreateNewsletter = async (e) => {
     e.preventDefault();
@@ -414,8 +440,11 @@ export default function Newsletter() {
             <h1>Newsletters</h1>
             <p>
               <strong>Feed</strong> shows official announcements, new issues from newsletters you follow,
-              and your own published issues. <strong>My newsletter</strong> is where you set up your channel
-              and publish issues. <strong>Discover</strong> lists every newsletter, including yours.
+              and your own published issues. Use <strong>Hide from my feed</strong> on an official
+              announcement once you have read it—it only hides the card for you. <strong>My newsletter</strong>{' '}
+              is where you set up
+              your channel and publish issues. <strong>Discover</strong> lists every newsletter, including
+              yours.
             </p>
             <p className="newsletter-hero-note">
               You can have <strong>one newsletter per account</strong> (your channel name and description).
@@ -480,6 +509,19 @@ export default function Newsletter() {
                           </div>
                           <div className="nl-body">
                             <LinkifiedText text={item.content} />
+                          </div>
+                          <div className="nl-announcement-actions">
+                            <button
+                              type="button"
+                              className="nl-btn nl-btn-secondary nl-announcement-read-btn"
+                              disabled={dismissingAnnouncementId === String(item.id)}
+                              onClick={() => dismissAnnouncementFromFeed(item.id)}
+                            >
+                              {dismissingAnnouncementId === String(item.id) ? 'Hiding…' : 'Hide from my feed'}
+                            </button>
+                            <span className="nl-announcement-actions-hint">
+                              Only removes this card for your account after you have read it.
+                            </span>
                           </div>
                         </article>
                       ) : (

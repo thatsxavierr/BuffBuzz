@@ -51,6 +51,7 @@ model User {
   newsletter              Newsletter?
   newsletterSubscriptions NewsletterSubscription[]  @relation("NewsletterSubscriber")
   announcementsAuthored   PlatformAnnouncement[]    @relation("AnnouncementAuthor")
+  announcementDismissals  PlatformAnnouncementDismissal[]
 
   @@map("users")
 }
@@ -62,9 +63,24 @@ model PlatformAnnouncement {
   authorId  String
   createdAt DateTime @default(now())
   author    User     @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  dismissals PlatformAnnouncementDismissal[]
 
   @@index([createdAt])
   @@map("platform_announcements")
+}
+
+model PlatformAnnouncementDismissal {
+  id             String               @id @default(uuid())
+  userId         String
+  announcementId String
+  createdAt      DateTime             @default(now())
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  announcement   PlatformAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, announcementId])
+  @@index([userId])
+  @@index([announcementId])
+  @@map("platform_announcement_dismissals")
 }
 
 model Newsletter {

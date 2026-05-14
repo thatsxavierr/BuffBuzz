@@ -5765,6 +5765,9 @@ app.get('/api/newsletters/feed', async (req, res) => {
 
     const [announcements, subs, ownedNewsletter] = await Promise.all([
       prisma.platformAnnouncement.findMany({
+        where: {
+          dismissals: { none: { userId } }
+        },
         orderBy: { createdAt: 'desc' },
         take: 30,
         include: {
@@ -5832,6 +5835,32 @@ app.get('/api/newsletters/feed', async (req, res) => {
   } catch (error) {
     console.error('Newsletter feed error:', error);
     res.status(500).json({ message: 'Failed to load feed' });
+  }
+});
+
+app.post('/api/newsletters/feed/dismiss-announcement', async (req, res) => {
+  try {
+    const { userId, announcementId } = req.body;
+    if (!userId || !announcementId) {
+      return res.status(400).json({ message: 'userId and announcementId are required' });
+    }
+    const exists = await prisma.platformAnnouncement.findUnique({
+      where: { id: announcementId },
+      select: { id: true }
+    });
+    if (!exists) return res.status(404).json({ message: 'Announcement not found' });
+
+    await prisma.platformAnnouncementDismissal.upsert({
+      where: {
+        userId_announcementId: { userId, announcementId }
+      },
+      create: { userId, announcementId },
+      update: {}
+    });
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error('Dismiss announcement error:', error);
+    res.status(500).json({ message: 'Failed to update feed' });
   }
 });
 
