@@ -11,5 +11,25 @@ Students often ignore official emails but frequently check social media for upda
 - **Frontend**: React, CSS  
 - **Backend**: Node.js 
 - **Database**: PostgreSQL + Prisma ORM  
-- **Authentication**: WTAMU Email Integration  
+- **Authentication**: WTAMU Email Integration
+
+- ## Landing Page
+
+![Landing Page](./screenshots/LandingPage.png)
+
+- ## Signup Page
+
+![Signup Page](./screenshots/Signup.png)
+
+- ## HomePage
+
+![HomePage](./screenshots/Homepage.png)
+
+- ## Newsletter Page
+
+![Newsletter Page](./screenshots/Newsletter.png)
+
+## Marketplace
+
+![Marketplace](./screenshots/Marketplace.png)
 
